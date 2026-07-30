@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="小狗原创占位 钱包">
+  <rect width="80" height="80" rx="18" fill="#ffffff"/>
+  <path d="M20 25 Q12 18 14 34" fill="#ffffff" stroke="#322414" stroke-width="3"/><path d="M60 25 Q68 18 66 34" fill="#ffffff" stroke="#322414" stroke-width="3"/>
+  <circle cx="40" cy="32" r="17" fill="#ffffff" stroke="#322414" stroke-width="3"/>
+  <path d="M33 31h.1M47 31h.1M35 39q5 4 10 0" stroke="#322414" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <g stroke="#322414" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M28 43h24a5 5 0 0 1 5 5v12H23V48a5 5 0 0 1 5-5z"/><path d="M47 52h8"/></g>
+</svg>

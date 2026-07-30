@@ -1,0 +1,26 @@
+{
+  "plan": {
+    "selected": "nav-icons/plan-selected.svg",
+    "unselected": "nav-icons/plan-unselected.svg"
+  },
+  "workout": {
+    "selected": "nav-icons/workout-selected.svg",
+    "unselected": "nav-icons/workout-unselected.svg"
+  },
+  "finance": {
+    "selected": "nav-icons/finance-selected.svg",
+    "unselected": "nav-icons/finance-unselected.svg"
+  },
+  "love": {
+    "selected": "nav-icons/love-selected.svg",
+    "unselected": "nav-icons/love-unselected.svg"
+  },
+  "gifts": {
+    "selected": "nav-icons/gifts-selected.svg",
+    "unselected": "nav-icons/gifts-unselected.svg"
+  },
+  "exam": {
+    "selected": "nav-icons/exam-selected.svg",
+    "unselected": "nav-icons/exam-unselected.svg"
+  }
+}

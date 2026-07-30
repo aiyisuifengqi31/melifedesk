@@ -1,0 +1,11 @@
+{
+  "background": "#fff8ed",
+  "surface": "#fffdfa",
+  "surfaceMuted": "#f4eadb",
+  "text": "#34261d",
+  "textMuted": "#7a685c",
+  "accent": "#e88f7a",
+  "accentSoft": "#ffe6d9",
+  "border": "#ebd8c6",
+  "danger": "#c75050"
+}

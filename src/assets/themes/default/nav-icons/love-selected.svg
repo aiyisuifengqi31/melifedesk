@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="圆角伙伴 日记">
+  <rect width="80" height="80" rx="18" fill="#ebe5ff"/>
+  
+  <circle cx="40" cy="32" r="17" fill="#ebe5ff" stroke="#7d5fff" stroke-width="3"/>
+  <path d="M33 31h.1M47 31h.1M35 39q5 4 10 0" stroke="#7d5fff" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <g stroke="#7d5fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M28 42h24v22H28z"/><path d="M40 39c-5-6-14 1 0 10c14-9 5-16 0-10z"/></g>
+</svg>
