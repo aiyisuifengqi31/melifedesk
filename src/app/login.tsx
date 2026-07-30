@@ -3,8 +3,19 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { AuthPanel } from "@/auth/AuthPanel";
 import { getPublicAppConfig } from "@/config/app";
+import { ContentCard } from "@/shared/ui/primitives";
 
 const app = getPublicAppConfig();
+const tokens = {
+  accent: "#8f5a72",
+  accentSoft: "#f4e4ec",
+  background: "#fff8fb",
+  border: "#ead4df",
+  surface: "#ffffff",
+  surfaceMuted: "#fbedf3",
+  text: "#332431",
+  textMuted: "#786574"
+};
 
 export default function LoginRoute() {
   useEffect(() => {
@@ -15,11 +26,13 @@ export default function LoginRoute() {
 
   return (
     <View style={styles.root}>
-      <Text accessibilityRole="header" role="heading" style={styles.title}>
-        {app.displayName}
-      </Text>
-      <Text style={styles.subtitle}>{app.subtitle}</Text>
-      <AuthPanel />
+      <ContentCard tokens={tokens}>
+        <Text accessibilityRole="header" role="heading" style={styles.title}>
+          {app.displayName}
+        </Text>
+        <Text style={styles.subtitle}>{app.subtitle}</Text>
+        <AuthPanel />
+      </ContentCard>
     </View>
   );
 }
@@ -29,16 +42,16 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#fff8ed",
+    backgroundColor: tokens.background,
     padding: 24
   },
   title: {
-    color: "#34261d",
+    color: tokens.text,
     fontSize: 32,
     fontWeight: "800"
   },
   subtitle: {
-    color: "#7a685c",
+    color: tokens.textMuted,
     fontSize: 18,
     marginTop: 8
   }

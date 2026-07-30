@@ -7,6 +7,7 @@ import { readStoredThemeId, writeStoredThemeId } from "@/auth/userSettings";
 import { getPublicAppConfig } from "@/config/app";
 import { FinancePanel } from "@/features/finance/FinancePanel";
 import { GiftsPanel } from "@/features/gifts/GiftsPanel";
+import { LovePanel } from "@/features/love/LovePanel";
 import { DailyPlanPanel } from "@/features/plan/DailyPlanPanel";
 import { WorkoutPanel } from "@/features/workout/WorkoutPanel";
 import { NAV_ITEMS, type NavItem, routeToKey, routeToTitle } from "@/navigation/items";
@@ -132,7 +133,8 @@ export function AppShell({ initialRoute = "/plan", route, viewport, onNavigate }
         {activeKey === "workout" ? <WorkoutPanel /> : null}
         {activeKey === "finance" ? <FinancePanel /> : null}
         {activeKey === "gifts" ? <GiftsPanel /> : null}
-        {activeKey !== "plan" && activeKey !== "workout" && activeKey !== "finance" && activeKey !== "gifts" ? <GenericModuleSkeleton themeEmptyState={theme.emptyState} styles={styles} /> : null}
+        {activeKey === "love" ? <LovePanel themeTokens={tokens} /> : null}
+        {activeKey !== "plan" && activeKey !== "workout" && activeKey !== "finance" && activeKey !== "gifts" && activeKey !== "love" ? <GenericModuleSkeleton themeEmptyState={theme.emptyState} styles={styles} /> : null}
       </ScrollView>
     </View>
   );
@@ -210,7 +212,7 @@ function createStyles(tokens: ReturnType<typeof getTheme>["tokens"][ColorMode], 
     },
     navItem: {
       minHeight: isMobile ? 64 : 54,
-      borderRadius: 8,
+      borderRadius: 999,
       alignItems: "center",
       justifyContent: "center",
       paddingVertical: 6,

@@ -11,7 +11,7 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "jest --runInBand",
-    "test:supabase": "jest --runInBand src/__tests__/task2-migration.test.ts src/__tests__/task2-couple-policy.test.ts src/__tests__/task3-4-migration.test.ts src/__tests__/task3-4-policy.test.ts src/__tests__/task5-7-migration.test.ts src/__tests__/task5-7-policy.test.ts",
+    "test:supabase": "jest --runInBand src/__tests__/task2-migration.test.ts src/__tests__/task2-couple-policy.test.ts src/__tests__/task3-4-migration.test.ts src/__tests__/task3-4-policy.test.ts src/__tests__/task5-7-migration.test.ts src/__tests__/task5-7-policy.test.ts src/__tests__/task6-migration.test.ts src/__tests__/task6-love-policy.test.ts",
     "test:supabase:remote": "node scripts/verify-task2-remote.mjs",
     "test:web": "playwright test",
     "build:web": "expo export --platform web",

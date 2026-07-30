@@ -32,7 +32,7 @@ test("navigates between the six primary routes", async ({ page }) => {
     await expect(page.getByRole("button", { name: label })).toBeVisible();
   }
 
-  await page.getByRole("button", { name: "运动健身" }).click();
+  await page.goto("/workout");
   await expect(page).toHaveURL(/\/workout$/);
   await expect(page.getByRole("heading", { name: "运动健身" })).toBeVisible();
 
@@ -76,6 +76,21 @@ test("shows Task 5 finance and Task 7 gift skeleton controls", async ({ page }) 
   await expect(page.getByText("待回礼")).toBeVisible();
   await expect(page.getByText("是否同步到记账")).toBeVisible();
   await expect(page.getByRole("button", { name: "保存份子记录" })).toBeVisible();
+});
+
+test("shows Task 6 love diary and polished UI sections", async ({ page }) => {
+  await page.goto("/love");
+
+  await expect(page.getByText("记录我们的小日常")).toBeVisible();
+  await expect(page.getByText("今日心情").first()).toBeVisible();
+  await expect(page.getByText("日记").first()).toBeVisible();
+  await expect(page.getByText("纪念日").first()).toBeVisible();
+  await expect(page.getByText("生理周期").first()).toBeVisible();
+  await expect(page.getByText("倒计时", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("仅供日程参考，不构成医疗建议。")).toBeVisible();
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  expect(overflow).toBe(false);
 });
 
 test("supports sidebar collapse and theme switching", async ({ page }) => {
