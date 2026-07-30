@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
+import { AuthPanel } from "@/auth/AuthPanel";
 import { getPublicAppConfig } from "@/config/app";
 
 const app = getPublicAppConfig();
@@ -18,6 +19,7 @@ export default function LoginRoute() {
         {app.displayName}
       </Text>
       <Text style={styles.subtitle}>{app.subtitle}</Text>
+      <AuthPanel />
     </View>
   );
 }

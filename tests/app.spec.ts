@@ -8,6 +8,22 @@ test("shows the confirmed app name and no old brand", async ({ page }) => {
   await expect(page.getByText("LifeDesk")).toHaveCount(0);
 });
 
+test("shows Task 2 auth and couple controls on the login page", async ({ page }) => {
+  await page.goto("/login");
+
+  await expect(page.getByPlaceholder("邮箱")).toBeVisible();
+  await expect(page.getByPlaceholder("密码")).toBeVisible();
+  await expect(page.getByPlaceholder("显示名称")).toBeVisible();
+  await expect(page.getByPlaceholder("邀请码")).toBeVisible();
+  await expect(page.getByRole("button", { name: "注册" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "登录" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "保存主题" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "生成情侣邀请码" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "接受邀请" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "解除绑定" })).toBeVisible();
+  await expect(page.getByText("LifeDesk")).toHaveCount(0);
+});
+
 test("navigates between the six primary routes", async ({ page }) => {
   await page.goto("/");
 

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
+import { saveUserSettings } from "@/auth/authRepository";
+import { getSupabaseClient } from "@/auth/supabaseClient";
+import { readStoredThemeId, writeStoredThemeId } from "@/auth/userSettings";
 import { getPublicAppConfig } from "@/config/app";
 import { NAV_ITEMS, type NavItem, routeToKey, routeToTitle } from "@/navigation/items";
 import { getTheme, THEME_IDS } from "@/theme/registry";
@@ -21,7 +24,7 @@ export function AppShell({ initialRoute = "/plan", route, viewport, onNavigate }
   const inferredViewport = viewport ?? (dimensions.width < 720 ? "mobile" : "desktop");
   const [currentRoute, setCurrentRoute] = useState(route ?? initialRoute);
   const [collapsed, setCollapsed] = useState(false);
-  const [themeId, setThemeId] = useState<ThemeId>("default");
+  const [themeId, setThemeId] = useState<ThemeId>(() => readStoredThemeId(typeof window === "undefined" ? undefined : window.localStorage) ?? "default");
   const [mode, setMode] = useState<ColorMode>("light");
 
   const activeRoute = route ?? currentRoute;
@@ -46,6 +49,21 @@ export function AppShell({ initialRoute = "/plan", route, viewport, onNavigate }
       return;
     }
     setCurrentRoute(href);
+  };
+
+  const handleThemeChange = async (nextThemeId: ThemeId) => {
+    setThemeId(nextThemeId);
+    writeStoredThemeId(typeof window === "undefined" ? undefined : window.localStorage, nextThemeId);
+
+    const client = getSupabaseClient();
+    if (!client) {
+      return;
+    }
+
+    const { data } = await client.auth.getUser();
+    if (data.user) {
+      await saveUserSettings(client, data.user.id, { themeId: nextThemeId });
+    }
   };
 
   return (
@@ -86,7 +104,7 @@ export function AppShell({ initialRoute = "/plan", route, viewport, onNavigate }
           </View>
           <View style={styles.themeControls}>
             {THEME_IDS.map((id) => (
-              <Pressable key={id} accessibilityRole="button" accessibilityLabel={id} onPress={() => setThemeId(id)} style={styles.themeButton}>
+              <Pressable key={id} accessibilityRole="button" accessibilityLabel={id} onPress={() => void handleThemeChange(id)} style={styles.themeButton}>
                 <Text style={styles.themeButtonText}>{id}</Text>
               </Pressable>
             ))}
