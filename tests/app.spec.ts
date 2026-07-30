@@ -41,6 +41,25 @@ test("navigates between the six primary routes", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "运动健身" })).toBeVisible();
 });
 
+test("shows Task 3 plan and Task 4 workout skeleton controls", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.getByText("今日日期")).toBeVisible();
+  await expect(page.getByText("天气", { exact: true })).toBeVisible();
+  await expect(page.getByText("月历", { exact: true })).toBeVisible();
+  await expect(page.getByPlaceholder("新增待办")).toBeVisible();
+  await expect(page.getByRole("button", { name: "快速记录" })).toBeVisible();
+
+  await page.getByRole("button", { name: "运动健身" }).click();
+
+  await expect(page.getByText("今日是否训练")).toBeVisible();
+  await expect(page.getByText("训练部位")).toBeVisible();
+  await expect(page.getByText("训练强度")).toBeVisible();
+  await expect(page.getByPlaceholder("训练项目")).toBeVisible();
+  await expect(page.getByPlaceholder("消耗热量")).toBeVisible();
+  await expect(page.getByText("本周训练次数")).toBeVisible();
+});
+
 test("supports sidebar collapse and theme switching", async ({ page }) => {
   await page.goto("/");
 

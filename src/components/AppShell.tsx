@@ -5,6 +5,8 @@ import { saveUserSettings } from "@/auth/authRepository";
 import { getSupabaseClient } from "@/auth/supabaseClient";
 import { readStoredThemeId, writeStoredThemeId } from "@/auth/userSettings";
 import { getPublicAppConfig } from "@/config/app";
+import { DailyPlanPanel } from "@/features/plan/DailyPlanPanel";
+import { WorkoutPanel } from "@/features/workout/WorkoutPanel";
 import { NAV_ITEMS, type NavItem, routeToKey, routeToTitle } from "@/navigation/items";
 import { getTheme, THEME_IDS } from "@/theme/registry";
 import type { ColorMode, ThemeId } from "@/theme/types";
@@ -124,32 +126,42 @@ export function AppShell({ initialRoute = "/plan", route, viewport, onNavigate }
           <Text testID="theme-token" nativeID="theme-token" style={styles.pageMeta}>背景 token：{tokens.background}</Text>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>通用空状态</Text>
-          <Text style={styles.bodyText}>这里还没有真实业务记录。Task 1 只展示布局骨架和主题资源接口。</Text>
-          <Text style={styles.assetHint}>空状态资源：{theme.emptyState}</Text>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>基础卡片</Text>
-          <Text style={styles.bodyText}>页面将使用统一卡片、加载、错误和重试状态，后续 Task 才接入真实数据。</Text>
-        </View>
-
-        <View style={styles.stateRow}>
-          <View style={styles.stateBox}>
-            <Text style={styles.cardTitle}>加载状态</Text>
-            <Text style={styles.bodyText}>正在加载...</Text>
-          </View>
-          <View style={styles.stateBox}>
-            <Text style={styles.cardTitle}>错误状态</Text>
-            <Text style={styles.bodyText}>暂时无法读取内容。</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="重试" style={styles.retryButton}>
-              <Text style={styles.retryText}>重试</Text>
-            </Pressable>
-          </View>
-        </View>
+        {activeKey === "plan" ? <DailyPlanPanel /> : null}
+        {activeKey === "workout" ? <WorkoutPanel /> : null}
+        {activeKey !== "plan" && activeKey !== "workout" ? <GenericModuleSkeleton themeEmptyState={theme.emptyState} styles={styles} /> : null}
       </ScrollView>
     </View>
+  );
+}
+
+function GenericModuleSkeleton({ themeEmptyState, styles }: { themeEmptyState: string; styles: ReturnType<typeof createStyles> }) {
+  return (
+    <>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>通用空状态</Text>
+        <Text style={styles.bodyText}>这里还没有真实业务记录。当前只展示布局骨架和主题资源接口。</Text>
+        <Text style={styles.assetHint}>空状态资源：{themeEmptyState}</Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>基础卡片</Text>
+        <Text style={styles.bodyText}>页面将使用统一卡片、加载、错误和重试状态，后续 Task 才接入真实数据。</Text>
+      </View>
+
+      <View style={styles.stateRow}>
+        <View style={styles.stateBox}>
+          <Text style={styles.cardTitle}>加载状态</Text>
+          <Text style={styles.bodyText}>正在加载...</Text>
+        </View>
+        <View style={styles.stateBox}>
+          <Text style={styles.cardTitle}>错误状态</Text>
+          <Text style={styles.bodyText}>暂时无法读取内容。</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="重试" style={styles.retryButton}>
+            <Text style={styles.retryText}>重试</Text>
+          </Pressable>
+        </View>
+      </View>
+    </>
   );
 }
 
