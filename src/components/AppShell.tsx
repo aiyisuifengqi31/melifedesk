@@ -5,6 +5,8 @@ import { saveUserSettings } from "@/auth/authRepository";
 import { getSupabaseClient } from "@/auth/supabaseClient";
 import { readStoredThemeId, writeStoredThemeId } from "@/auth/userSettings";
 import { getPublicAppConfig } from "@/config/app";
+import { FinancePanel } from "@/features/finance/FinancePanel";
+import { GiftsPanel } from "@/features/gifts/GiftsPanel";
 import { DailyPlanPanel } from "@/features/plan/DailyPlanPanel";
 import { WorkoutPanel } from "@/features/workout/WorkoutPanel";
 import { NAV_ITEMS, type NavItem, routeToKey, routeToTitle } from "@/navigation/items";
@@ -128,7 +130,9 @@ export function AppShell({ initialRoute = "/plan", route, viewport, onNavigate }
 
         {activeKey === "plan" ? <DailyPlanPanel /> : null}
         {activeKey === "workout" ? <WorkoutPanel /> : null}
-        {activeKey !== "plan" && activeKey !== "workout" ? <GenericModuleSkeleton themeEmptyState={theme.emptyState} styles={styles} /> : null}
+        {activeKey === "finance" ? <FinancePanel /> : null}
+        {activeKey === "gifts" ? <GiftsPanel /> : null}
+        {activeKey !== "plan" && activeKey !== "workout" && activeKey !== "finance" && activeKey !== "gifts" ? <GenericModuleSkeleton themeEmptyState={theme.emptyState} styles={styles} /> : null}
       </ScrollView>
     </View>
   );

@@ -60,6 +60,24 @@ test("shows Task 3 plan and Task 4 workout skeleton controls", async ({ page }) 
   await expect(page.getByText("本周训练次数")).toBeVisible();
 });
 
+test("shows Task 5 finance and Task 7 gift skeleton controls", async ({ page }) => {
+  await page.goto("/finance");
+
+  await expect(page.getByText("今日支出")).toBeVisible();
+  await expect(page.getByText("本月结余")).toBeVisible();
+  await expect(page.getByPlaceholder("输入金额")).toBeVisible();
+  await expect(page.getByRole("button", { name: "快速记账" })).toBeVisible();
+  await expect(page.getByText("最近 30 天支出趋势")).toBeVisible();
+
+  await page.getByRole("button", { name: "份子记录" }).click();
+
+  await expect(page.getByText("新增份子记录")).toBeVisible();
+  await expect(page.getByText("联系人列表")).toBeVisible();
+  await expect(page.getByText("待回礼")).toBeVisible();
+  await expect(page.getByText("是否同步到记账")).toBeVisible();
+  await expect(page.getByRole("button", { name: "保存份子记录" })).toBeVisible();
+});
+
 test("supports sidebar collapse and theme switching", async ({ page }) => {
   await page.goto("/");
 
