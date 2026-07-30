@@ -4,7 +4,8 @@ test("shows the confirmed app name and no old brand", async ({ page }) => {
   await page.goto("/");
 
   await expect(page).toHaveTitle("帆帆和关关");
-  await expect(page.getByRole("heading", { name: "帆帆和关关" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "每日计划" })).toBeVisible();
+  await expect(page.getByText("帆帆和关关").first()).toBeVisible();
   await expect(page.getByText("LifeDesk")).toHaveCount(0);
 });
 
@@ -44,7 +45,7 @@ test("navigates between the six primary routes", async ({ page }) => {
 test("shows Task 3 plan and Task 4 workout skeleton controls", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByText("今日日期")).toBeVisible();
+  await expect(page.getByText("今日", { exact: true })).toBeVisible();
   await expect(page.getByText("天气", { exact: true })).toBeVisible();
   await expect(page.getByText("月历", { exact: true })).toBeVisible();
   await expect(page.getByPlaceholder("新增待办")).toBeVisible();
@@ -100,8 +101,10 @@ test("supports sidebar collapse and theme switching", async ({ page }) => {
   await page.getByRole("button", { name: "折叠导航" }).click();
   await expect(page.locator("#sidebar")).toHaveCSS("width", "72px");
 
+  await expect(page.getByRole("button", { name: "cat" })).toHaveCount(0);
+  await page.locator("#sidebar-settings-button").click();
   await page.getByRole("button", { name: "cat" }).click();
-  await expect(page.locator("#active-theme")).toContainText("当前主题：cat");
+  await expect(page.locator("#sidebar-current-theme")).toContainText("cat");
   await expect(page.locator("#nav-icon-plan svg")).toBeVisible();
   await expect(page.locator("#nav-icon-plan")).toHaveAttribute("data-icon-source", /cat\/nav-icons\/plan-selected\.svg/);
   await expect(page.locator("#nav-icon-workout")).toHaveAttribute("data-icon-source", /cat\/nav-icons\/workout-unselected\.svg/);
@@ -110,8 +113,8 @@ test("supports sidebar collapse and theme switching", async ({ page }) => {
   await page.getByRole("button", { name: "dog" }).click();
   await expect(page.locator("#nav-icon-plan")).toHaveAttribute("data-icon-source", /dog\/nav-icons\/plan-selected\.svg/);
 
-  await page.getByRole("button", { name: "切换深色模式" }).click();
-  await expect(page.locator("#theme-mode")).toContainText("当前模式：dark");
+  await page.getByRole("button", { name: "dark mode" }).click();
+  await expect(page.locator("#sidebar-theme-mode")).toContainText("dark");
 });
 
 test("keeps the mobile sidebar from covering content", async ({ page }) => {

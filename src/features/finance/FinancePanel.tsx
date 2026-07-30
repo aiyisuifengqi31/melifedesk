@@ -1,9 +1,22 @@
+import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 const expenseCategories = ["餐饮", "买菜", "交通", "加油", "购物", "学习", "娱乐", "恋爱", "医疗", "房租", "份子", "其他"];
 const incomeCategories = ["生活费", "工资", "奖学金", "兼职", "红包", "退款", "其他"];
 
 export function FinancePanel() {
+  const [amount, setAmount] = useState("");
+  const [direction, setDirection] = useState<"income" | "expense">("expense");
+  const [feedback, setFeedback] = useState("输入金额后可以保存为预览账单。");
+
+  const savePreviewTransaction = () => {
+    if (!amount.trim()) {
+      setFeedback("请先输入金额。");
+      return;
+    }
+    setFeedback(`已加入预览账单：${direction === "expense" ? "支出" : "收入"} ${amount}`);
+  };
+
   return (
     <View style={styles.stack}>
       <View style={styles.grid}>
@@ -14,16 +27,21 @@ export function FinancePanel() {
 
       <View style={styles.card}>
         <Text style={styles.title}>快速记账入口</Text>
-        <TextInput keyboardType="decimal-pad" placeholder="输入金额" style={styles.input} />
+        <TextInput keyboardType="decimal-pad" onChangeText={setAmount} placeholder="输入金额" style={styles.input} value={amount} />
         <View style={styles.row}>
-          <Text style={styles.pill}>收入</Text>
-          <Text style={styles.pill}>支出</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="收入" onPress={() => setDirection("income")} style={[styles.pillButton, direction === "income" ? styles.pillSelected : null]}>
+            <Text style={styles.pill}>收入</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="支出" onPress={() => setDirection("expense")} style={[styles.pillButton, direction === "expense" ? styles.pillSelected : null]}>
+            <Text style={styles.pill}>支出</Text>
+          </Pressable>
         </View>
-        <Text style={styles.muted}>固定流程：输入金额 → 选择分类 → 可选备注 → 保存。</Text>
+        <Text style={styles.muted}>{"固定流程：输入金额 -> 选择分类 -> 可选备注 -> 保存。"}</Text>
         <TextInput placeholder="可选备注" style={styles.input} />
-        <Pressable accessibilityRole="button" accessibilityLabel="快速记账" style={styles.button}>
+        <Pressable accessibilityRole="button" accessibilityLabel="快速记账" nativeID="finance-save-button" onPress={savePreviewTransaction} style={styles.button}>
           <Text style={styles.buttonText}>快速记账</Text>
         </Pressable>
+        <Text nativeID="finance-feedback" style={styles.feedback}>{feedback}</Text>
       </View>
 
       <View style={styles.card}>
@@ -49,8 +67,8 @@ export function FinancePanel() {
 
       <View style={styles.card}>
         <Text style={styles.title}>状态示例</Text>
-        <Text style={styles.muted}>加载状态 / 空数据状态 / 错误状态 / 防重复提交</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="重试" style={styles.button}>
+        <Text style={styles.muted}>加载状态 / 空数据状态 / 错误状态 / 防重复提交。</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="重试" onPress={() => setFeedback("已重新尝试读取账单。")} style={styles.button}>
           <Text style={styles.buttonText}>重试</Text>
         </Pressable>
       </View>
@@ -100,6 +118,15 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8
   },
+  feedback: {
+    backgroundColor: "#e9f2df",
+    borderRadius: 8,
+    color: "#263421",
+    fontSize: 13,
+    fontWeight: "800",
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -127,12 +154,19 @@ const styles = StyleSheet.create({
     lineHeight: 18
   },
   pill: {
-    backgroundColor: "#e9f2df",
-    borderRadius: 8,
     color: "#263421",
-    fontWeight: "800",
+    fontWeight: "800"
+  },
+  pillButton: {
+    backgroundColor: "#e9f2df",
+    borderColor: "transparent",
+    borderRadius: 8,
+    borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 7
+  },
+  pillSelected: {
+    borderColor: "#273423"
   },
   row: {
     flexDirection: "row",

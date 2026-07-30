@@ -1,29 +1,33 @@
+import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 const workoutParts = ["胸", "背", "肩", "手臂", "核心", "腿", "臀", "有氧", "全身", "拉伸", "休息"];
 
 export function WorkoutPanel() {
+  const [feedback, setFeedback] = useState("选择今日状态后会显示在这里。");
+
   return (
     <View style={styles.stack}>
       <View style={styles.card}>
         <Text style={styles.title}>今日是否训练</Text>
         <View style={styles.row}>
-          <Pressable accessibilityRole="button" accessibilityLabel="今天训练了" style={styles.button}>
+          <Pressable accessibilityRole="button" accessibilityLabel="今天训练了" onPress={() => setFeedback("已选择训练，请继续填写训练记录。")} style={styles.button}>
             <Text style={styles.buttonText}>训练了</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="今天休息" style={styles.secondaryButton}>
+          <Pressable accessibilityRole="button" accessibilityLabel="今天休息" onPress={() => setFeedback("已标记今日休息。")} style={styles.secondaryButton}>
             <Text style={styles.secondaryText}>休息</Text>
           </Pressable>
         </View>
+        <Text nativeID="workout-feedback" style={styles.feedback}>{feedback}</Text>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.title}>训练部位</Text>
         <View style={styles.partGrid}>
           {workoutParts.map((part) => (
-            <Text key={part} style={styles.part}>
-              {part}
-            </Text>
+            <Pressable key={part} accessibilityRole="button" accessibilityLabel={`选择${part}`} onPress={() => setFeedback(`已选择部位：${part}`)} style={styles.partButton}>
+              <Text style={styles.part}>{part}</Text>
+            </Pressable>
           ))}
         </View>
       </View>
@@ -37,14 +41,16 @@ export function WorkoutPanel() {
 
         <Text style={styles.title}>训练强度</Text>
         <View style={styles.row}>
-          <Text style={styles.part}>轻松</Text>
-          <Text style={styles.part}>适中</Text>
-          <Text style={styles.part}>高强度</Text>
+          {["轻松", "适中", "高强度"].map((level) => (
+            <Pressable key={level} accessibilityRole="button" accessibilityLabel={level} onPress={() => setFeedback(`已选择强度：${level}`)} style={styles.partButton}>
+              <Text style={styles.part}>{level}</Text>
+            </Pressable>
+          ))}
         </View>
 
         <TextInput placeholder="自我感受" style={styles.input} />
         <TextInput placeholder="备注" style={styles.input} />
-        <Pressable accessibilityRole="button" accessibilityLabel="上传健身图片" style={styles.button}>
+        <Pressable accessibilityRole="button" accessibilityLabel="上传健身图片" onPress={() => setFeedback("图片上传会走私有 bucket，本预览先保留入口。")} style={styles.button}>
           <Text style={styles.buttonText}>上传健身图片</Text>
         </Pressable>
       </View>
@@ -93,6 +99,15 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 16
   },
+  feedback: {
+    backgroundColor: "#ffe8bc",
+    borderRadius: 8,
+    color: "#322414",
+    fontSize: 13,
+    fontWeight: "800",
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -120,10 +135,12 @@ const styles = StyleSheet.create({
     lineHeight: 18
   },
   part: {
+    color: "#322414",
+    fontWeight: "700"
+  },
+  partButton: {
     backgroundColor: "#ffe8bc",
     borderRadius: 8,
-    color: "#322414",
-    fontWeight: "700",
     paddingHorizontal: 10,
     paddingVertical: 7
   },

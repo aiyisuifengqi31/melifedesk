@@ -1,22 +1,30 @@
+import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 const eventTypes = ["婚礼", "订婚", "生日", "满月", "乔迁", "升学", "丧事", "节日", "其他"];
 
 export function GiftsPanel() {
+  const [feedback, setFeedback] = useState("份子记录默认 private，可选择同步到记账。");
+
   return (
     <View style={styles.stack}>
       <View style={styles.card}>
         <Text style={styles.title}>新增份子记录</Text>
         <TextInput placeholder="搜索联系人" style={styles.input} />
         <View style={styles.row}>
-          <Text style={styles.pill}>送出 / 收到切换</Text>
-          <Text style={styles.pill}>默认 private</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="送出" onPress={() => setFeedback("已切换为送出记录。")} style={styles.pillButton}>
+            <Text style={styles.pill}>送出</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="收到" onPress={() => setFeedback("已切换为收到记录。")} style={styles.pillButton}>
+            <Text style={styles.pill}>收到</Text>
+          </Pressable>
+          <Text style={styles.pillStatic}>默认 private</Text>
         </View>
         <View style={styles.categoryGrid}>
           {eventTypes.map((eventType) => (
-            <Text key={eventType} style={styles.category}>
-              {eventType}
-            </Text>
+            <Pressable key={eventType} accessibilityRole="button" accessibilityLabel={eventType} onPress={() => setFeedback(`已选择事项：${eventType}`)} style={styles.categoryButton}>
+              <Text style={styles.category}>{eventType}</Text>
+            </Pressable>
           ))}
         </View>
         <TextInput keyboardType="decimal-pad" placeholder="金额" style={styles.input} />
@@ -24,9 +32,10 @@ export function GiftsPanel() {
         <TextInput placeholder="备注" style={styles.input} />
         <Text style={styles.title}>是否同步到记账</Text>
         <Text style={styles.muted}>送出份子钱可同步生成支出账单，关联账单通过 gift_record_id 防重复。</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="保存份子记录" style={styles.button}>
+        <Pressable accessibilityRole="button" accessibilityLabel="保存份子记录" onPress={() => setFeedback("已保存到预览草稿；同步账单会在登录后执行。")} style={styles.button}>
           <Text style={styles.buttonText}>保存份子记录</Text>
         </Pressable>
+        <Text nativeID="gifts-feedback" style={styles.feedback}>{feedback}</Text>
       </View>
 
       <View style={styles.grid}>
@@ -39,8 +48,8 @@ export function GiftsPanel() {
 
       <View style={styles.card}>
         <Text style={styles.title}>状态示例</Text>
-        <Text style={styles.muted}>加载状态 / 空数据状态 / 错误状态 / 防重复提交</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="重试" style={styles.button}>
+        <Text style={styles.muted}>加载状态 / 空数据状态 / 错误状态 / 防重复提交。</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="重试" onPress={() => setFeedback("已重新尝试读取份子记录。")} style={styles.button}>
           <Text style={styles.buttonText}>重试</Text>
         </Pressable>
       </View>
@@ -78,10 +87,12 @@ const styles = StyleSheet.create({
     padding: 16
   },
   category: {
+    color: "#39271d",
+    fontWeight: "700"
+  },
+  categoryButton: {
     backgroundColor: "#f6e5d0",
     borderRadius: 8,
-    color: "#39271d",
-    fontWeight: "700",
     paddingHorizontal: 10,
     paddingVertical: 7
   },
@@ -89,6 +100,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8
+  },
+  feedback: {
+    backgroundColor: "#f6e5d0",
+    borderRadius: 8,
+    color: "#39271d",
+    fontSize: 13,
+    fontWeight: "800",
+    paddingHorizontal: 10,
+    paddingVertical: 8
   },
   grid: {
     flexDirection: "row",
@@ -117,6 +137,16 @@ const styles = StyleSheet.create({
     lineHeight: 18
   },
   pill: {
+    color: "#39271d",
+    fontWeight: "800"
+  },
+  pillButton: {
+    backgroundColor: "#f6e5d0",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  pillStatic: {
     backgroundColor: "#f6e5d0",
     borderRadius: 8,
     color: "#39271d",

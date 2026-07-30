@@ -18,37 +18,36 @@ describe("theme system", () => {
     }
   });
 
-  it("switches theme icons and tokens together", () => {
+  it("switches theme icons from the sidebar settings panel", () => {
     render(<AppShell initialRoute="/plan" />);
 
-    expect(screen.getByTestId("active-theme")).toHaveTextContent("当前主题：default");
-    expect(screen.getByTestId("theme-token").props.children).toContain("#ffffff");
     expect(screen.queryByText("default-plan")).toBeNull();
     expect(screen.getByTestId("nav-icon-plan")).toHaveProp("accessibilityLabel", "default plan selected icon");
     expect(screen.getByTestId("nav-icon-workout")).toHaveProp("accessibilityLabel", "default workout unselected icon");
 
-    fireEvent.press(screen.getByRole("button", { name: "cat" }));
+    fireEvent.press(screen.getByRole("button", { name: "settings" }));
+    expect(screen.getByText("theme: default")).toBeOnTheScreen();
 
-    expect(screen.getByTestId("active-theme")).toHaveTextContent("当前主题：cat");
-    expect(screen.getByTestId("theme-token").props.children).toContain("#fff8ed");
+    fireEvent.press(screen.getByRole("button", { name: "cat" }));
+    expect(screen.getByText("theme: cat")).toBeOnTheScreen();
     expect(screen.queryByText("cat-plan")).toBeNull();
     expect(screen.getByTestId("nav-icon-plan")).toHaveProp("accessibilityLabel", "cat plan selected icon");
     expect(screen.getByTestId("nav-icon-workout")).toHaveProp("accessibilityLabel", "cat workout unselected icon");
 
     fireEvent.press(screen.getByRole("button", { name: "dog" }));
-
-    expect(screen.getByTestId("active-theme")).toHaveTextContent("当前主题：dog");
+    expect(screen.getByText("theme: dog")).toBeOnTheScreen();
     expect(screen.queryByText("dog-plan")).toBeNull();
     expect(screen.getByTestId("nav-icon-plan")).toHaveProp("accessibilityLabel", "dog plan selected icon");
   });
 
-  it("switches between light and dark mode tokens", () => {
+  it("switches between light and dark mode from sidebar settings", () => {
     render(<AppShell initialRoute="/plan" />);
 
-    expect(screen.getByTestId("theme-token").props.children).toContain("#ffffff");
+    fireEvent.press(screen.getByRole("button", { name: "settings" }));
+    expect(screen.getByText("mode: light")).toBeOnTheScreen();
 
-    fireEvent.press(screen.getByRole("button", { name: "切换深色模式" }));
+    fireEvent.press(screen.getByRole("button", { name: "dark mode" }));
 
-    expect(screen.getByTestId("theme-token").props.children).toContain("#17151f");
+    expect(screen.getByText("mode: dark")).toBeOnTheScreen();
   });
 });

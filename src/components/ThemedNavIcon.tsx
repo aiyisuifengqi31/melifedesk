@@ -20,10 +20,10 @@ export function ThemedNavIcon({ routeKey, selected, theme }: ThemedNavIconProps)
       {...webDataAttributes}
       accessibilityLabel={`${theme.id} ${routeKey} ${state} icon`}
       nativeID={`nav-icon-${routeKey}`}
-      style={styles.iconFrame}
+      style={[styles.iconFrame, selected ? styles.iconFrameSelected : styles.iconFrameIdle]}
       testID={`nav-icon-${routeKey}`}
     >
-      <SvgXml height={30} testID={`nav-icon-svg-${routeKey}`} width={30} xml={resource.xml} />
+      <SvgXml height={24} testID={`nav-icon-svg-${routeKey}`} width={24} xml={resource.xml} />
     </View>
   );
 }
@@ -31,8 +31,15 @@ export function ThemedNavIcon({ routeKey, selected, theme }: ThemedNavIconProps)
 const styles = StyleSheet.create({
   iconFrame: {
     alignItems: "center",
-    height: 32,
+    borderRadius: 999,
+    height: 34,
     justifyContent: "center",
-    width: 32
+    width: 34
+  },
+  iconFrameIdle: {
+    backgroundColor: "rgba(255, 255, 255, 0.54)"
+  },
+  iconFrameSelected: {
+    backgroundColor: "rgba(255, 255, 255, 0.92)"
   }
 });

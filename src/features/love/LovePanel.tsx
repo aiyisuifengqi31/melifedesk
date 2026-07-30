@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Image, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { ActionChip, AppPage, ContentCard, EmptyState, FloatingQuickAction, PageHeader, PrimaryButton, SectionHeader, SegmentedTabs, StatCard, type UiTokens } from "@/shared/ui/primitives";
@@ -16,6 +17,7 @@ const tokens: UiTokens = {
 };
 
 export function LovePanel({ themeTokens = tokens }: { themeTokens?: UiTokens }) {
+  const [feedback, setFeedback] = useState("今天还没有新的预览记录。");
   const daysTogether = calculateDaysTogether("2025-05-20", "2026-07-30");
   const cycleWindow = calculateCycleWindow("2026-07-10");
 
@@ -44,12 +46,15 @@ export function LovePanel({ themeTokens = tokens }: { themeTokens?: UiTokens }) 
             <ActionChip key={tag} label={tag} tokens={themeTokens} />
           ))}
         </View>
-        <PrimaryButton label="记录心情" tokens={themeTokens} />
+        <PrimaryButton label="记录心情" onPress={() => setFeedback("已记录到预览草稿，登录后再同步。")} tokens={themeTokens} />
+        <Text nativeID="love-feedback" style={[styles.feedback, { backgroundColor: themeTokens.surfaceMuted, color: themeTokens.text }]}>
+          {feedback}
+        </Text>
       </ContentCard>
 
       <ContentCard tokens={themeTokens}>
         <SectionHeader title="日记" tokens={themeTokens} />
-        <Text style={[styles.body, { color: themeTokens.textMuted }]}>日记时间轴 · private / couple_read / couple_edit · 共同编辑开关</Text>
+        <Text style={[styles.body, { color: themeTokens.textMuted }]}>日记时间线 · private / couple_read / couple_edit · 共同编辑开关。</Text>
         <View style={[styles.diaryPreview, { backgroundColor: themeTokens.surfaceMuted }]}>
           <View>
             <Text style={[styles.cardTitle, { color: themeTokens.text }]}>晚饭后散步</Text>
@@ -57,7 +62,7 @@ export function LovePanel({ themeTokens = tokens }: { themeTokens?: UiTokens }) 
           </View>
           <Image accessibilityLabel="日记图片缩略图" source={{ uri: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" }} style={styles.thumbnail} />
         </View>
-        <PrimaryButton label="编辑日记" tokens={themeTokens} />
+        <PrimaryButton label="编辑日记" onPress={() => setFeedback("已打开日记编辑预览。")} tokens={themeTokens} />
       </ContentCard>
 
       <ContentCard tokens={themeTokens}>
@@ -77,7 +82,7 @@ export function LovePanel({ themeTokens = tokens }: { themeTokens?: UiTokens }) 
       </ContentCard>
 
       <EmptyState description="还没有更多共同记忆。可以先记录今天的心情，或者写一篇小日记。" title="空状态卡片" tokens={themeTokens} />
-      <FloatingQuickAction label="快速记录" tokens={themeTokens} />
+      <FloatingQuickAction label="快速记录" onPress={() => setFeedback("已打开快速记录预览。")} tokens={themeTokens} />
     </AppPage>
   );
 }
@@ -103,6 +108,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900",
     lineHeight: 19
+  },
+  feedback: {
+    borderRadius: 10,
+    fontSize: 13,
+    fontWeight: "800",
+    paddingHorizontal: 10,
+    paddingVertical: 8
   },
   grid: {
     flexDirection: "row",

@@ -89,17 +89,17 @@ export function InlineError({ message, tokens }: TokenProps & { message: string 
   );
 }
 
-export function PrimaryButton({ label, tokens }: TokenProps & { label: string }) {
+export function PrimaryButton({ label, onPress, tokens }: TokenProps & { label: string; onPress?: () => void }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} style={[styles.primaryButton, { backgroundColor: tokens.accent }]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={[styles.primaryButton, { backgroundColor: tokens.accent }]}>
       <Text style={styles.primaryText}>{label}</Text>
     </Pressable>
   );
 }
 
-export function SecondaryButton({ label, tokens }: TokenProps & { label: string }) {
+export function SecondaryButton({ label, onPress, tokens }: TokenProps & { label: string; onPress?: () => void }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} style={[styles.secondaryButton, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={[styles.secondaryButton, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
       <Text style={[styles.secondaryText, { color: tokens.text }]}>{label}</Text>
     </Pressable>
   );
@@ -113,9 +113,9 @@ export function IconNavItem({ label, selected, tokens }: TokenProps & { label: s
   );
 }
 
-export function FloatingQuickAction({ label, tokens }: TokenProps & { label: string }) {
+export function FloatingQuickAction({ label, onPress, tokens }: TokenProps & { label: string; onPress?: () => void }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} style={[styles.fab, { backgroundColor: tokens.accent }]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={[styles.fab, { backgroundColor: tokens.accent }]}>
       <Text style={styles.primaryText}>{label}</Text>
     </Pressable>
   );
