@@ -87,8 +87,15 @@ test("settings entry stays available on every feature page", async ({ page }) =>
 
 test("primary preview buttons provide visible feedback", async ({ page }) => {
   await page.goto("/plan");
-  await page.locator("#plan-add-button").click();
-  await expect(page.locator("#plan-feedback")).toContainText("已加入预览");
+  await page.evaluate(() => localStorage.removeItem("fanfan-guanguan.todos.v1"));
+  await page.reload();
+  await page.getByRole("button", { name: "新增任务" }).click();
+  await page.getByPlaceholder("任务名称").fill("网页端待办验收");
+  await page.getByPlaceholder("截止日期").fill("2026-08-02");
+  await page.getByPlaceholder("提醒时间，可选").fill("09:30");
+  await page.getByRole("button", { name: "保存任务" }).click();
+  await expect(page.getByText("网页端待办验收")).toBeVisible();
+  await expect(page.locator("#plan-feedback")).toContainText("新任务已保存");
 
   await page.goto("/workout");
   await page.getByRole("button", { name: "今天训练了" }).click();

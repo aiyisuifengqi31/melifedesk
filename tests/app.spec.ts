@@ -48,8 +48,9 @@ test("shows Task 3 plan and Task 4 workout skeleton controls", async ({ page }) 
   await expect(page.getByText("今日", { exact: true })).toBeVisible();
   await expect(page.getByText("天气", { exact: true })).toBeVisible();
   await expect(page.getByText("月历", { exact: true })).toBeVisible();
-  await expect(page.getByPlaceholder("新增待办")).toBeVisible();
-  await expect(page.getByRole("button", { name: "快速记录" })).toBeVisible();
+  await expect(page.getByText("待办", { exact: true })).toBeVisible();
+  await expect(page.getByText("已完成 0", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "新增任务" })).toBeVisible();
 
   await page.getByRole("button", { name: "运动健身" }).click();
 

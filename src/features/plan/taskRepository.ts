@@ -5,6 +5,7 @@ export type TaskStatus = "todo" | "in_progress" | "done" | "cancelled";
 
 export type TaskInput = {
   coupleId?: string | null;
+  dueAt?: string | null;
   notes?: string | null;
   remindAt?: string | null;
   taskDate: string;
@@ -14,6 +15,7 @@ export type TaskInput = {
 
 export type TaskUpdate = Partial<{
   completedAt: string | null;
+  dueAt: string | null;
   notes: string | null;
   remindAt: string | null;
   status: TaskStatus;
@@ -25,6 +27,7 @@ export type TaskUpdate = Partial<{
 function mapTaskInput(ownerUserId: string, input: TaskInput) {
   return {
     couple_id: input.coupleId ?? null,
+    due_at: input.dueAt ?? null,
     notes: input.notes ?? null,
     owner_user_id: ownerUserId,
     remind_at: input.remindAt ?? null,
@@ -37,6 +40,7 @@ function mapTaskInput(ownerUserId: string, input: TaskInput) {
 function mapTaskUpdate(update: TaskUpdate) {
   return {
     completed_at: update.completedAt,
+    due_at: update.dueAt,
     notes: update.notes,
     remind_at: update.remindAt,
     status: update.status,
@@ -48,6 +52,10 @@ function mapTaskUpdate(update: TaskUpdate) {
 
 export async function listTasks(client: SupabaseClient, ownerUserId: string, taskDate: string) {
   return client.from("tasks").select("*").eq("owner_user_id", ownerUserId).eq("task_date", taskDate).is("deleted_at", null).order("created_at");
+}
+
+export async function listAllActiveTasks(client: SupabaseClient, ownerUserId: string) {
+  return client.from("tasks").select("*").eq("owner_user_id", ownerUserId).is("deleted_at", null).order("created_at");
 }
 
 export async function createTask(client: SupabaseClient, ownerUserId: string, input: TaskInput) {
