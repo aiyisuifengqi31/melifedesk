@@ -11,6 +11,19 @@ export type BackgroundOption = {
 
 const STORAGE_KEY = "fanfan-guanguan.background.v1";
 
+// 背景图作为静态文件随构建拷贝到 dist/backgrounds/，运行时按部署基路径拼接前缀。
+function assetBase(): string {
+  if (typeof window === "undefined" || !window.location) {
+    return "/melifedesk";
+  }
+  const match = window.location.pathname.match(/^\/[^\/]+/);
+  return match ? match[0] : "";
+}
+
+function bgUri(file: string): string {
+  return `${assetBase()}/backgrounds/${file}`;
+}
+
 export const PRESET_BACKGROUNDS: BackgroundOption[] = [
   {
     id: "none",
@@ -20,22 +33,22 @@ export const PRESET_BACKGROUNDS: BackgroundOption[] = [
   {
     id: "cat-blue",
     name: "蓝色小猫",
-    source: { kind: "preset", uri: require("@/assets/backgrounds/theme-cat-blue.jpg") }
+    source: { kind: "preset", uri: bgUri("theme-cat-blue.jpg") }
   },
   {
     id: "cat-cup",
     name: "茶杯猫咪",
-    source: { kind: "preset", uri: require("@/assets/backgrounds/theme-cat-cup.jpg") }
+    source: { kind: "preset", uri: bgUri("theme-cat-cup.jpg") }
   },
   {
     id: "dogs",
     name: "元气狗狗",
-    source: { kind: "preset", uri: require("@/assets/backgrounds/theme-dogs.jpg") }
+    source: { kind: "preset", uri: bgUri("theme-dogs.jpg") }
   },
   {
     id: "rainbow",
     name: "彩虹山河",
-    source: { kind: "preset", uri: require("@/assets/backgrounds/theme-rainbow.jpg") }
+    source: { kind: "preset", uri: bgUri("theme-rainbow.jpg") }
   }
 ];
 
@@ -79,12 +92,9 @@ export function findBackgroundOption(source: BackgroundSource | null): Backgroun
   return PRESET_BACKGROUNDS.find((option) => option.source.uri === source.uri);
 }
 
-export function getImageSource(source: BackgroundSource | null): number | { uri: string } | undefined {
+export function getImageSource(source: BackgroundSource | null): { uri: string } | undefined {
   if (!source || !source.uri) {
     return undefined;
-  }
-  if (source.kind === "preset") {
-    return source.uri as unknown as number;
   }
   return { uri: source.uri };
 }

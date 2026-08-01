@@ -8,6 +8,7 @@ import {
   existsSync,
   readdirSync,
   statSync,
+  mkdirSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,7 +41,26 @@ if (existsSync(iconSrc)) {
   console.warn('[make-pwa] 未找到 assets/icon.png，跳过图标');
 }
 
-// 2) 写入 manifest.json
+// 2) 拷贝主题背景图 -> dist/backgrounds/（运行时按基路径引用）
+const bgSrcDir = join(root, 'assets', 'backgrounds');
+const bgDestDir = join(dist, 'backgrounds');
+if (existsSync(bgSrcDir)) {
+  if (!existsSync(bgDestDir)) {
+    mkdirSync(bgDestDir, { recursive: true });
+  }
+  let copied = 0;
+  for (const file of readdirSync(bgSrcDir)) {
+    if (/\.(jpe?g|png|webp|gif)$/i.test(file)) {
+      copyFileSync(join(bgSrcDir, file), join(bgDestDir, file));
+      copied++;
+    }
+  }
+  console.log(`[make-pwa] 已拷贝 ${copied} 张背景图 -> backgrounds/`);
+} else {
+  console.warn('[make-pwa] 未找到 assets/backgrounds，跳过背景图');
+}
+
+// 3) 写入 manifest.json
 const manifest = {
   name: NAME,
   short_name: SHORT,
