@@ -26,7 +26,7 @@ export function NotesPanel({ onClose, storage, themeTokens }: NotesPanelProps) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [newCategory, setNewCategory] = useState<NoteCategory>("未分类");
-  const [feedback, setFeedback] = useState("记录一闪而过的念头。");
+  const [feedback, setFeedback] = useState("记录一闪而过的念头、待办事项或购物清单。");
 
   const filteredNotes = category === "全部" ? notes : notes.filter((n) => n.category === category);
 
@@ -69,7 +69,7 @@ export function NotesPanel({ onClose, storage, themeTokens }: NotesPanelProps) {
         <Pressable accessibilityRole="button" accessibilityLabel="返回首页" onPress={onClose} style={styles.backButton}>
           <Text style={styles.backText}>← 返回</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>灵感随笔</Text>
+        <Text style={styles.headerTitle}>备忘录</Text>
         <View style={styles.backButton} />
       </View>
 
@@ -119,8 +119,8 @@ export function NotesPanel({ onClose, storage, themeTokens }: NotesPanelProps) {
       {filteredNotes.length === 0 ? (
         <View style={styles.emptyBox}>
           <Text style={styles.emptyIcon}>✍️</Text>
-          <Text style={styles.emptyTitle}>还没有灵感记录</Text>
-          <Text style={styles.emptyText}>写下第一篇随笔吧</Text>
+          <Text style={styles.emptyTitle}>还没有备忘</Text>
+          <Text style={styles.emptyText}>写下第一条备忘吧</Text>
         </View>
       ) : (
         <View style={styles.notesGrid}>

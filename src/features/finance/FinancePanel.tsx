@@ -406,17 +406,14 @@ export function FinancePanel({ storage }: FinancePanelProps) {
               const color = getCategoryColor(share.categoryName, index);
               const percent = Math.round(share.ratio * 100);
               return (
-                <View key={share.categoryName}>
-                  <View style={styles.shareRow}>
-                    <View style={[styles.shareDot, { backgroundColor: color }]} />
-                    <Text style={styles.shareName}>{share.categoryName}</Text>
-                    <View style={styles.shareTrack}>
-                      <View style={[styles.shareFill, { width: `${percent}%`, backgroundColor: color }]} />
-                    </View>
-                    <Text style={[styles.sharePercent, { color }]}>{percent}%</Text>
-                    <Text style={[styles.shareAmount, { color }]}>¥{share.amount}</Text>
+                <View key={share.categoryName} style={styles.shareRow}>
+                  <View style={[styles.shareDot, { backgroundColor: color }]} />
+                  <Text style={styles.shareName}>{share.categoryName}</Text>
+                  <View style={styles.shareTrack}>
+                    <View style={[styles.shareFill, { width: `${percent}%`, backgroundColor: color }]} />
                   </View>
-                  <View style={[styles.shareLine, { borderLeftColor: color }]} />
+                  <Text style={[styles.sharePercent, { color }]}>{percent}%</Text>
+                  <Text style={[styles.shareAmount, { color }]}>¥{share.amount}</Text>
                 </View>
               );
             })}
@@ -770,10 +767,10 @@ const styles = StyleSheet.create({
     borderColor: "#e3e8ef",
     borderRadius: 14,
     borderWidth: 1,
-    gap: 7,
-    minWidth: 88,
-    paddingHorizontal: 10,
-    paddingVertical: 11
+    gap: 5,
+    minWidth: 72,
+    paddingHorizontal: 8,
+    paddingVertical: 9
   },
   categoryGrid: {
     flexDirection: "row",
@@ -783,15 +780,15 @@ const styles = StyleSheet.create({
   categoryIcon: {
     borderRadius: 999,
     color: "#1599d3",
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "900",
     overflow: "hidden",
-    paddingHorizontal: 11,
-    paddingVertical: 8
+    paddingHorizontal: 9,
+    paddingVertical: 6
   },
   categoryName: {
     color: "#697386",
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "800"
   },
   categoryRow: {
@@ -1094,30 +1091,30 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     flex: 1,
-    minWidth: 155,
-    padding: 16
+    minWidth: 110,
+    padding: 12
   },
   metricCount: {
     color: "#697386",
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "700",
-    marginTop: 6
+    marginTop: 4
   },
   metricGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12
+    gap: 10
   },
   metricTitle: {
     color: "#697386",
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: "800"
   },
   metricValue: {
     color: "#1fa8e2",
-    fontSize: 30,
+    fontSize: 22,
     fontWeight: "900",
-    marginTop: 8
+    marginTop: 6
   },
   noteInput: {
     minHeight: 90,

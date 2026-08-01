@@ -7,7 +7,8 @@ import { getSupabaseClient } from "@/auth/supabaseClient";
 import { createAlarmId, hydrateAlarmsFromCloud, loadAlarms, repeatLabel, saveAlarms, weekLabel, type AlarmItem } from "@/features/plan/alarmStorage";
 import { createTask, listAllActiveTasks, softDeleteTask, updateTask } from "@/features/plan/taskRepository";
 import { createTodoId, getDefaultTodoStorage, hydrateTodosFromCloud, loadLocalTodos, saveLocalTodos, sortTodos, type TodoPriority, type TodoStorage, type TodoTask } from "@/features/plan/todoStorage";
-import { resolveCurrentCityWeather, type WeatherState } from "@/features/plan/weatherProvider";
+import { getHolidayLabel, isWeekend } from "@/features/plan/holidays";
+import { resolveCurrentCityWeather, weatherEmoji, type WeatherState } from "@/features/plan/weatherProvider";
 
 type DailyPlanPanelProps = {
   storage?: TodoStorage;
@@ -304,11 +305,6 @@ export function DailyPlanPanel({ storage, themeTokens }: DailyPlanPanelProps) {
 
   return (
     <View style={styles.stack}>
-      <View style={styles.greetingCard}>
-        <Text style={styles.dateLine}>{formatFullDate(now)}</Text>
-        <Text style={styles.greeting}>上午好，把今天安排得轻一点</Text>
-      </View>
-
       {ringingAlarm ? (
         <View style={styles.ringBanner}>
           <Text style={styles.ringEmoji}>⏰</Text>
@@ -324,7 +320,7 @@ export function DailyPlanPanel({ storage, themeTokens }: DailyPlanPanelProps) {
 
       <WeatherCard onRefresh={loadWeather} weather={weather} />
 
-      <MonthCalendar selectedDate={today} />
+      <MonthCalendar onSelectDate={(date) => { /* 选中日期，未来可联动筛选当日待办 */ }} selectedDate={today} />
 
       <View style={styles.todoCard}>
         <View style={styles.todoHeader}>
@@ -451,7 +447,7 @@ export function DailyPlanPanel({ storage, themeTokens }: DailyPlanPanelProps) {
   );
 }
 
-function MonthCalendar({ selectedDate }: { selectedDate: string }) {
+function MonthCalendar({ onSelectDate, selectedDate }: { onSelectDate?: (date: string) => void; selectedDate: string }) {
   const [viewYear, setViewYear] = useState(parseIsoDate(selectedDate).getFullYear());
   const [viewMonth, setViewMonth] = useState(parseIsoDate(selectedDate).getMonth());
   const days = buildMonthDays(viewYear, viewMonth);
@@ -487,15 +483,32 @@ function MonthCalendar({ selectedDate }: { selectedDate: string }) {
       </View>
       <View style={styles.weekRow}>
         {["日", "一", "二", "三", "四", "五", "六"].map((weekday) => (
-          <Text key={weekday} style={styles.weekday}>{weekday}</Text>
+          <Text key={weekday} style={[styles.weekday, weekday === "日" || weekday === "六" ? styles.weekendHeader : null]}>{weekday}</Text>
         ))}
       </View>
       <View style={styles.dayGrid}>
-        {days.map((day) => (
-          <View key={day.date} style={styles.dayCell}>
-            <Text style={[styles.dayText, !day.inMonth ? styles.mutedDay : null, day.date === selectedDate ? styles.selectedDay : null]}>{day.day}</Text>
-          </View>
-        ))}
+        {days.map((day) => {
+          const holiday = day.inMonth ? getHolidayLabel(day.date) : null;
+          const weekend = day.inMonth && isWeekend(day.date);
+          const selected = day.date === selectedDate;
+          return (
+            <Pressable
+              key={day.date}
+              accessibilityRole="button"
+              accessibilityLabel={`选择日期 ${day.date}${holiday ? `，${holiday}` : ""}`}
+              onPress={() => day.inMonth && onSelectDate?.(day.date)}
+              style={[styles.dayCell, selected ? styles.dayCellSelected : null]}
+            >
+              <Text style={[
+                styles.dayText,
+                !day.inMonth ? styles.mutedDay : null,
+                weekend && day.inMonth ? styles.weekendDay : null,
+                selected ? styles.selectedDay : null
+              ]}>{day.day}</Text>
+              {holiday ? <Text style={styles.holidayText} numberOfLines={1}>{holiday}</Text> : <View style={styles.holidayPlaceholder} />}
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
@@ -525,7 +538,7 @@ function WeatherCard({ onRefresh, weather }: { onRefresh: () => void; weather: W
         <Text style={styles.weatherMeta}>{weather.description} · 体感 {weather.apparentTemperature}°</Text>
       </View>
       <View style={styles.weatherRight}>
-        <Text style={styles.cloudMark}>{weather.description === "Clear" ? "晴" : "云"}</Text>
+        <Text style={styles.weatherEmoji}>{weatherEmoji(weather.weatherCode)}</Text>
         <Text style={styles.weatherMeta}>湿度 {weather.humidity}%</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="刷新当前城市天气" onPress={onRefresh} style={styles.weatherSmallButton}>
           <Text style={styles.weatherSmallButtonText}>刷新</Text>
@@ -854,11 +867,6 @@ function formatMeta(task: TodoTask, statusText: string) {
   return `${dateText} ${timeText} · ${statusText}`;
 }
 
-function formatFullDate(date: Date) {
-  const weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
-  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日${weekdays[date.getDay()]}`;
-}
-
 function parseIsoDate(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day);
@@ -898,7 +906,7 @@ const styles = StyleSheet.create({
   },
   calendarArrow: {
     color: "#111827",
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: "500"
   },
   calendarCard: {
@@ -906,18 +914,18 @@ const styles = StyleSheet.create({
     borderColor: "#e3e6eb",
     borderRadius: 18,
     borderWidth: 1,
-    padding: 18
+    padding: 14
   },
   calendarTitle: {
     color: "#111827",
-    fontSize: 22,
+    fontSize: 17,
     fontWeight: "900"
   },
   calendarTop: {
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 18
+    marginBottom: 10
   },
   cancelButton: {
     alignItems: "center",
@@ -954,6 +962,10 @@ const styles = StyleSheet.create({
     fontSize: 38,
     fontWeight: "900"
   },
+  weatherEmoji: {
+    fontSize: 34,
+    lineHeight: 40
+  },
   confirmButton: {
     alignItems: "center",
     backgroundColor: "#2f85ff",
@@ -985,16 +997,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "900"
   },
-  dateLine: {
-    color: "#697386",
-    fontSize: 17,
-    fontWeight: "700"
-  },
   dayCell: {
     alignItems: "center",
     flexBasis: "14.285%",
-    height: 44,
-    justifyContent: "center"
+    height: 46,
+    justifyContent: "center",
+    paddingVertical: 4
+  },
+  dayCellSelected: {
+    backgroundColor: "#28aeea",
+    borderRadius: 10
   },
   dayGrid: {
     flexDirection: "row",
@@ -1002,9 +1014,9 @@ const styles = StyleSheet.create({
   },
   dayText: {
     color: "#111827",
-    fontSize: 18,
-    lineHeight: 34,
-    minWidth: 38,
+    fontSize: 14,
+    fontWeight: "800",
+    lineHeight: 20,
     textAlign: "center"
   },
   emptyText: {
@@ -1024,20 +1036,6 @@ const styles = StyleSheet.create({
   flag: {
     color: "#111827",
     fontSize: 21
-  },
-  greeting: {
-    color: "#111827",
-    fontSize: 32,
-    fontWeight: "900",
-    lineHeight: 42,
-    marginTop: 8
-  },
-  greetingCard: {
-    backgroundColor: "#eefbff",
-    borderColor: "#dceef6",
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 22
   },
   input: {
     borderColor: "#e3e6eb",
@@ -1078,6 +1076,22 @@ const styles = StyleSheet.create({
   },
   mutedDay: {
     color: "#c9ced6"
+  },
+  weekendDay: {
+    color: "#ef4444"
+  },
+  weekendHeader: {
+    color: "#ef4444"
+  },
+  holidayText: {
+    color: "#ef4444",
+    fontSize: 9,
+    fontWeight: "800",
+    marginTop: 1,
+    textAlign: "center"
+  },
+  holidayPlaceholder: {
+    height: 11
   },
   primaryButton: {
     alignItems: "center",
@@ -1133,8 +1147,14 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     gap: 4,
+    opacity: 1,
     padding: 8,
     position: "absolute",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
     zIndex: 20
   },
   priorityOption: {
@@ -1227,13 +1247,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8
   },
   selectedDay: {
-    backgroundColor: "#28aeea",
-    borderRadius: 12,
-    color: "#ffffff",
-    fontWeight: "900",
-    overflow: "hidden",
-    paddingHorizontal: 10,
-    paddingVertical: 5
+    color: "#ffffff"
   },
   settingHint: {
     color: "#9ca3af",
@@ -1446,7 +1460,7 @@ const styles = StyleSheet.create({
   weekday: {
     color: "#697386",
     flex: 1,
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: "800",
     textAlign: "center"
   },

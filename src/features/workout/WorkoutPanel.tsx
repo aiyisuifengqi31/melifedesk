@@ -19,7 +19,15 @@ type WorkoutPanelProps = {
   storage?: WorkoutStorage;
 };
 
-const workoutParts = ["胸", "背", "肩", "手臂", "核心", "腿", "臀", "有氧", "全身", "拉伸", "休息"];
+const WORKOUT_PARTS: Array<{ icon: string; name: string }> = [
+  { icon: "❤️", name: "胸" },
+  { icon: "🦋", name: "背" },
+  { icon: "🦅", name: "肩" },
+  { icon: "💪", name: "手臂" },
+  { icon: "🦵", name: "腿" },
+  { icon: "🍑", name: "臀" },
+  { icon: "🏃", name: "有氧" }
+];
 const intensityOptions: Array<{ label: string; value: WorkoutIntensity }> = [
   { label: "轻松", value: "easy" },
   { label: "适中", value: "moderate" },
@@ -54,16 +62,9 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   };
 
   const togglePart = (part: string) => {
-    if (part === "休息") {
-      setStatus("rest");
-      setSelectedParts(["休息"]);
-      return;
-    }
-
     setStatus("trained");
     setSelectedParts((current) => {
-      const withoutRest = current.filter((item) => item !== "休息");
-      return withoutRest.includes(part) ? withoutRest.filter((item) => item !== part) : [...withoutRest, part];
+      return current.includes(part) ? current.filter((item) => item !== part) : [...current, part];
     });
   };
 
@@ -155,7 +156,7 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="今天休息" onPress={() => {
             setStatus("rest");
-            setSelectedParts(["休息"]);
+            setSelectedParts([]);
           }} style={[styles.segment, status === "rest" ? styles.segmentActive : null]}>
             <Text style={[styles.segmentText, status === "rest" ? styles.segmentTextActive : null]}>休息</Text>
           </Pressable>
@@ -163,11 +164,12 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
 
         <Text style={styles.sectionLabel}>训练部位</Text>
         <View style={styles.partGrid}>
-          {workoutParts.map((part) => {
-            const selected = selectedParts.includes(part);
+          {WORKOUT_PARTS.map((part) => {
+            const selected = selectedParts.includes(part.name);
             return (
-              <Pressable key={part} accessibilityRole="button" accessibilityLabel={`选择${part}`} onPress={() => togglePart(part)} style={[styles.partButton, selected ? styles.partButtonActive : null]}>
-                <Text style={[styles.partText, selected ? styles.partTextActive : null]}>{part}</Text>
+              <Pressable key={part.name} accessibilityRole="button" accessibilityLabel={`选择${part.name}`} onPress={() => togglePart(part.name)} style={[styles.partButton, selected ? styles.partButtonActive : null]}>
+                <Text style={styles.partIcon}>{part.icon}</Text>
+                <Text style={[styles.partText, selected ? styles.partTextActive : null]}>{part.name}</Text>
               </Pressable>
             );
           })}
@@ -377,7 +379,7 @@ const styles = StyleSheet.create({
     gap: 8
   },
   barFill: {
-    backgroundColor: "#1fa8e2",
+    backgroundColor: "#7cb87c",
     borderRadius: 8,
     bottom: 0,
     left: 0,
@@ -425,7 +427,7 @@ const styles = StyleSheet.create({
     paddingTop: 8
   },
   chartIcon: {
-    color: "#1fa8e2",
+    color: "#7cb87c",
     fontSize: 24,
     fontWeight: "900"
   },
@@ -438,15 +440,15 @@ const styles = StyleSheet.create({
     paddingVertical: 9
   },
   chipActive: {
-    backgroundColor: "#dff3ff",
-    borderColor: "#1fa8e2"
+    backgroundColor: "#e2f2e2",
+    borderColor: "#7cb87c"
   },
   chipText: {
     color: "#697386",
     fontWeight: "800"
   },
   chipTextActive: {
-    color: "#0f79ad"
+    color: "#5a8a5a"
   },
   deleteButton: {
     backgroundColor: "#f8fafc",
@@ -487,14 +489,14 @@ const styles = StyleSheet.create({
   },
   logBadge: {
     alignItems: "center",
-    backgroundColor: "#dff3ff",
+    backgroundColor: "#e2f2e2",
     borderRadius: 12,
     height: 52,
     justifyContent: "center",
     width: 52
   },
   logBadgeText: {
-    color: "#0f79ad",
+    color: "#5a8a5a",
     fontSize: 17,
     fontWeight: "900"
   },
@@ -527,13 +529,13 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   metric: {
-    backgroundColor: "#eaf6ff",
-    borderColor: "#d7eaf7",
+    backgroundColor: "#f0f7f0",
+    borderColor: "#d8e8d8",
     borderRadius: 16,
     borderWidth: 1,
     flex: 1,
-    minWidth: 160,
-    padding: 18
+    minWidth: 120,
+    padding: 16
   },
   metricRow: {
     flexDirection: "row",
@@ -546,12 +548,12 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
   metricUnit: {
-    color: "#1fa8e2",
+    color: "#7cb87c",
     fontSize: 16
   },
   metricValue: {
-    color: "#1fa8e2",
-    fontSize: 36,
+    color: "#7cb87c",
+    fontSize: 32,
     fontWeight: "900",
     marginTop: 8
   },
@@ -561,32 +563,40 @@ const styles = StyleSheet.create({
     lineHeight: 20
   },
   partButton: {
+    alignItems: "center",
     backgroundColor: "#f8fafc",
     borderColor: "#e3e8ef",
-    borderRadius: 999,
+    borderRadius: 16,
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 9
+    gap: 4,
+    minWidth: 68,
+    paddingHorizontal: 10,
+    paddingVertical: 10
   },
   partButtonActive: {
-    backgroundColor: "#dff3ff",
-    borderColor: "#1fa8e2"
+    backgroundColor: "#e2f2e2",
+    borderColor: "#7cb87c"
   },
   partGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 9
+    gap: 10,
+    justifyContent: "space-between"
+  },
+  partIcon: {
+    fontSize: 22
   },
   partText: {
     color: "#697386",
+    fontSize: 13,
     fontWeight: "800"
   },
   partTextActive: {
-    color: "#0f79ad"
+    color: "#5a8a5a"
   },
   saveButton: {
     alignItems: "center",
-    backgroundColor: "#1fa8e2",
+    backgroundColor: "#7cb87c",
     borderRadius: 14,
     paddingVertical: 14
   },
@@ -610,8 +620,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12
   },
   segmentActive: {
-    backgroundColor: "#1fa8e2",
-    borderColor: "#1fa8e2"
+    backgroundColor: "#7cb87c",
+    borderColor: "#7cb87c"
   },
   segmentRow: {
     flexDirection: "row",

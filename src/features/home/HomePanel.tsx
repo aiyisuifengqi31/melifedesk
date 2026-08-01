@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import type { UiTokens } from "@/shared/ui/primitives";
-import { hydrateNotesFromCloud, loadNotes } from "@/features/home/notesStorage";
+import { hydrateNotesFromCloud, loadNotes, type NoteItem } from "@/features/home/notesStorage";
 import { createTodoId, getDefaultTodoStorage, hydrateTodosFromCloud, loadLocalTodos, saveLocalTodos, type TodoTask, type TodoStorage } from "@/features/plan/todoStorage";
 import type { NavItem } from "@/navigation/items";
 import { MealSpinner } from "./MealSpinner";
 import { NotesPanel } from "./NotesPanel";
 
 const EXAM_WRONG_KEY = "fanfan-guanguan.exam.wrongQuestions.v1";
+const MAX_HOME_NOTES = 3;
 
 type HomePanelProps = {
   onNavigate?: (href: NavItem["href"]) => void;
@@ -160,9 +161,6 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
                     {todo.completed ? <Text style={styles.todoCheckMark}>✓</Text> : null}
                   </View>
                   <Text style={[styles.todoTitle, todo.completed ? styles.todoTitleDone : null]} numberOfLines={1}>{todo.title}</Text>
-                  <View style={styles.todoTag}>
-                    <Text style={styles.todoTagText}>常规</Text>
-                  </View>
                 </Pressable>
               ))
             )}
@@ -171,19 +169,34 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
 
         <View style={[styles.widget, styles.widgetRight]}>
           <View style={styles.widgetHeader}>
-            <Text style={styles.widgetIcon}>💡</Text>
-            <Text style={styles.widgetTitle}>灵感随笔</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="查看全部灵感" onPress={() => setViewState("notes")} style={styles.widgetMore}>
+            <Text style={styles.widgetIcon}>📝</Text>
+            <Text style={styles.widgetTitle}>备忘录</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="查看全部备忘" onPress={() => setViewState("notes")} style={styles.widgetMore}>
               <Text style={styles.widgetMoreText}>全部 →</Text>
             </Pressable>
           </View>
 
-          <Pressable accessibilityRole="button" accessibilityLabel="记录灵感" onPress={() => setViewState("notes")} style={styles.notesCard}>
-            <Text style={styles.notesPlaceholder}>闪过的念头...</Text>
-            <View style={styles.notesRecordButton}>
-              <Text style={styles.notesRecordText}>记录</Text>
-            </View>
-            <Text style={styles.notesHint}>还没有灵感记录</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="记一条备忘" onPress={() => setViewState("notes")} style={styles.notesCard}>
+            {notesCount === 0 ? (
+              <>
+                <Text style={styles.notesPlaceholder}>闪过的念头、待买清单...</Text>
+                <View style={styles.notesRecordButton}>
+                  <Text style={styles.notesRecordText}>记一条</Text>
+                </View>
+              </>
+            ) : (
+              <View style={styles.notesList}>
+                {loadNotes().slice(0, MAX_HOME_NOTES).map((note) => (
+                  <View key={note.id} style={styles.noteRow}>
+                    <View style={styles.noteDot} />
+                    <Text style={styles.noteRowText} numberOfLines={1}>{note.title || note.content}</Text>
+                  </View>
+                ))}
+                {notesCount > MAX_HOME_NOTES ? (
+                  <Text style={styles.notesMore}>还有 {notesCount - MAX_HOME_NOTES} 条</Text>
+                ) : null}
+              </View>
+            )}
           </Pressable>
         </View>
       </View>
@@ -207,7 +220,7 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
           <View style={styles.summaryDivider} />
           <View style={styles.summaryStat}>
             <Text style={styles.summaryValue}>{notesCount}</Text>
-            <Text style={styles.summaryLabel}>灵感随笔</Text>
+            <Text style={styles.summaryLabel}>备忘录</Text>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryStat}>
@@ -275,8 +288,9 @@ function createStyles(tokens: UiTokens) {
       backgroundColor: "#ffffff",
       borderRadius: 22,
       flex: 1,
-      gap: 12,
-      padding: 16,
+      gap: 10,
+      minHeight: 170,
+      padding: 14,
       shadowColor: "#7cb87c",
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.06,
@@ -284,23 +298,24 @@ function createStyles(tokens: UiTokens) {
       elevation: 2
     },
     widgetLeft: {
-      flex: 1.1
+      flex: 1.05
     },
     widgetRight: {
-      flex: 0.9
+      flex: 0.95
     },
     widgetHeader: {
       alignItems: "center",
       flexDirection: "row",
-      gap: 8
+      gap: 6,
+      marginBottom: 2
     },
     widgetIcon: {
-      fontSize: 18
+      fontSize: 16
     },
     widgetTitle: {
       color: tokens.text,
       flex: 1,
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: "900"
     },
     widgetMore: {
@@ -308,7 +323,7 @@ function createStyles(tokens: UiTokens) {
     },
     widgetMoreText: {
       color: tokens.textMuted,
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: "800"
     },
     todoInputRow: {
@@ -317,41 +332,46 @@ function createStyles(tokens: UiTokens) {
     },
     todoInput: {
       backgroundColor: "#f6faf6",
-      borderRadius: 14,
+      borderRadius: 12,
       color: tokens.text,
       flex: 1,
-      fontSize: 14,
-      paddingHorizontal: 14,
-      paddingVertical: 10
+      fontSize: 13,
+      paddingHorizontal: 12,
+      paddingVertical: 8
     },
     todoAddButton: {
       alignItems: "center",
       backgroundColor: tokens.accent,
-      borderRadius: 14,
+      borderRadius: 12,
+      height: 36,
       justifyContent: "center",
-      width: 42
+      width: 36
     },
     todoAddText: {
       color: "#ffffff",
-      fontSize: 20,
+      fontSize: 18,
       fontWeight: "900"
     },
     todoList: {
-      gap: 10
+      gap: 8
     },
     todoRow: {
       alignItems: "center",
+      backgroundColor: "#f6faf6",
+      borderRadius: 10,
       flexDirection: "row",
-      gap: 10
+      gap: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 8
     },
     todoCheck: {
       alignItems: "center",
       borderColor: tokens.border,
-      borderRadius: 6,
-      borderWidth: 2,
-      height: 20,
+      borderRadius: 5,
+      borderWidth: 1.5,
+      height: 18,
       justifyContent: "center",
-      width: 20
+      width: 18
     },
     todoCheckActive: {
       backgroundColor: tokens.accent,
@@ -359,13 +379,13 @@ function createStyles(tokens: UiTokens) {
     },
     todoCheckMark: {
       color: "#ffffff",
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: "900"
     },
     todoTitle: {
       color: tokens.text,
       flex: 1,
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: "700"
     },
     todoTitleDone: {
@@ -385,38 +405,67 @@ function createStyles(tokens: UiTokens) {
     },
     emptyHint: {
       color: tokens.textMuted,
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: "700",
       textAlign: "center"
     },
     notesCard: {
-      alignItems: "flex-start",
+      alignItems: "stretch",
       backgroundColor: "#f6faf6",
       borderRadius: 16,
-      gap: 12,
-      padding: 14
+      flex: 1,
+      justifyContent: "center",
+      padding: 12
     },
     notesPlaceholder: {
       color: tokens.textMuted,
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: "700"
     },
     notesRecordButton: {
       alignItems: "center",
+      alignSelf: "flex-start",
       backgroundColor: tokens.accent,
       borderRadius: 12,
-      paddingHorizontal: 18,
-      paddingVertical: 10
+      marginTop: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 8
     },
     notesRecordText: {
       color: "#ffffff",
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: "900"
     },
     notesHint: {
       color: tokens.textMuted,
       fontSize: 12,
       fontWeight: "700"
+    },
+    notesList: {
+      gap: 8
+    },
+    noteRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 8
+    },
+    noteDot: {
+      backgroundColor: tokens.accent,
+      borderRadius: 999,
+      height: 6,
+      width: 6
+    },
+    noteRowText: {
+      color: tokens.text,
+      flex: 1,
+      fontSize: 13,
+      fontWeight: "700"
+    },
+    notesMore: {
+      color: tokens.textMuted,
+      fontSize: 12,
+      fontWeight: "800",
+      marginLeft: 14
     },
     summaryCard: {
       backgroundColor: "#ffffff",
