@@ -23,7 +23,6 @@ export default (): ExpoConfig => ({
   web: {
     bundler: "metro",
     output: "static",
-    baseUrl: process.env.PAGES_BASE_URL || "/",
     favicon: "./assets/favicon.png"
   },
   plugins: [
@@ -38,6 +37,7 @@ export default (): ExpoConfig => ({
     ]
   ],
   experiments: {
+    baseUrl: process.env.PAGES_BASE_URL || "",
     typedRoutes: true
   }
 });
