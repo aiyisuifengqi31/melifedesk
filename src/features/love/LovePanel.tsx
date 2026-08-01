@@ -1,140 +1,571 @@
-import { useState } from "react";
-import { Image, StyleSheet, Text, TextInput, View } from "react-native";
+import { useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
+import type { UiTokens } from "@/shared/ui/primitives";
 
-import { ActionChip, AppPage, ContentCard, EmptyState, FloatingQuickAction, PageHeader, PrimaryButton, SectionHeader, SegmentedTabs, StatCard, type UiTokens } from "@/shared/ui/primitives";
-import { calculateCycleWindow, calculateDaysTogether } from "./loveService";
+type LoveTab = "diary" | "anniversary";
+type DiaryVisibility = "private" | "couple_read";
 
-const tabs = ["今日心情", "日记", "纪念日", "生理周期", "倒计时"];
-const tokens: UiTokens = {
-  accent: "#8f5a72",
-  accentSoft: "#f4e4ec",
-  background: "#fff8fb",
-  border: "#ead4df",
-  surface: "#ffffff",
-  surfaceMuted: "#fbedf3",
-  text: "#332431",
-  textMuted: "#786574"
+type DiaryEntry = {
+  content: string;
+  createTime: string;
+  date: string;
+  id: string;
+  mood: string;
+  visibility: DiaryVisibility;
 };
 
-export function LovePanel({ themeTokens = tokens }: { themeTokens?: UiTokens }) {
-  const [feedback, setFeedback] = useState("今天还没有新的预览记录。");
-  const daysTogether = calculateDaysTogether("2025-05-20", "2026-07-30");
-  const cycleWindow = calculateCycleWindow("2026-07-10");
+type AnniversaryEntry = {
+  date: string;
+  id: string;
+  repeatYearly: boolean;
+  title: string;
+};
+
+type LoveStorage = {
+  getItem: (key: string) => string | null;
+  setItem: (key: string, value: string) => void;
+};
+
+const DIARY_KEY = "fanfan-guanguan.love.diaries.v1";
+const ANNIVERSARY_KEY = "fanfan-guanguan.love.anniversaries.v1";
+const moods = ["开心", "甜蜜", "平静", "难过", "生气", "疲惫"];
+const moodIcons: Record<string, string> = {
+  开心: "😊",
+  甜蜜: "🥰",
+  平静: "😌",
+  难过: "😢",
+  生气: "😤",
+  疲惫: "😴"
+};
+
+let memoryStore = new Map<string, string>();
+
+const memoryStorage: LoveStorage = {
+  getItem: (key) => memoryStore.get(key) ?? null,
+  setItem: (key, value) => {
+    memoryStore.set(key, value);
+  }
+};
+
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
+export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: UiTokens }) {
+  const loveStorage = useMemo(() => storage ?? getDefaultLoveStorage(), [storage]);
+  const [tab, setTab] = useState<LoveTab>("diary");
+  const [diaries, setDiaries] = useState<DiaryEntry[]>(() => loadArray<DiaryEntry>(loveStorage, DIARY_KEY));
+  const [anniversaries, setAnniversaries] = useState<AnniversaryEntry[]>(() => loadArray<AnniversaryEntry>(loveStorage, ANNIVERSARY_KEY));
+  const [content, setContent] = useState("");
+  const [mood, setMood] = useState("开心");
+  const [date, setDate] = useState(todayIso());
+  const [visibility, setVisibility] = useState<DiaryVisibility>("private");
+  const [anniversaryTitle, setAnniversaryTitle] = useState("");
+  const [anniversaryDate, setAnniversaryDate] = useState(todayIso());
+  const [repeatYearly, setRepeatYearly] = useState(false);
+  const [feedback, setFeedback] = useState("写下今天的小瞬间。");
+
+  const [diaryDatePickerOpen, setDiaryDatePickerOpen] = useState(false);
+  const [anniversaryDatePickerOpen, setAnniversaryDatePickerOpen] = useState(false);
+
+  const saveDiary = () => {
+    const cleanContent = content.trim();
+    if (!cleanContent) {
+      setFeedback("请先写一点日记内容。");
+      return;
+    }
+
+    const entry: DiaryEntry = {
+      content: cleanContent,
+      createTime: new Date().toISOString(),
+      date,
+      id: createLoveId("diary"),
+      mood,
+      visibility
+    };
+    const nextEntries = [entry, ...diaries];
+    setDiaries(nextEntries);
+    loveStorage.setItem(DIARY_KEY, JSON.stringify(nextEntries));
+    setContent("");
+    setFeedback("日记已保存。");
+  };
+
+  const saveAnniversary = () => {
+    const title = anniversaryTitle.trim();
+    if (!title) {
+      setFeedback("请先输入纪念日名称。");
+      return;
+    }
+
+    const entry: AnniversaryEntry = {
+      date: anniversaryDate,
+      id: createLoveId("anniversary"),
+      repeatYearly,
+      title
+    };
+    const nextEntries = [entry, ...anniversaries];
+    setAnniversaries(nextEntries);
+    loveStorage.setItem(ANNIVERSARY_KEY, JSON.stringify(nextEntries));
+    setAnniversaryTitle("");
+    setFeedback("纪念日已添加。");
+  };
+
+  const deleteDiary = (id: string) => {
+    const nextEntries = diaries.filter((entry) => entry.id !== id);
+    setDiaries(nextEntries);
+    loveStorage.setItem(DIARY_KEY, JSON.stringify(nextEntries));
+    setFeedback("日记已删除。");
+  };
+
+  const deleteAnniversary = (id: string) => {
+    const nextEntries = anniversaries.filter((entry) => entry.id !== id);
+    setAnniversaries(nextEntries);
+    loveStorage.setItem(ANNIVERSARY_KEY, JSON.stringify(nextEntries));
+    setFeedback("纪念日已删除。");
+  };
 
   return (
-    <AppPage tokens={themeTokens}>
-      <PageHeader meta={`在一起 ${daysTogether} 天 · 下一个纪念日还有 24 天`} subtitle="记录我们的小日常" title="恋爱日记" tokens={themeTokens} />
-      <SegmentedTabs options={tabs} selected="今日心情" tokens={themeTokens} />
-
-      <View style={styles.grid}>
-        <StatCard label="在一起天数" value={`${daysTogether}`} tokens={themeTokens} />
-        <StatCard label="下一纪念日倒计时" value="24 天" tokens={themeTokens} />
-        <StatCard label="恋爱开始日期" value="2025-05-20" tokens={themeTokens} />
-        <StatCard label="双方生日" value="已预留" tokens={themeTokens} />
+    <View style={styles.stack}>
+      <View style={styles.hero}>
+        <Text style={styles.heroTitle}>恋爱日记</Text>
+        <Text style={styles.heroSub}>记录每一个甜蜜瞬间</Text>
       </View>
 
-      <ContentCard tokens={themeTokens}>
-        <SectionHeader title="今日心情" tokens={themeTokens} />
-        <View style={styles.row}>
-          <ActionChip label="我的心情" selected tokens={themeTokens} />
-          <ActionChip label="对方心情" tokens={themeTokens} />
-          <ActionChip label="心情分数 8/10" tokens={themeTokens} />
-        </View>
-        <TextInput placeholder="心情文字" style={[styles.input, { borderColor: themeTokens.border, color: themeTokens.text }]} />
-        <View style={styles.row}>
-          {["开心", "想念", "忙碌", "需要抱抱"].map((tag) => (
-            <ActionChip key={tag} label={tag} tokens={themeTokens} />
-          ))}
-        </View>
-        <PrimaryButton label="记录心情" onPress={() => setFeedback("已记录到预览草稿，登录后再同步。")} tokens={themeTokens} />
-        <Text nativeID="love-feedback" style={[styles.feedback, { backgroundColor: themeTokens.surfaceMuted, color: themeTokens.text }]}>
-          {feedback}
-        </Text>
-      </ContentCard>
+      <View style={styles.tabs}>
+        <TabButton active={tab === "diary"} label="日记" onPress={() => setTab("diary")} />
+        <TabButton active={tab === "anniversary"} label="纪念日" onPress={() => setTab("anniversary")} />
+      </View>
 
-      <ContentCard tokens={themeTokens}>
-        <SectionHeader title="日记" tokens={themeTokens} />
-        <Text style={[styles.body, { color: themeTokens.textMuted }]}>日记时间线 · private / couple_read / couple_edit · 共同编辑开关。</Text>
-        <View style={[styles.diaryPreview, { backgroundColor: themeTokens.surfaceMuted }]}>
-          <View>
-            <Text style={[styles.cardTitle, { color: themeTokens.text }]}>晚饭后散步</Text>
-            <Text style={[styles.body, { color: themeTokens.textMuted }]}>2026-07-30 · 标签：日常 / 散步 · 可见范围：couple_read</Text>
+      {tab === "diary" ? (
+        <>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>写日记</Text>
+            <TextInput
+              multiline
+              onChangeText={setContent}
+              placeholder="今天发生了什么..."
+              style={[styles.input, styles.diaryInput]}
+              value={content}
+            />
+            <View style={styles.moodGrid}>
+              {moods.map((item) => (
+                <Pressable key={item} accessibilityRole="button" accessibilityLabel={`选择心情：${item}`} onPress={() => setMood(item)} style={[styles.moodChip, mood === item ? styles.moodChipActive : null]}>
+                  <Text style={styles.moodText}>{moodIcons[item]} {item}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={styles.visibilityRow}>
+              <Pressable accessibilityRole="button" accessibilityLabel="仅自己可见" onPress={() => setVisibility("private")} style={[styles.visibilityButton, visibility === "private" ? styles.visibilityActive : null]}>
+                <Text style={[styles.visibilityText, visibility === "private" ? styles.visibilityTextActive : null]}>仅自己可见</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="双方可见" onPress={() => setVisibility("couple_read")} style={[styles.visibilityButton, visibility === "couple_read" ? styles.visibilityActive : null]}>
+                <Text style={[styles.visibilityText, visibility === "couple_read" ? styles.visibilityTextActive : null]}>双方可见</Text>
+              </Pressable>
+            </View>
+            <View style={styles.saveRow}>
+              <Pressable accessibilityRole="button" accessibilityLabel="选择日记日期" onPress={() => setDiaryDatePickerOpen(true)} style={[styles.input, styles.dateInput, styles.dateField]}>
+                <Text style={styles.dateValue}>{date.replaceAll("-", "/")}</Text>
+                <Text style={styles.dateChevron}>⌄</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="保存日记" nativeID="love-save-diary-button" onPress={saveDiary} style={styles.primaryButton}>
+                <Text style={styles.primaryText}>保存</Text>
+              </Pressable>
+            </View>
+            {diaryDatePickerOpen ? (
+              <DatePickerPopup
+                onCancel={() => setDiaryDatePickerOpen(false)}
+                onConfirm={(selectedDate) => { setDate(selectedDate); setDiaryDatePickerOpen(false); }}
+                selectedDate={date}
+                title="选择日记日期"
+              />
+            ) : null}
+            <Text nativeID="love-feedback" style={styles.feedback}>{feedback}</Text>
           </View>
-          <Image accessibilityLabel="日记图片缩略图" source={{ uri: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" }} style={styles.thumbnail} />
-        </View>
-        <PrimaryButton label="编辑日记" onPress={() => setFeedback("已打开日记编辑预览。")} tokens={themeTokens} />
-      </ContentCard>
 
-      <ContentCard tokens={themeTokens}>
-        <SectionHeader title="纪念日" tokens={themeTokens} />
-        <View style={styles.row}>
-          <ActionChip label="恋爱开始日期" selected tokens={themeTokens} />
-          <ActionChip label="下一纪念日倒计时" tokens={themeTokens} />
-          <ActionChip label="自定义倒计时" tokens={themeTokens} />
-        </View>
-      </ContentCard>
+          {diaries.length === 0 ? (
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyIcon}>♡</Text>
+              <Text style={styles.emptyTitle}>还没有日记</Text>
+              <Text style={styles.emptyText}>记录第一篇日记吧</Text>
+            </View>
+          ) : (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>日记列表</Text>
+              {diaries.map((entry) => (
+                <View key={entry.id} style={styles.diaryCard}>
+                  <View style={styles.diaryMetaRow}>
+                    <Text style={styles.diaryDate}>{entry.date}</Text>
+                    <View style={styles.diaryActions}>
+                      <Text style={styles.visibilityBadge}>{entry.visibility === "private" ? "仅自己可见" : "双方可见"}</Text>
+                      <Pressable accessibilityRole="button" accessibilityLabel={`删除日记：${entry.date}`} onPress={() => deleteDiary(entry.id)} style={styles.deleteButton}>
+                        <Text style={styles.deleteText}>删除</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                  <Text style={styles.diaryMood}>{moodIcons[entry.mood]} {entry.mood}</Text>
+                  <Text style={styles.diaryContent}>{entry.content}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </>
+      ) : null}
 
-      <ContentCard tokens={themeTokens}>
-        <SectionHeader title="生理周期" tokens={themeTokens} />
-        <Text style={[styles.body, { color: themeTokens.textMuted }]}>当前状态：记录者本人可编辑；对象仅在授权开启时只读。</Text>
-        <Text style={[styles.body, { color: themeTokens.text }]}>预测区间：{cycleWindow.startDate} 至 {cycleWindow.endDate}</Text>
-        <Text style={[styles.disclaimer, { color: themeTokens.accent }]}>仅供日程参考，不构成医疗建议。</Text>
-      </ContentCard>
+      {tab === "anniversary" ? (
+        <>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>添加纪念日</Text>
+            <TextInput onChangeText={setAnniversaryTitle} placeholder="纪念日名称（如：在一起的日子）" style={styles.input} value={anniversaryTitle} />
+            <Pressable accessibilityRole="button" accessibilityLabel="选择纪念日日期" onPress={() => setAnniversaryDatePickerOpen(true)} style={[styles.input, styles.dateField]}>
+              <Text style={styles.dateValue}>{anniversaryDate.replaceAll("-", "/")}</Text>
+              <Text style={styles.dateChevron}>⌄</Text>
+            </Pressable>
+            {anniversaryDatePickerOpen ? (
+              <DatePickerPopup
+                onCancel={() => setAnniversaryDatePickerOpen(false)}
+                onConfirm={(selectedDate) => { setAnniversaryDate(selectedDate); setAnniversaryDatePickerOpen(false); }}
+                selectedDate={anniversaryDate}
+                title="选择纪念日日期"
+              />
+            ) : null}
+            <Pressable accessibilityRole="switch" accessibilityLabel="每年重复" accessibilityState={{ checked: repeatYearly }} onPress={() => setRepeatYearly((value) => !value)} style={styles.repeatRow}>
+              <View style={[styles.switchTrack, repeatYearly ? styles.switchTrackActive : null]}>
+                <View style={[styles.switchThumb, repeatYearly ? styles.switchThumbActive : null]} />
+              </View>
+              <Text style={styles.repeatText}>每年重复</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="添加纪念日" onPress={saveAnniversary} style={styles.primaryButton}>
+              <Text style={styles.primaryText}>添加</Text>
+            </Pressable>
+          </View>
 
-      <EmptyState description="还没有更多共同记忆。可以先记录今天的心情，或者写一篇小日记。" title="空状态卡片" tokens={themeTokens} />
-      <FloatingQuickAction label="快速记录" onPress={() => setFeedback("已打开快速记录预览。")} tokens={themeTokens} />
-    </AppPage>
+          {anniversaries.length === 0 ? (
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyIcon}>♡</Text>
+              <Text style={styles.emptyTitle}>还没有纪念日</Text>
+              <Text style={styles.emptyText}>添加你们的特殊日子</Text>
+            </View>
+          ) : (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>纪念日列表</Text>
+              {anniversaries.map((entry) => (
+                <View key={entry.id} style={styles.diaryCard}>
+                  <View style={styles.diaryMetaRow}>
+                    <Text style={styles.diaryDate}>{entry.date}</Text>
+                    <Pressable accessibilityRole="button" accessibilityLabel={`删除纪念日：${entry.title}`} onPress={() => deleteAnniversary(entry.id)} style={styles.deleteButton}>
+                      <Text style={styles.deleteText}>删除</Text>
+                    </Pressable>
+                  </View>
+                  <Text style={styles.diaryContent}>{entry.title}</Text>
+                  <Text style={styles.emptyText}>{entry.repeatYearly ? "每年重复" : "不重复"}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </>
+      ) : null}
+    </View>
   );
 }
 
+function TabButton({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={[styles.tab, active ? styles.tabActive : null]}>
+      <Text style={[styles.tabText, active ? styles.tabTextActive : null]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function getDefaultLoveStorage(): LoveStorage {
+  if (typeof window !== "undefined" && window.localStorage) {
+    return window.localStorage;
+  }
+  return memoryStorage;
+}
+
+function loadArray<T>(storage: LoveStorage, key: string) {
+  const raw = storage.getItem(key);
+  if (!raw) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(raw) as T[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function createLoveId(prefix: string) {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+export function clearLoveMemoryForTests() {
+  memoryStore = new Map<string, string>();
+}
+
 const styles = StyleSheet.create({
-  body: {
-    fontSize: 14,
-    lineHeight: 20
+  card: {
+    backgroundColor: "#ffffff",
+    borderColor: "#e3e8ef",
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 14,
+    padding: 18
   },
   cardTitle: {
-    fontSize: 16,
+    color: "#111827",
+    fontSize: 22,
     fontWeight: "900"
   },
-  diaryPreview: {
-    alignItems: "center",
-    borderRadius: 12,
-    flexDirection: "row",
-    gap: 12,
-    justifyContent: "space-between",
-    padding: 12
+  dateChevron: {
+    color: "#697386",
+    fontSize: 20,
+    fontWeight: "900"
   },
-  disclaimer: {
+  dateField: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  dateInput: {
+    flex: 1
+  },
+  dateValue: {
+    color: "#111827",
+    fontSize: 16,
+    fontWeight: "700"
+  },
+  deleteButton: {
+    backgroundColor: "#fee2e2",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
+  deleteText: {
+    color: "#ef4444",
     fontSize: 13,
-    fontWeight: "900",
-    lineHeight: 19
+    fontWeight: "900"
+  },
+  diaryCard: {
+    backgroundColor: "#f8fafc",
+    borderColor: "#e3e8ef",
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 8,
+    padding: 14
+  },
+  diaryContent: {
+    color: "#111827",
+    fontSize: 17,
+    fontWeight: "800",
+    lineHeight: 24
+  },
+  diaryDate: {
+    color: "#697386",
+    fontSize: 14,
+    fontWeight: "800"
+  },
+  diaryInput: {
+    minHeight: 150,
+    textAlignVertical: "top"
+  },
+  diaryActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10
+  },
+  diaryMetaRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  diaryMood: {
+    color: "#697386",
+    fontSize: 15,
+    fontWeight: "800"
+  },
+  emptyBox: {
+    alignItems: "center",
+    gap: 8,
+    minHeight: 230,
+    justifyContent: "center"
+  },
+  emptyIcon: {
+    color: "#c6ccd5",
+    fontSize: 76,
+    lineHeight: 82
+  },
+  emptyText: {
+    color: "#697386",
+    fontSize: 16,
+    fontWeight: "700"
+  },
+  emptyTitle: {
+    color: "#111827",
+    fontSize: 24,
+    fontWeight: "900"
   },
   feedback: {
-    borderRadius: 10,
+    color: "#697386",
     fontSize: 13,
-    fontWeight: "800",
-    paddingHorizontal: 10,
-    paddingVertical: 8
+    fontWeight: "800"
   },
-  grid: {
+  hero: {
+    gap: 8
+  },
+  heroSub: {
+    color: "#697386",
+    fontSize: 18,
+    fontWeight: "700"
+  },
+  heroTitle: {
+    color: "#111827",
+    fontSize: 34,
+    fontWeight: "900"
+  },
+  input: {
+    backgroundColor: "#f8fafc",
+    borderColor: "#e3e8ef",
+    borderRadius: 14,
+    borderWidth: 1,
+    color: "#111827",
+    fontSize: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 13
+  },
+  moodChip: {
+    backgroundColor: "#ffffff",
+    borderColor: "#e3e8ef",
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 10
+  },
+  moodChipActive: {
+    backgroundColor: "#eaf6ff",
+    borderColor: "#1fa8e2"
+  },
+  moodGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10
   },
-  input: {
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10
+  moodText: {
+    color: "#111827",
+    fontSize: 16,
+    fontWeight: "900"
   },
-  row: {
+  primaryButton: {
+    alignItems: "center",
+    backgroundColor: "#7acbf0",
+    borderRadius: 14,
+    minWidth: 116,
+    paddingHorizontal: 22,
+    paddingVertical: 14
+  },
+  primaryText: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  repeatRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12
+  },
+  repeatText: {
+    color: "#111827",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  saveRow: {
+    alignItems: "center",
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8
+    gap: 12
   },
-  thumbnail: {
-    borderRadius: 10,
-    height: 58,
-    width: 58
+  stack: {
+    gap: 18
+  },
+  switchThumb: {
+    backgroundColor: "#ffffff",
+    borderRadius: 999,
+    height: 32,
+    width: 32
+  },
+  switchThumbActive: {
+    marginLeft: 30
+  },
+  switchTrack: {
+    backgroundColor: "#e3e8ef",
+    borderRadius: 999,
+    padding: 3,
+    width: 68
+  },
+  switchTrackActive: {
+    backgroundColor: "#7acbf0"
+  },
+  tab: {
+    alignItems: "center",
+    borderRadius: 14,
+    flex: 1,
+    paddingVertical: 13
+  },
+  tabActive: {
+    backgroundColor: "#ffffff"
+  },
+  tabs: {
+    backgroundColor: "#f1f5f9",
+    borderRadius: 16,
+    flexDirection: "row",
+    gap: 4,
+    padding: 5
+  },
+  tabText: {
+    color: "#697386",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  tabTextActive: {
+    color: "#111827"
+  },
+  visibilityActive: {
+    backgroundColor: "#1fa8e2",
+    borderColor: "#1fa8e2"
+  },
+  visibilityBadge: {
+    backgroundColor: "#eaf6ff",
+    borderRadius: 999,
+    color: "#0f79ad",
+    fontSize: 13,
+    fontWeight: "900",
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
+  visibilityButton: {
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderColor: "#e3e8ef",
+    borderRadius: 999,
+    borderWidth: 1,
+    flex: 1,
+    minWidth: 130,
+    paddingVertical: 11
+  },
+  visibilityRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
+  },
+  visibilityText: {
+    color: "#697386",
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  visibilityTextActive: {
+    color: "#ffffff"
   }
 });

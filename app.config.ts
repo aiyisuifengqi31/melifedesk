@@ -23,6 +23,7 @@ export default (): ExpoConfig => ({
   web: {
     bundler: "metro",
     output: "static",
+    baseUrl: process.env.PAGES_BASE_URL || "/",
     favicon: "./assets/favicon.png"
   },
   plugins: [

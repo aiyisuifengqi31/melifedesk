@@ -1,8 +1,13 @@
+import { hydrateFromCloud, saveCloudValue } from "@/features/sync/cloudSync";
+
+export type TodoPriority = "low" | "normal" | "high" | "urgent";
+
 export type TodoTask = {
   completed: boolean;
   createTime: string;
   deadline: string | null;
   id: string;
+  priority: TodoPriority;
   remindAt?: string | null;
   remoteId?: string | null;
   title: string;
@@ -50,7 +55,12 @@ export function loadLocalTodos(storage: TodoStorage = getDefaultTodoStorage()): 
     if (!Array.isArray(parsed)) {
       return [];
     }
-    return parsed.filter((task) => typeof task.id === "string" && typeof task.title === "string" && typeof task.completed === "boolean");
+    return parsed
+      .filter((task) => typeof task.id === "string" && typeof task.title === "string" && typeof task.completed === "boolean")
+      .map((task) => ({
+        ...task,
+        priority: isTodoPriority(task.priority) ? task.priority : "normal"
+      }));
   } catch {
     return [];
   }
@@ -58,6 +68,12 @@ export function loadLocalTodos(storage: TodoStorage = getDefaultTodoStorage()): 
 
 export function saveLocalTodos(tasks: TodoTask[], storage: TodoStorage = getDefaultTodoStorage()) {
   storage.setItem(TODO_STORAGE_KEY, JSON.stringify(tasks));
+  void saveCloudValue(TODO_STORAGE_KEY, tasks);
+}
+
+export async function hydrateTodosFromCloud(storage: TodoStorage = getDefaultTodoStorage()): Promise<TodoTask[]> {
+  const local = loadLocalTodos(storage);
+  return hydrateFromCloud<TodoTask[]>(TODO_STORAGE_KEY, local, (value) => saveLocalTodos(value, storage));
 }
 
 export function clearLocalTodosForTests(storage: TodoStorage = memoryStorage) {
@@ -81,4 +97,8 @@ export function sortTodos(tasks: TodoTask[]) {
     const rightTime = right.deadline ?? right.createTime;
     return leftTime.localeCompare(rightTime);
   });
+}
+
+function isTodoPriority(value: unknown): value is TodoPriority {
+  return value === "low" || value === "normal" || value === "high" || value === "urgent";
 }

@@ -18,31 +18,32 @@ const sharedDark = {
 export const themes: Record<ThemeId, ThemeDefinition> = {
   default: {
     id: "default",
-    name: "简约主题",
+    name: "清新绿意",
     tokens: {
       light: {
-        background: "#ffffff",
-        surface: "#f7f5fb",
-        surfaceMuted: "#ebe7f4",
-        text: "#272234",
-        textMuted: "#6e647a",
-        accent: "#7d5fff",
-        accentSoft: "#ebe5ff",
-        border: "#ded8ea",
-        danger: "#d94b4b"
+        background: "#f0f7f0",
+        surface: "#ffffff",
+        surfaceMuted: "#e8f2e8",
+        text: "#1f2937",
+        textMuted: "#6b7c6b",
+        accent: "#7cb87c",
+        accentSoft: "#e2f2e2",
+        border: "#d8e8d8",
+        danger: "#e57373"
       },
       dark: sharedDark
     },
     icons: {
+      home: createNavIconResource("default", "home"),
       plan: createNavIconResource("default", "plan"),
       workout: createNavIconResource("default", "workout"),
       finance: createNavIconResource("default", "finance"),
       love: createNavIconResource("default", "love"),
-      gifts: createNavIconResource("default", "gifts"),
-      exam: createNavIconResource("default", "exam")
+      exam: createNavIconResource("default", "exam"),
+      fun: createNavIconResource("default", "fun")
     },
     emptyState: "default/empty-states/generic.svg",
-    chartPalette: ["#7d5fff", "#30bced", "#ffb84d", "#4bcf8f", "#f56cae"],
+    chartPalette: ["#7cb87c", "#6ab0b0", "#e8b87c", "#b8a0d8", "#f28c8c"],
     license: "项目原创占位资源，可在本项目内使用和再分发。"
   },
   cat: {
@@ -63,12 +64,13 @@ export const themes: Record<ThemeId, ThemeDefinition> = {
       dark: { ...sharedDark, accent: "#f0b08e", accentSoft: "#4a3328" }
     },
     icons: {
+      home: createNavIconResource("cat", "home"),
       plan: createNavIconResource("cat", "plan"),
       workout: createNavIconResource("cat", "workout"),
       finance: createNavIconResource("cat", "finance"),
       love: createNavIconResource("cat", "love"),
-      gifts: createNavIconResource("cat", "gifts"),
-      exam: createNavIconResource("cat", "exam")
+      exam: createNavIconResource("cat", "exam"),
+      fun: createNavIconResource("cat", "fun")
     },
     emptyState: "cat/empty-states/generic.svg",
     chartPalette: ["#e88f7a", "#f4c95d", "#8bc6a9", "#b895d6", "#6aaed6"],
@@ -92,12 +94,13 @@ export const themes: Record<ThemeId, ThemeDefinition> = {
       dark: { ...sharedDark, accent: "#efb15b", accentSoft: "#46351f" }
     },
     icons: {
+      home: createNavIconResource("dog", "home"),
       plan: createNavIconResource("dog", "plan"),
       workout: createNavIconResource("dog", "workout"),
       finance: createNavIconResource("dog", "finance"),
       love: createNavIconResource("dog", "love"),
-      gifts: createNavIconResource("dog", "gifts"),
-      exam: createNavIconResource("dog", "exam")
+      exam: createNavIconResource("dog", "exam"),
+      fun: createNavIconResource("dog", "fun")
     },
     emptyState: "dog/empty-states/generic.svg",
     chartPalette: ["#d9902f", "#5aa9a4", "#ef767a", "#7d8cc4", "#6bbf59"],

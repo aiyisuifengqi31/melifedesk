@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
 
 import { AppShell } from "@/components/AppShell";
 import { ActionChip, ContentCard, EmptyState, FloatingQuickAction, InlineError, PageHeader, PrimaryButton, SecondaryButton, SegmentedTabs, StatCard } from "@/shared/ui/primitives";
@@ -18,15 +18,29 @@ describe("Task 6 love page and UI polish", () => {
   it("renders the love diary workspace areas and disclaimer", () => {
     render(<AppShell initialRoute="/love" />);
 
-    expect(screen.getAllByRole("heading", { name: "恋爱日记" }).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("记录我们的小日常")).toBeOnTheScreen();
-    expect(screen.getAllByText("今日心情").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("恋爱日记").length).toBeGreaterThan(0);
+    expect(screen.getByText("记录每一个甜蜜瞬间")).toBeOnTheScreen();
     expect(screen.getAllByText("日记").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("纪念日").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("生理周期").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("倒计时")).toBeOnTheScreen();
-    expect(screen.getByText("仅供日程参考，不构成医疗建议。")).toBeOnTheScreen();
-    expect(screen.getByRole("button", { name: "快速记录" })).toBeOnTheScreen();
+    expect(screen.queryByText("生理周期")).toBeNull();
+    expect(screen.getByText("写日记")).toBeOnTheScreen();
+    expect(screen.getByPlaceholderText("今天发生了什么...")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "仅自己可见" })).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "双方可见" })).toBeOnTheScreen();
+  });
+
+  it("saves a diary with private or shared visibility", () => {
+    render(<AppShell initialRoute="/love" />);
+
+    fireEvent.changeText(screen.getByPlaceholderText("今天发生了什么..."), "今天一起散步，很开心");
+    fireEvent.press(screen.getByRole("button", { name: "选择心情：甜蜜" }));
+    fireEvent.press(screen.getByRole("button", { name: "双方可见" }));
+    fireEvent.press(screen.getByRole("button", { name: "保存日记" }));
+
+    expect(screen.getByText("日记已保存。")).toBeOnTheScreen();
+    expect(screen.getByText("今天一起散步，很开心")).toBeOnTheScreen();
+    expect(screen.getAllByText("双方可见").length).toBeGreaterThan(1);
+    expect(screen.queryByText("还没有日记")).toBeNull();
   });
 
   it("exports reusable polished UI primitives", () => {

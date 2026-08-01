@@ -4,5 +4,5 @@ import { AppShell } from "@/components/AppShell";
 
 export default function FinanceRoute() {
   const router = useRouter();
-  return <AppShell route="/finance" onNavigate={(href) => router.push(href)} />;
+  return <AppShell route="/finance" onNavigate={(href) => router.push(href as never)} />;
 }

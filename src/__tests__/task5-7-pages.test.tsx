@@ -6,13 +6,14 @@ describe("Task 5 and Task 7 pages", () => {
   it("renders the finance workspace controls", () => {
     render(<AppShell initialRoute="/finance" />);
 
-    for (const label of ["今日支出", "今日收入", "本月支出", "本月收入", "本月结余", "预算剩余", "最近账单", "最近 7 天支出趋势", "最近 30 天支出趋势", "本月分类占比", "本月与上月对比", "预算卡片", "存钱目标"]) {
-      expect(screen.getByText(label)).toBeOnTheScreen();
+    for (const label of ["记录", "统计", "储蓄", "分类", "今日支出", "本月支出", "本月收入", "本月结余", "支出明细", "收入明细"]) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
-    expect(screen.getByPlaceholderText("输入金额")).toBeOnTheScreen();
-    expect(screen.getByText("分类图标网格")).toBeOnTheScreen();
+    expect(screen.queryByText("今日收入")).toBeNull();
+    expect(screen.queryByText("预算剩余")).toBeNull();
+    expect(screen.getByPlaceholderText("0.00")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "选择分类：餐饮" })).toBeOnTheScreen();
     expect(screen.getByRole("button", { name: "快速记账" })).toBeOnTheScreen();
-    expect(screen.getByRole("button", { name: "重试" })).toBeOnTheScreen();
   });
 
   it("renders the gift workspace controls", () => {

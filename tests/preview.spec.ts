@@ -72,6 +72,65 @@ test("preview supports theme and dark mode switching", async ({ page }) => {
   await expect(page.locator("#sidebar-theme-mode")).toContainText(/dark|深色/);
 });
 
+test("todo priority menu does not stretch the quick input", async ({ page }) => {
+  await page.goto("/plan");
+
+  const input = page.locator("#plan-quick-input");
+  const priorityButton = page.locator("#plan-priority-button");
+
+  await expect(input).toBeVisible();
+  const before = await input.boundingBox();
+  expect(before).not.toBeNull();
+
+  await priorityButton.click();
+  await expect(page.locator("#plan-priority-menu")).toBeVisible();
+
+  const after = await input.boundingBox();
+  expect(after).not.toBeNull();
+  expect(after?.height).toBe(before?.height);
+});
+
+test("workout page saves a real training log", async ({ page }) => {
+  await page.goto("/workout");
+  await page.evaluate(() => localStorage.removeItem("fanfan-guanguan.workouts.v1"));
+  await page.reload();
+
+  await page.getByPlaceholder("训练项目").click();
+  await page.keyboard.type("背部训练");
+  await page.getByPlaceholder("训练时长").fill("10");
+  await page.getByPlaceholder("消耗热量").fill("200");
+  await page.getByRole("button", { name: "保存记录" }).click();
+
+  await expect(page.locator("#workout-feedback")).toContainText("训练记录已保存");
+  await expect(page.getByText("背部训练")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText("背部训练")).toBeVisible();
+});
+
+test("finance page records expense and updates stats", async ({ page }) => {
+  await page.goto("/finance");
+  await page.evaluate(() => {
+    localStorage.removeItem("fanfan-guanguan.finance.transactions.v1");
+    localStorage.removeItem("fanfan-guanguan.finance.savings.v1");
+    localStorage.removeItem("fanfan-guanguan.finance.categories.v1");
+  });
+  await page.reload();
+
+  await expect(page.getByText("今日收入")).toHaveCount(0);
+  await expect(page.getByText("预算剩余")).toHaveCount(0);
+  await page.getByRole("button", { name: "选择分类：餐饮" }).click();
+  await page.getByPlaceholder("0.00").click();
+  await page.keyboard.type("25.50");
+  await page.getByRole("button", { name: "快速记账" }).click();
+
+  await expect(page.locator("#finance-feedback")).toContainText("支出已保存");
+  await expect(page.getByText("¥-25.50")).toBeVisible();
+  await page.getByRole("button", { name: "统计" }).click();
+  await expect(page.getByText("近7天支出趋势")).toBeVisible();
+  await expect(page.getByText("本月结余 = 本月收入 ¥0.00 - 本月支出 ¥25.50")).toBeVisible();
+});
+
 test("settings entry stays available on every feature page", async ({ page }) => {
   for (const path of ["/plan", "/workout", "/finance", "/love", "/gifts", "/exam"]) {
     await page.goto(path);
@@ -91,21 +150,32 @@ test("primary preview buttons provide visible feedback", async ({ page }) => {
   await page.reload();
   await page.getByRole("button", { name: "新增任务" }).click();
   await page.getByPlaceholder("任务名称").fill("网页端待办验收");
-  await page.getByPlaceholder("截止日期").fill("2026-08-02");
-  await page.getByPlaceholder("提醒时间，可选").fill("09:30");
+  await page.getByRole("button", { name: "选择截止日期" }).click();
+  await expect(page.getByText("设置提醒时间")).toBeVisible();
+  await page.getByPlaceholder("提醒时间").fill("09:30");
+  await page.getByRole("button", { name: "确定提醒时间" }).click();
   await page.getByRole("button", { name: "保存任务" }).click();
   await expect(page.getByText("网页端待办验收")).toBeVisible();
   await expect(page.locator("#plan-feedback")).toContainText("新任务已保存");
 
   await page.goto("/workout");
-  await page.getByRole("button", { name: "今天训练了" }).click();
-  await expect(page.locator("#workout-feedback")).toContainText("已选择训练");
+  await page.evaluate(() => localStorage.removeItem("fanfan-guanguan.workouts.v1"));
+  await page.reload();
+  await page.getByPlaceholder("训练项目").fill("背部训练");
+  await page.getByPlaceholder("训练时长").fill("10");
+  await page.getByPlaceholder("消耗热量").fill("200");
+  await page.getByRole("button", { name: "保存记录" }).click();
+  await expect(page.locator("#workout-feedback")).toContainText("训练记录已保存");
+  await expect(page.getByText("背部训练")).toBeVisible();
 
   await page.goto("/finance");
   await page.locator("#finance-save-button").click();
   await expect(page.locator("#finance-feedback")).toContainText("请先输入金额");
 
   await page.goto("/love");
-  await page.getByRole("button", { name: "记录心情" }).click();
-  await expect(page.locator("#love-feedback")).toContainText("已记录到预览草稿");
+  await page.getByPlaceholder("今天发生了什么...").fill("今天一起散步，很开心");
+  await page.getByRole("button", { name: "双方可见" }).click();
+  await page.getByRole("button", { name: "保存日记" }).click();
+  await expect(page.locator("#love-feedback")).toContainText("日记已保存");
+  await expect(page.getByText("双方可见")).toBeVisible();
 });

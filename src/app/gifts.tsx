@@ -1,8 +1,5 @@
-import { useRouter } from "expo-router";
-
-import { AppShell } from "@/components/AppShell";
+import { Redirect } from "expo-router";
 
 export default function GiftsRoute() {
-  const router = useRouter();
-  return <AppShell route="/gifts" onNavigate={(href) => router.push(href)} />;
+  return <Redirect href="/finance" />;
 }

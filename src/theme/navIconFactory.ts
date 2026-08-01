@@ -3,61 +3,70 @@ import type { NavIconResource, ThemeId } from "./types";
 
 type IconPalette = {
   accent: string;
-  fill: string;
   stroke: string;
 };
 
 const palettes: Record<ThemeId, IconPalette> = {
   default: {
-    accent: "#7d5fff",
-    fill: "#ebe5ff",
-    stroke: "#272234"
+    accent: "#7cb87c",
+    stroke: "#5c7a5c"
   },
   cat: {
     accent: "#e88f7a",
-    fill: "#ffe6d9",
-    stroke: "#34261d"
+    stroke: "#475569"
   },
   dog: {
     accent: "#d9902f",
-    fill: "#ffe8bc",
-    stroke: "#322414"
+    stroke: "#475569"
   }
 };
 
 const motifs: Record<RouteKey, string> = {
-  plan: '<rect x="27" y="40" width="26" height="22" rx="4"/><path d="M32 36v8M48 36v8M31 50h18"/>',
-  workout: '<path d="M24 52h32M24 46v12M56 46v12M31 48v8M49 48v8"/>',
-  finance: '<path d="M28 43h24a5 5 0 0 1 5 5v12H23V48a5 5 0 0 1 5-5z"/><path d="M47 52h8"/>',
-  love: '<path d="M28 42h24v22H28z"/><path d="M40 39c-5-6-14 1 0 10c14-9 5-16 0-10z"/>',
-  gifts: '<rect x="26" y="45" width="28" height="19" rx="3"/><path d="M40 45v19M26 52h28M34 44c-6-6-10-1-4 2M46 44c6-6 10-1 4 2"/>',
-  exam: '<path d="M27 39h26v25H27z"/><path d="M32 47h16M32 54h10M48 58l7 7"/>'
+  home: [
+    '<path d="M28 38l12-10 12 10"/>',
+    '<path d="M32 40v10h16V40"/>'
+  ].join(""),
+  plan: [
+    '<rect x="27" y="30" width="26" height="24" rx="3"/>',
+    '<path d="M27 39h26"/>',
+    '<path d="M33 28v5"/>',
+    '<path d="M47 28v5"/>'
+  ].join(""),
+  workout: [
+    '<path d="M24 36h8a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5h-8"/>',
+    '<path d="M48 36h8a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5h-8"/>',
+    '<path d="M34 42h12"/>'
+  ].join(""),
+  finance: [
+    '<path d="M24 30h32a4 4 0 0 1 4 4v14a4 4 0 0 1-4 4H24a4 4 0 0 1-4-4V34a4 4 0 0 1 4-4z"/>',
+    '<path d="M24 38h8"/>',
+    '<circle cx="48" cy="44" r="3.5"/>'
+  ].join(""),
+  love: [
+    '<path d="M40 52c-6-7-13-2-10 5 1 2 3 5 10 9 7-4 9-7 10-9 3-7-4-12-10-5z"/>'
+  ].join(""),
+  exam: [
+    '<path d="M25 27h30a2 2 0 0 1 2 2v22a2 2 0 0 1-2 2H25a2 2 0 0 1-2-2V29a2 2 0 0 1 2-2z"/>',
+    '<path d="M27 33h26"/>',
+    '<path d="M32 39h10"/>',
+    '<path d="M50 42l6 6"/>',
+    '<path d="M32 45h8"/>'
+  ].join(""),
+  fun: [
+    '<path d="M34 29l16 11-16 11z"/>'
+  ].join("")
 };
-
-function themeHead(themeId: ThemeId, fill: string, stroke: string): string {
-  if (themeId === "cat") {
-    return `<path d="M22 21 L27 11 L32 21" fill="${fill}" stroke="${stroke}" stroke-width="3" stroke-linejoin="round"/><path d="M48 21 L53 11 L58 21" fill="${fill}" stroke="${stroke}" stroke-width="3" stroke-linejoin="round"/>`;
-  }
-
-  if (themeId === "dog") {
-    return `<path d="M20 25 Q12 18 14 34" fill="${fill}" stroke="${stroke}" stroke-width="3"/><path d="M60 25 Q68 18 66 34" fill="${fill}" stroke="${stroke}" stroke-width="3"/>`;
-  }
-
-  return "";
-}
 
 function createSvg(themeId: ThemeId, key: RouteKey, selected: boolean): string {
   const palette = palettes[themeId];
-  const fill = selected ? palette.fill : "#ffffff";
-  const stroke = selected ? palette.accent : palette.stroke;
-  const head = themeHead(themeId, fill, stroke);
+  const circleFill = selected ? palette.accent : "#f8fafc";
+  const circleStroke = selected ? palette.accent : "#e2e8f0";
+  const iconStroke = selected ? "#ffffff" : palette.stroke;
   const motif = motifs[key];
+
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-  <rect width="80" height="80" rx="18" fill="${fill}"/>
-  ${head}
-  <circle cx="40" cy="32" r="17" fill="${fill}" stroke="${stroke}" stroke-width="3"/>
-  <path d="M33 31h.1M47 31h.1M35 39q5 4 10 0" stroke="${stroke}" stroke-width="3" stroke-linecap="round" fill="none"/>
-  <g stroke="${stroke}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">${motif}</g>
+  <circle cx="40" cy="40" r="27" fill="${circleFill}" stroke="${circleStroke}" stroke-width="2"/>
+  <g stroke="${iconStroke}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none">${motif}</g>
 </svg>`;
 }
 
