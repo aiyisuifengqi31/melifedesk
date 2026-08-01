@@ -29,11 +29,14 @@ import {
 } from "./coupleStorage";
 import { getTheme, THEME_IDS } from "@/theme/registry";
 import type { ColorMode, ThemeId, ThemeTokens } from "@/theme/types";
+import { PRESET_BACKGROUNDS, findBackgroundOption, type BackgroundSource } from "@/theme/background";
 
 type SettingsTab = "backup" | "profile" | "theme";
 
 type SettingsPanelProps = {
+  background: BackgroundSource | null;
   colorMode: ColorMode;
+  onBackgroundChange: (background: BackgroundSource | null) => void;
   onClose: () => void;
   onColorModeChange: (mode: ColorMode) => void;
   onProfileChange: (profile: AppProfile) => void;
@@ -50,7 +53,9 @@ const TABS: Array<{ icon: string; key: SettingsTab; label: string }> = [
 ];
 
 export function SettingsPanel({
+  background,
   colorMode,
+  onBackgroundChange,
   onClose,
   onColorModeChange,
   onProfileChange,
@@ -158,6 +163,12 @@ export function SettingsPanel({
   const persistCouple = (next: CoupleState) => {
     setCouple(next);
     saveCoupleState(next);
+  };
+
+  const pickCustomBackground = () => {
+    openImagePicker((dataUrl) => {
+      onBackgroundChange({ kind: "custom", uri: dataUrl });
+    });
   };
 
   const regenerateCode = async () => {
@@ -479,6 +490,51 @@ export function SettingsPanel({
                       </Pressable>
                     );
                   })}
+                </View>
+              </View>
+
+              <View style={styles.block}>
+                <Text style={styles.blockTitle}>页面背景</Text>
+                <Text style={styles.muted}>
+                  当前背景：{background?.kind === "custom" ? "自定义图片" : findBackgroundOption(background)?.name ?? "无背景"}
+                </Text>
+                <View style={styles.backgroundGrid}>
+                  {PRESET_BACKGROUNDS.map((option) => {
+                    const selected =
+                      (background === null && option.id === "none") ||
+                      (background?.kind === "preset" && background.uri === option.source.uri);
+                    return (
+                      <Pressable
+                        key={option.id}
+                        accessibilityLabel={`使用${option.name}背景`}
+                        accessibilityRole="button"
+                        onPress={() => onBackgroundChange(option.id === "none" ? null : option.source)}
+                        style={[styles.backgroundCard, selected ? styles.backgroundCardActive : null]}
+                      >
+                        {option.source.uri ? (
+                          <Image source={option.source.uri as unknown as { uri: string }} style={styles.backgroundThumb} />
+                        ) : (
+                          <View style={styles.backgroundNone}>
+                            <Text style={styles.backgroundNoneText}>无</Text>
+                          </View>
+                        )}
+                        <Text style={styles.backgroundName}>{option.name}</Text>
+                        {selected ? <Text style={styles.backgroundSelected}>使用中</Text> : null}
+                      </Pressable>
+                    );
+                  })}
+                  <Pressable
+                    accessibilityLabel="上传自定义背景"
+                    accessibilityRole="button"
+                    onPress={pickCustomBackground}
+                    style={[styles.backgroundCard, background?.kind === "custom" ? styles.backgroundCardActive : null]}
+                  >
+                    <View style={styles.backgroundUpload}>
+                      <Text style={styles.backgroundUploadText}>+</Text>
+                    </View>
+                    <Text style={styles.backgroundName}>自定义</Text>
+                    {background?.kind === "custom" ? <Text style={styles.backgroundSelected}>使用中</Text> : null}
+                  </Pressable>
                 </View>
               </View>
             </>
@@ -845,6 +901,76 @@ function createStyles(tokens: ThemeTokens) {
       color: tokens.accent,
       fontSize: 11,
       fontWeight: "900"
+    },
+    backgroundCard: {
+      alignItems: "center",
+      backgroundColor: tokens.surfaceMuted,
+      borderColor: tokens.border,
+      borderRadius: 14,
+      borderWidth: 1,
+      flexBasis: "30%",
+      flexGrow: 1,
+      gap: 6,
+      overflow: "hidden",
+      padding: 8
+    },
+    backgroundCardActive: {
+      backgroundColor: tokens.accentSoft,
+      borderColor: tokens.accent,
+      borderWidth: 2
+    },
+    backgroundGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginTop: 4
+    },
+    backgroundName: {
+      color: tokens.text,
+      fontSize: 12,
+      fontWeight: "800"
+    },
+    backgroundNone: {
+      alignItems: "center",
+      backgroundColor: tokens.surface,
+      borderColor: tokens.border,
+      borderRadius: 10,
+      borderStyle: "dashed",
+      borderWidth: 1,
+      height: 70,
+      justifyContent: "center",
+      width: "100%"
+    },
+    backgroundNoneText: {
+      color: tokens.textMuted,
+      fontSize: 14,
+      fontWeight: "900"
+    },
+    backgroundSelected: {
+      color: tokens.accent,
+      fontSize: 11,
+      fontWeight: "900"
+    },
+    backgroundThumb: {
+      borderRadius: 10,
+      height: 70,
+      width: "100%"
+    },
+    backgroundUpload: {
+      alignItems: "center",
+      backgroundColor: tokens.surface,
+      borderColor: tokens.border,
+      borderRadius: 10,
+      borderStyle: "dashed",
+      borderWidth: 1,
+      height: 70,
+      justifyContent: "center",
+      width: "100%"
+    },
+    backgroundUploadText: {
+      color: tokens.accent,
+      fontSize: 28,
+      fontWeight: "500"
     },
     title: {
       color: tokens.text,

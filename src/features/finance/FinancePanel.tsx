@@ -92,7 +92,13 @@ export function FinancePanel({ storage }: FinancePanelProps) {
   const giftPlaceInputWebProps = { id: "finance-gift-place-input" } as object;
   const giftNoteInputWebProps = { id: "finance-gift-note-input" } as object;
 
-  const categories = transactionType === "expense" ? expenseCategories : incomeCategories;
+  const categories = useMemo(() => {
+    const base = transactionType === "expense" ? expenseCategories : incomeCategories;
+    const custom = customCategories
+      .filter((category) => category.transactionType === transactionType)
+      .map((category) => category.name);
+    return [...base, ...custom];
+  }, [transactionType, customCategories]);
   const allCategories = useMemo(
     () => [
       ...expenseCategories.map((name) => ({ isSystem: true, name, transactionType: "expense" as const })),
@@ -350,11 +356,11 @@ export function FinancePanel({ storage }: FinancePanelProps) {
               </View>
               <View style={styles.formCol}>
                 <Text style={styles.fieldLabel}>日期</Text>
-                <Pressable accessibilityRole="button" accessibilityLabel="选择记账日期" onPress={() => setDatePickerOpen(true)} style={[styles.dateField, styles.flexInput]}>
+                <Pressable accessibilityRole="button" accessibilityLabel="选择记账日期" onPress={() => setDatePickerOpen((value) => !value)} style={[styles.dateField, styles.flexInput]}>
                   <Text style={styles.dateValue}>{date.replaceAll("-", "/")}</Text>
                   <Text style={styles.dateChevron}>⌄</Text>
                 </Pressable>
-                {datePickerOpen ? <DatePickerPopup onCancel={() => setDatePickerOpen(false)} onConfirm={(date) => { setDate(date); setDatePickerOpen(false); }} selectedDate={date} title="选择记账日期" /> : null}
+                <DatePickerPopup onCancel={() => setDatePickerOpen(false)} onConfirm={(date) => { setDate(date); setDatePickerOpen(false); }} selectedDate={date} title="选择记账日期" visible={datePickerOpen} />
               </View>
             </View>
             <Text style={styles.fieldLabel}>备注</Text>
@@ -461,11 +467,11 @@ export function FinancePanel({ storage }: FinancePanelProps) {
             <TextInput {...giftAmountInputWebProps} keyboardType="decimal-pad" nativeID="finance-gift-amount-input" onChange={makeTextInputChangeHandler(setGiftAmount)} onChangeText={setGiftAmount} placeholder="0.00" style={styles.input} value={giftAmount} />
 
             <Text style={styles.fieldLabel}>日期</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="选择份子日期" onPress={() => setGiftDatePickerOpen(true)} style={styles.dateField}>
+            <Pressable accessibilityRole="button" accessibilityLabel="选择份子日期" onPress={() => setGiftDatePickerOpen((value) => !value)} style={styles.dateField}>
               <Text style={styles.dateValue}>{giftDate.replaceAll("-", "/")}</Text>
               <Text style={styles.dateChevron}>⌄</Text>
             </Pressable>
-            {giftDatePickerOpen ? <DatePickerPopup onCancel={() => setGiftDatePickerOpen(false)} onConfirm={(date) => { setGiftDate(date); setGiftDatePickerOpen(false); }} selectedDate={giftDate} title="选择份子日期" /> : null}
+            <DatePickerPopup onCancel={() => setGiftDatePickerOpen(false)} onConfirm={(date) => { setGiftDate(date); setGiftDatePickerOpen(false); }} selectedDate={giftDate} title="选择份子日期" visible={giftDatePickerOpen} />
 
             <Text style={styles.fieldLabel}>地点</Text>
             <TextInput {...giftPlaceInputWebProps} nativeID="finance-gift-place-input" onChange={makeTextInputChangeHandler(setGiftPlace)} onChangeText={setGiftPlace} placeholder="可选..." style={styles.input} value={giftPlace} />
@@ -534,11 +540,11 @@ export function FinancePanel({ storage }: FinancePanelProps) {
               <Text style={styles.selectText}>取出</Text>
             </Pressable>
             <Text style={styles.fieldLabel}>日期</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="选择储蓄日期" onPress={() => setSavingDatePickerOpen(true)} style={styles.dateField}>
+            <Pressable accessibilityRole="button" accessibilityLabel="选择储蓄日期" onPress={() => setSavingDatePickerOpen((value) => !value)} style={styles.dateField}>
               <Text style={styles.dateValue}>{savingDate.replaceAll("-", "/")}</Text>
               <Text style={styles.dateChevron}>⌄</Text>
             </Pressable>
-            {savingDatePickerOpen ? <DatePickerPopup onCancel={() => setSavingDatePickerOpen(false)} onConfirm={(date) => { setSavingDate(date); setSavingDatePickerOpen(false); }} selectedDate={savingDate} title="选择储蓄日期" /> : null}
+            <DatePickerPopup onCancel={() => setSavingDatePickerOpen(false)} onConfirm={(date) => { setSavingDate(date); setSavingDatePickerOpen(false); }} selectedDate={savingDate} title="选择储蓄日期" visible={savingDatePickerOpen} />
             <TextInput onChangeText={setSavingNote} placeholder="备注（可选）" style={styles.input} value={savingNote} />
             <Pressable accessibilityRole="button" accessibilityLabel="添加储蓄记录" onPress={saveSaving} style={styles.primaryButton}>
               <Text style={styles.primaryText}>添加</Text>
@@ -1104,36 +1110,38 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   metric: {
+    alignItems: "center",
     backgroundColor: "#eaf6ff",
     borderColor: "#d7eaf7",
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     flex: 1,
-    flexBasis: "48%",
-    minWidth: 100,
-    padding: 10
+    flexBasis: "23%",
+    minWidth: 0,
+    paddingHorizontal: 6,
+    paddingVertical: 10
   },
   metricCount: {
     color: "#697386",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "700",
-    marginTop: 3
+    marginTop: 2
   },
   metricGrid: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    flexWrap: "nowrap",
     gap: 8
   },
   metricTitle: {
     color: "#697386",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "800"
   },
   metricValue: {
     color: "#1fa8e2",
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "900",
-    marginTop: 4
+    marginTop: 2
   },
   noteInput: {
     minHeight: 64,

@@ -200,9 +200,18 @@ export default function LoginRoute() {
         ) : null}
 
         {!client ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="以本地模式继续" onPress={() => router.replace("/home" as Href)} style={styles.ghostButton}>
-            <Text style={styles.ghostButtonText}>以本地模式继续</Text>
-          </Pressable>
+          <>
+            <View style={styles.configHintBox}>
+              <Text style={styles.configHintTitle}>🌱 当前是本地模式</Text>
+              <Text style={styles.configHintText}>云端账号服务未配置，因此暂时无法注册/登录。</Text>
+              <Text style={styles.configHintText}>如需启用登录与双人同步，请在仓库的 GitHub Actions Secrets 中设置：</Text>
+              <Text style={styles.configHintCode}>EXPO_PUBLIC_SUPABASE_URL</Text>
+              <Text style={styles.configHintCode}>EXPO_PUBLIC_SUPABASE_ANON_KEY</Text>
+            </View>
+            <Pressable accessibilityRole="button" accessibilityLabel="以本地模式继续" onPress={() => router.replace("/home" as Href)} style={styles.ghostButton}>
+              <Text style={styles.ghostButtonText}>以本地模式继续</Text>
+            </Pressable>
+          </>
         ) : null}
 
         <Text style={styles.footerHint}>登录后在「设置 · 我的」里用绑定码和 TA 绑定，数据各自独立、按需共享。</Text>
@@ -269,6 +278,31 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 28,
     width: "100%"
+  },
+  configHintBox: {
+    backgroundColor: palette.accentSoft,
+    borderRadius: 14,
+    gap: 6,
+    padding: 14
+  },
+  configHintCode: {
+    backgroundColor: palette.surface,
+    borderRadius: 6,
+    color: palette.accentDeep,
+    fontSize: 11,
+    fontWeight: "800",
+    paddingHorizontal: 8,
+    paddingVertical: 4
+  },
+  configHintText: {
+    color: palette.textMuted,
+    fontSize: 12,
+    lineHeight: 18
+  },
+  configHintTitle: {
+    color: palette.accentDeep,
+    fontSize: 14,
+    fontWeight: "900"
   },
   field: {
     gap: 6

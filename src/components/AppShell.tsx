@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import { saveUserSettings } from "@/auth/authRepository";
 import { getSupabaseClient } from "@/auth/supabaseClient";
@@ -17,6 +17,7 @@ import { WorkoutPanel } from "@/features/workout/WorkoutPanel";
 import { NAV_ITEMS, type NavItem, routeToKey } from "@/navigation/items";
 import { getTheme } from "@/theme/registry";
 import type { ColorMode, ThemeId } from "@/theme/types";
+import { loadBackground, saveBackground, type BackgroundSource, getImageSource } from "@/theme/background";
 import { ThemedNavIcon } from "./ThemedNavIcon";
 
 type AppShellProps = {
@@ -37,6 +38,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const [themeId, setThemeId] = useState<ThemeId>(() => readStoredThemeId(typeof window === "undefined" ? undefined : window.localStorage) ?? "default");
   const [mode, setMode] = useState<ColorMode>(() => readStoredColorMode(typeof window === "undefined" ? undefined : window.localStorage) ?? "light");
   const [profile, setProfile] = useState<AppProfile>(() => loadProfile());
+  const [background, setBackground] = useState<BackgroundSource | null>(() => loadBackground());
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +62,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const sidebarWidth = isMobile ? 68 : collapsed ? 72 : 224;
 
   const viewportHeight = Math.max(dimensions.height, 640);
+  const imageSource = useMemo(() => getImageSource(background), [background]);
   const styles = useMemo(() => createStyles(tokens, sidebarWidth, isMobile, viewportHeight), [tokens, sidebarWidth, isMobile, viewportHeight]);
 
   useEffect(() => {
@@ -104,6 +107,11 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
     if (data.user) {
       await saveUserSettings(client, data.user.id, { colorMode: nextMode });
     }
+  };
+
+  const handleBackgroundChange = (nextBackground: BackgroundSource | null) => {
+    setBackground(nextBackground);
+    saveBackground(nextBackground);
   };
 
   return (
@@ -163,20 +171,28 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
         </View>
       </View>
 
-      <ScrollView testID="page-content" nativeID="page-content" style={styles.content} contentContainerStyle={styles.contentInner}>
-        {activeKey === "home" ? <HomePanel themeTokens={tokens} onNavigate={handleNavigate} /> : null}
-        {activeKey === "plan" ? <DailyPlanPanel themeTokens={tokens} /> : null}
-        {activeKey === "workout" ? <WorkoutPanel /> : null}
-        {activeKey === "finance" ? <FinancePanel /> : null}
-        {activeKey === "love" ? <LovePanel themeTokens={tokens} /> : null}
-        {activeKey === "exam" ? <ExamPanel themeTokens={tokens} /> : null}
-        {activeKey === "fun" ? <EntertainmentPanel themeTokens={tokens} /> : null}
-        {activeKey !== "home" && activeKey !== "plan" && activeKey !== "workout" && activeKey !== "finance" && activeKey !== "love" && activeKey !== "exam" && activeKey !== "fun" ? <GenericModuleSkeleton themeEmptyState={theme.emptyState} styles={styles} /> : null}
-      </ScrollView>
+      {imageSource ? (
+        <ImageBackground
+          imageStyle={styles.backgroundImage}
+          resizeMode="cover"
+          source={imageSource}
+          style={styles.content}
+        >
+          <ScrollView testID="page-content" nativeID="page-content" style={styles.contentScroll} contentContainerStyle={styles.contentInner}>
+            <PageContent activeKey={activeKey} handleNavigate={handleNavigate} styles={styles} themeEmptyState={theme.emptyState} tokens={tokens} />
+          </ScrollView>
+        </ImageBackground>
+      ) : (
+        <ScrollView testID="page-content" nativeID="page-content" style={styles.content} contentContainerStyle={styles.contentInner}>
+          <PageContent activeKey={activeKey} handleNavigate={handleNavigate} styles={styles} themeEmptyState={theme.emptyState} tokens={tokens} />
+        </ScrollView>
+      )}
 
       {settingsOpen ? (
         <SettingsPanel
+          background={background}
           colorMode={mode}
+          onBackgroundChange={handleBackgroundChange}
           onClose={() => setSettingsOpen(false)}
           onColorModeChange={(next) => void handleColorModeChange(next)}
           onProfileChange={setProfile}
@@ -187,6 +203,33 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
         />
       ) : null}
     </View>
+  );
+}
+
+function PageContent({
+  activeKey,
+  handleNavigate,
+  styles,
+  themeEmptyState,
+  tokens
+}: {
+  activeKey: string;
+  handleNavigate: (href: NavItem["href"]) => void;
+  styles: ReturnType<typeof createStyles>;
+  themeEmptyState: string;
+  tokens: ReturnType<typeof getTheme>["tokens"][ColorMode];
+}) {
+  return (
+    <>
+      {activeKey === "home" ? <HomePanel themeTokens={tokens} onNavigate={handleNavigate} /> : null}
+      {activeKey === "plan" ? <DailyPlanPanel themeTokens={tokens} /> : null}
+      {activeKey === "workout" ? <WorkoutPanel /> : null}
+      {activeKey === "finance" ? <FinancePanel /> : null}
+      {activeKey === "love" ? <LovePanel themeTokens={tokens} /> : null}
+      {activeKey === "exam" ? <ExamPanel themeTokens={tokens} /> : null}
+      {activeKey === "fun" ? <EntertainmentPanel themeTokens={tokens} /> : null}
+      {activeKey !== "home" && activeKey !== "plan" && activeKey !== "workout" && activeKey !== "finance" && activeKey !== "love" && activeKey !== "exam" && activeKey !== "fun" ? <GenericModuleSkeleton themeEmptyState={themeEmptyState} styles={styles} /> : null}
+    </>
   );
 }
 
@@ -347,11 +390,18 @@ function createStyles(tokens: ReturnType<typeof getTheme>["tokens"][ColorMode], 
       fontSize: compactSidebar ? 11 : 13,
       fontWeight: "800"
     },
+    backgroundImage: {
+      opacity: 0.22
+    },
     content: {
       flex: 1,
       height: viewportHeight,
       marginLeft: 0,
       zIndex: 0
+    },
+    contentScroll: {
+      flex: 1,
+      height: viewportHeight
     },
     contentInner: {
       gap: 16,

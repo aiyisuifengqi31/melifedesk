@@ -241,7 +241,10 @@ function createStyles(tokens: UiTokens) {
       borderRadius: 18,
       borderWidth: 1,
       gap: 12,
-      padding: 14
+      overflow: "hidden",
+      padding: 14,
+      position: "relative",
+      width: "100%"
     },
     check: {
       alignItems: "center",
@@ -342,7 +345,7 @@ function createStyles(tokens: UiTokens) {
       borderWidth: 1,
       gap: 8,
       padding: 10,
-      width: 260
+      width: 220
     },
     itemCardDone: {
       opacity: 0.7

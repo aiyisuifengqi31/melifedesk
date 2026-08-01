@@ -164,7 +164,7 @@ export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: Ui
               </Pressable>
             </View>
             <View style={styles.saveRow}>
-              <Pressable accessibilityRole="button" accessibilityLabel="选择日记日期" onPress={() => setDiaryDatePickerOpen(true)} style={[styles.input, styles.dateInput, styles.dateField]}>
+              <Pressable accessibilityRole="button" accessibilityLabel="选择日记日期" onPress={() => setDiaryDatePickerOpen((value) => !value)} style={[styles.input, styles.dateInput, styles.dateField]}>
                 <Text style={styles.dateValue}>{date.replaceAll("-", "/")}</Text>
                 <Text style={styles.dateChevron}>⌄</Text>
               </Pressable>
@@ -172,14 +172,13 @@ export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: Ui
                 <Text style={styles.primaryText}>保存</Text>
               </Pressable>
             </View>
-            {diaryDatePickerOpen ? (
-              <DatePickerPopup
-                onCancel={() => setDiaryDatePickerOpen(false)}
-                onConfirm={(selectedDate) => { setDate(selectedDate); setDiaryDatePickerOpen(false); }}
-                selectedDate={date}
-                title="选择日记日期"
-              />
-            ) : null}
+            <DatePickerPopup
+              onCancel={() => setDiaryDatePickerOpen(false)}
+              onConfirm={(selectedDate) => { setDate(selectedDate); setDiaryDatePickerOpen(false); }}
+              selectedDate={date}
+              title="选择日记日期"
+              visible={diaryDatePickerOpen}
+            />
             <Text nativeID="love-feedback" style={styles.feedback}>{feedback}</Text>
           </View>
 
@@ -217,18 +216,17 @@ export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: Ui
           <View style={styles.card}>
             <Text style={styles.cardTitle}>添加纪念日</Text>
             <TextInput onChangeText={setAnniversaryTitle} placeholder="纪念日名称（如：在一起的日子）" style={styles.input} value={anniversaryTitle} />
-            <Pressable accessibilityRole="button" accessibilityLabel="选择纪念日日期" onPress={() => setAnniversaryDatePickerOpen(true)} style={[styles.input, styles.dateField]}>
+            <Pressable accessibilityRole="button" accessibilityLabel="选择纪念日日期" onPress={() => setAnniversaryDatePickerOpen((value) => !value)} style={[styles.input, styles.dateField]}>
               <Text style={styles.dateValue}>{anniversaryDate.replaceAll("-", "/")}</Text>
               <Text style={styles.dateChevron}>⌄</Text>
             </Pressable>
-            {anniversaryDatePickerOpen ? (
-              <DatePickerPopup
-                onCancel={() => setAnniversaryDatePickerOpen(false)}
-                onConfirm={(selectedDate) => { setAnniversaryDate(selectedDate); setAnniversaryDatePickerOpen(false); }}
-                selectedDate={anniversaryDate}
-                title="选择纪念日日期"
-              />
-            ) : null}
+            <DatePickerPopup
+              onCancel={() => setAnniversaryDatePickerOpen(false)}
+              onConfirm={(selectedDate) => { setAnniversaryDate(selectedDate); setAnniversaryDatePickerOpen(false); }}
+              selectedDate={anniversaryDate}
+              title="选择纪念日日期"
+              visible={anniversaryDatePickerOpen}
+            />
             <Pressable accessibilityRole="switch" accessibilityLabel="每年重复" accessibilityState={{ checked: repeatYearly }} onPress={() => setRepeatYearly((value) => !value)} style={styles.repeatRow}>
               <View style={[styles.switchTrack, repeatYearly ? styles.switchTrackActive : null]}>
                 <View style={[styles.switchThumb, repeatYearly ? styles.switchThumbActive : null]} />

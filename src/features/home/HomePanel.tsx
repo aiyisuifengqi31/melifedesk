@@ -10,13 +10,8 @@ import { NotesPanel } from "./NotesPanel";
 
 const EXAM_WRONG_KEY = "fanfan-guanguan.exam.wrongQuestions.v1";
 const MAX_HOME_NOTES = 3;
-
-const priorityOptions: Array<{ color: string; label: string; value: TodoPriority }> = [
-  { color: "#8fb3c9", label: "低", value: "low" },
-  { color: "#63a7f8", label: "普通", value: "normal" },
-  { color: "#ffb020", label: "高", value: "high" },
-  { color: "#ef4444", label: "紧急", value: "urgent" }
-];
+const WIDGET_HEIGHT = 210;
+const LIST_HEIGHT = 136;
 
 type HomePanelProps = {
   onNavigate?: (href: NavItem["href"]) => void;
@@ -43,7 +38,6 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
   const todoStorage = useMemo(() => storage ?? getDefaultTodoStorage(), [storage]);
   const [todos, setTodos] = useState<TodoTask[]>(() => loadLocalTodos(todoStorage));
   const [newTodo, setNewTodo] = useState("");
-  const [todoPriority, setTodoPriority] = useState<TodoPriority>("normal");
   const [viewState, setViewState] = useState<ViewState>("home");
 
   const styles = useMemo(() => createStyles(themeTokens), [themeTokens]);
@@ -58,6 +52,10 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
     persistTodos(next);
   };
 
+  const deleteTodo = (id: string) => {
+    persistTodos(todos.filter((t) => t.id !== id));
+  };
+
   const addTodo = () => {
     const title = newTodo.trim();
     if (!title) return;
@@ -66,15 +64,14 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
       createTime: new Date().toISOString(),
       deadline: null,
       id: createTodoId(),
-      priority: todoPriority,
+      priority: "normal",
       title
     };
     persistTodos([task, ...todos]);
     setNewTodo("");
-    setTodoPriority("normal");
   };
 
-  const displayedTodos = todos.slice(0, 4);
+  const displayedTodos = todos;
   const completedCount = todos.filter((t) => t.completed).length;
   const [notesCount, setNotesCount] = useState(() => loadNotes().length);
 
@@ -141,27 +138,10 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
         <View style={[styles.widget, styles.widgetLeft]}>
           <View style={styles.widgetHeader}>
             <Text style={styles.widgetIcon}>📌</Text>
-            <Text style={styles.widgetTitle} numberOfLines={1}>今日计划</Text>
+            <Text style={styles.widgetTitle} numberOfLines={1}>今日待办</Text>
             <Pressable accessibilityRole="button" accessibilityLabel="查看全部待办" onPress={() => onNavigate?.("/plan")} style={styles.widgetMore}>
               <Text style={styles.widgetMoreText}>全部 →</Text>
             </Pressable>
-          </View>
-
-          <View style={styles.priorityRow}>
-            {priorityOptions.map((option) => {
-              const active = todoPriority === option.value;
-              return (
-                <Pressable
-                  key={option.value}
-                  accessibilityRole="button"
-                  accessibilityLabel={`优先级：${option.label}`}
-                  onPress={() => setTodoPriority(option.value)}
-                  style={[styles.priorityChip, active ? { backgroundColor: option.color, borderColor: option.color } : null]}
-                >
-                  <Text style={[styles.priorityChipText, active ? styles.priorityChipTextActive : null]}>{option.label}</Text>
-                </Pressable>
-              );
-            })}
           </View>
 
           <View style={styles.todoInputRow}>
@@ -182,12 +162,17 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
               <Text style={styles.emptyHint}>还没有待办，添加一个吧</Text>
             ) : (
               displayedTodos.map((todo) => (
-                <Pressable key={todo.id} accessibilityRole="button" accessibilityLabel={`切换待办状态：${todo.title}`} onPress={() => toggleTodo(todo.id)} style={styles.todoRow}>
-                  <View style={[styles.todoCheck, todo.completed ? styles.todoCheckActive : null]}>
-                    {todo.completed ? <Text style={styles.todoCheckMark}>✓</Text> : null}
-                  </View>
+                <View key={todo.id} style={styles.todoRow}>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`切换待办状态：${todo.title}`} onPress={() => toggleTodo(todo.id)} style={styles.todoCheckWrap}>
+                    <View style={[styles.todoCheck, todo.completed ? styles.todoCheckActive : null]}>
+                      {todo.completed ? <Text style={styles.todoCheckMark}>✓</Text> : null}
+                    </View>
+                  </Pressable>
                   <Text style={[styles.todoTitle, todo.completed ? styles.todoTitleDone : null]} numberOfLines={1}>{todo.title}</Text>
-                </Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`删除待办：${todo.title}`} onPress={() => deleteTodo(todo.id)} style={styles.todoDelete}>
+                    <Text style={styles.todoDeleteText}>×</Text>
+                  </Pressable>
+                </View>
               ))
             )}
           </View>
@@ -301,15 +286,16 @@ function createStyles(tokens: UiTokens) {
       fontWeight: "900"
     },
     topWidgets: {
-      flexDirection: "row",
-      gap: 10
+      flexDirection: "column",
+      gap: 16
     },
     widget: {
       backgroundColor: "#ffffff",
       borderRadius: 18,
       flex: 1,
       gap: 8,
-      minHeight: 138,
+      height: WIDGET_HEIGHT,
+      minHeight: WIDGET_HEIGHT,
       padding: 12,
       shadowColor: "#7cb87c",
       shadowOffset: { width: 0, height: 4 },
@@ -348,27 +334,6 @@ function createStyles(tokens: UiTokens) {
       fontSize: 11,
       fontWeight: "800"
     },
-    priorityRow: {
-      flexDirection: "row",
-      gap: 6
-    },
-    priorityChip: {
-      alignItems: "center",
-      backgroundColor: "#f6faf6",
-      borderColor: "#e3e8e3",
-      borderRadius: 999,
-      borderWidth: 1,
-      flex: 1,
-      paddingVertical: 5
-    },
-    priorityChipText: {
-      color: tokens.textMuted,
-      fontSize: 11,
-      fontWeight: "900"
-    },
-    priorityChipTextActive: {
-      color: "#ffffff"
-    },
     todoInputRow: {
       alignItems: "center",
       flexDirection: "row",
@@ -399,7 +364,9 @@ function createStyles(tokens: UiTokens) {
       fontWeight: "900"
     },
     todoList: {
-      gap: 6
+      gap: 6,
+      height: LIST_HEIGHT,
+      overflow: "scroll"
     },
     todoRow: {
       alignItems: "center",
@@ -409,6 +376,10 @@ function createStyles(tokens: UiTokens) {
       gap: 8,
       paddingHorizontal: 10,
       paddingVertical: 6
+    },
+    todoCheckWrap: {
+      alignItems: "center",
+      justifyContent: "center"
     },
     todoCheck: {
       alignItems: "center",
@@ -438,6 +409,19 @@ function createStyles(tokens: UiTokens) {
       color: tokens.textMuted,
       textDecorationLine: "line-through"
     },
+    todoDelete: {
+      alignItems: "center",
+      borderRadius: 999,
+      height: 22,
+      justifyContent: "center",
+      width: 22
+    },
+    todoDeleteText: {
+      color: tokens.textMuted,
+      fontSize: 18,
+      fontWeight: "700",
+      lineHeight: 20
+    },
     todoTag: {
       backgroundColor: tokens.accentSoft,
       borderRadius: 999,
@@ -459,7 +443,7 @@ function createStyles(tokens: UiTokens) {
       alignItems: "stretch",
       backgroundColor: "#f6faf6",
       borderRadius: 14,
-      flex: 1,
+      height: LIST_HEIGHT,
       justifyContent: "center",
       padding: 10
     },
@@ -488,7 +472,9 @@ function createStyles(tokens: UiTokens) {
       fontWeight: "700"
     },
     notesList: {
-      gap: 6
+      gap: 6,
+      height: LIST_HEIGHT - 20,
+      overflow: "scroll"
     },
     noteRow: {
       alignItems: "center",
