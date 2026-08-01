@@ -347,14 +347,20 @@ export function FinancePanel({ storage }: FinancePanelProps) {
                 </Pressable>
               ))}
             </View>
-            <Text style={styles.fieldLabel}>金额 (¥)</Text>
-            <TextInput {...amountInputWebProps} keyboardType="decimal-pad" nativeID="finance-amount-input" onChange={makeTextInputChangeHandler(setAmount)} onChangeText={setAmount} placeholder="0.00" style={styles.input} value={amount} />
-            <Text style={styles.fieldLabel}>日期</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="选择记账日期" onPress={() => setDatePickerOpen(true)} style={styles.dateField}>
-              <Text style={styles.dateValue}>{date.replaceAll("-", "/")}</Text>
-              <Text style={styles.dateChevron}>⌄</Text>
-            </Pressable>
-            {datePickerOpen ? <DatePickerPopup onCancel={() => setDatePickerOpen(false)} onConfirm={(date) => { setDate(date); setDatePickerOpen(false); }} selectedDate={date} title="选择记账日期" /> : null}
+            <View style={styles.formRow}>
+              <View style={styles.formCol}>
+                <Text style={styles.fieldLabel}>金额 (¥)</Text>
+                <TextInput {...amountInputWebProps} keyboardType="decimal-pad" nativeID="finance-amount-input" onChange={makeTextInputChangeHandler(setAmount)} onChangeText={setAmount} placeholder="0.00" style={[styles.input, styles.flexInput]} value={amount} />
+              </View>
+              <View style={styles.formCol}>
+                <Text style={styles.fieldLabel}>日期</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="选择记账日期" onPress={() => setDatePickerOpen(true)} style={[styles.dateField, styles.flexInput]}>
+                  <Text style={styles.dateValue}>{date.replaceAll("-", "/")}</Text>
+                  <Text style={styles.dateChevron}>⌄</Text>
+                </Pressable>
+                {datePickerOpen ? <DatePickerPopup onCancel={() => setDatePickerOpen(false)} onConfirm={(date) => { setDate(date); setDatePickerOpen(false); }} selectedDate={date} title="选择记账日期" /> : null}
+              </View>
+            </View>
             <Text style={styles.fieldLabel}>备注</Text>
             <TextInput {...noteInputWebProps} nativeID="finance-note-input" onChange={makeTextInputChangeHandler(setNote)} onChangeText={setNote} placeholder="可选备注..." style={[styles.input, styles.noteInput]} value={note} />
             <Pressable accessibilityRole="button" accessibilityLabel="快速记账" nativeID="finance-save-button" onPress={saveTransaction} style={styles.primaryButton}>
@@ -744,13 +750,13 @@ const styles = StyleSheet.create({
     borderColor: "#e3e8ef",
     borderRadius: 18,
     borderWidth: 1,
-    gap: 14,
-    padding: 18,
+    gap: 12,
+    padding: 14,
     position: "relative"
   },
   cardTitle: {
     color: "#111827",
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "900"
   },
   categoryBadge: {
@@ -765,46 +771,48 @@ const styles = StyleSheet.create({
   categoryButton: {
     alignItems: "center",
     borderColor: "#e3e8ef",
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    gap: 5,
-    minWidth: 72,
-    paddingHorizontal: 8,
-    paddingVertical: 9
+    flex: 1,
+    gap: 4,
+    maxWidth: "23%",
+    minWidth: 64,
+    paddingVertical: 7
   },
   categoryGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10
+    gap: 8,
+    justifyContent: "flex-start"
   },
   categoryIcon: {
     borderRadius: 999,
     color: "#1599d3",
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "900",
     overflow: "hidden",
-    paddingHorizontal: 9,
-    paddingVertical: 6
+    paddingHorizontal: 7,
+    paddingVertical: 4
   },
   categoryName: {
     color: "#697386",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "800"
   },
   categoryRow: {
     alignItems: "center",
     backgroundColor: "#ffffff",
     borderColor: "#e3e8ef",
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     flexDirection: "row",
-    gap: 16,
-    padding: 16
+    gap: 12,
+    padding: 12
   },
   categoryRowName: {
     color: "#111827",
     flex: 1,
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "900"
   },
   categorySelected: {
@@ -843,7 +851,7 @@ const styles = StyleSheet.create({
   },
   dateChevron: {
     color: "#697386",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "900"
   },
   dateConfirmButton: {
@@ -861,12 +869,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#f8fafc",
     borderColor: "#e3e8ef",
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 13
+    paddingHorizontal: 12,
+    paddingVertical: 10
   },
   datePickerCard: {
     backgroundColor: "#ffffff",
@@ -890,7 +898,7 @@ const styles = StyleSheet.create({
   },
   dateValue: {
     color: "#111827",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "800"
   },
   dayCell: {
@@ -980,7 +988,7 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     color: "#111827",
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: "900"
   },
   flexInput: {
@@ -1019,10 +1027,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#1fa8e2"
   },
   formRow: {
-    alignItems: "center",
+    alignItems: "flex-start",
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12
+    gap: 10
+  },
+  formCol: {
+    flex: 1,
+    gap: 4,
+    minWidth: 120
   },
   formula: {
     color: "#697386",
@@ -1030,28 +1043,28 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
   hero: {
-    gap: 8
+    gap: 6
   },
   heroSub: {
     color: "#697386",
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "700"
   },
   heroTitle: {
     color: "#111827",
-    fontSize: 34,
+    fontSize: 26,
     fontWeight: "900"
   },
   input: {
     backgroundColor: "#f8fafc",
     borderColor: "#e3e8ef",
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     color: "#111827",
-    fontSize: 16,
-    minWidth: 160,
-    paddingHorizontal: 16,
-    paddingVertical: 13
+    fontSize: 14,
+    minWidth: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 10
   },
   lineChart: {
     flexDirection: "row",
@@ -1088,47 +1101,48 @@ const styles = StyleSheet.create({
   metric: {
     backgroundColor: "#eaf6ff",
     borderColor: "#d7eaf7",
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     flex: 1,
-    minWidth: 110,
-    padding: 12
+    flexBasis: "48%",
+    minWidth: 100,
+    padding: 10
   },
   metricCount: {
     color: "#697386",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
-    marginTop: 4
+    marginTop: 3
   },
   metricGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10
+    gap: 8
   },
   metricTitle: {
     color: "#697386",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800"
   },
   metricValue: {
     color: "#1fa8e2",
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "900",
-    marginTop: 6
+    marginTop: 4
   },
   noteInput: {
-    minHeight: 90,
+    minHeight: 64,
     textAlignVertical: "top"
   },
   primaryButton: {
     alignItems: "center",
     backgroundColor: "#1fa8e2",
-    borderRadius: 14,
-    paddingVertical: 14
+    borderRadius: 12,
+    paddingVertical: 12
   },
   primaryText: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "900"
   },
   pieHint: {
@@ -1180,23 +1194,23 @@ const styles = StyleSheet.create({
   savingHero: {
     backgroundColor: "#eaf6ff",
     borderColor: "#d7eaf7",
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
-    padding: 22
+    padding: 16
   },
   savingValue: {
     color: "#1fa8e2",
-    fontSize: 42,
+    fontSize: 32,
     fontWeight: "900",
-    marginTop: 10
+    marginTop: 8
   },
   segment: {
     backgroundColor: "#f8fafc",
     borderColor: "#e3e8ef",
     borderRadius: 999,
     borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 9
+    paddingHorizontal: 14,
+    paddingVertical: 7
   },
   segmentActive: {
     backgroundColor: "#1fa8e2",
@@ -1205,10 +1219,11 @@ const styles = StyleSheet.create({
   segmentRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10
+    gap: 8
   },
   segmentText: {
     color: "#697386",
+    fontSize: 13,
     fontWeight: "900"
   },
   segmentTextActive: {
@@ -1290,23 +1305,23 @@ const styles = StyleSheet.create({
   },
   tab: {
     alignItems: "center",
-    borderRadius: 14,
+    borderRadius: 12,
     flex: 1,
-    paddingVertical: 13
+    paddingVertical: 10
   },
   tabActive: {
     backgroundColor: "#ffffff"
   },
   tabs: {
     backgroundColor: "#f1f5f9",
-    borderRadius: 16,
+    borderRadius: 14,
     flexDirection: "row",
     gap: 4,
-    padding: 5
+    padding: 4
   },
   tabText: {
     color: "#697386",
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "900"
   },
   tabTextActive: {

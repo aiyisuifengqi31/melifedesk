@@ -21,7 +21,7 @@ export function ThemedNavIcon({ routeKey, selected, theme }: ThemedNavIconProps)
       style={styles.iconFrame}
       testID={`nav-icon-${routeKey}`}
     >
-      <SvgXml height={44} testID={`nav-icon-svg-${routeKey}`} width={44} xml={resource.xml} />
+      <SvgXml height={30} testID={`nav-icon-svg-${routeKey}`} width={30} xml={resource.xml} />
     </View>
   );
 }

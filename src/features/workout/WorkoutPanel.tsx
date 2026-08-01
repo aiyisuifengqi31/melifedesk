@@ -25,7 +25,6 @@ const WORKOUT_PARTS: Array<{ icon: string; name: string }> = [
   { icon: "🦅", name: "肩" },
   { icon: "💪", name: "手臂" },
   { icon: "🦵", name: "腿" },
-  { icon: "🍑", name: "臀" },
   { icon: "🏃", name: "有氧" }
 ];
 const intensityOptions: Array<{ label: string; value: WorkoutIntensity }> = [
@@ -175,10 +174,10 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
           })}
         </View>
 
-        <View style={styles.formGrid}>
-          <TextInput {...titleInputWebProps} nativeID="workout-title-input" onChange={makeTextInputChangeHandler(setTitle)} onChangeText={setTitle} placeholder="训练项目" style={styles.input} value={title} />
-          <TextInput {...durationInputWebProps} keyboardType="numeric" nativeID="workout-duration-input" onChange={makeTextInputChangeHandler(setDuration)} onChangeText={setDuration} placeholder="训练时长" style={styles.input} value={duration} />
-          <TextInput {...kcalInputWebProps} keyboardType="numeric" nativeID="workout-kcal-input" onChange={makeTextInputChangeHandler(setKcal)} onChangeText={setKcal} placeholder="消耗热量" style={styles.input} value={kcal} />
+        <View style={styles.tripleRow}>
+          <TextInput {...titleInputWebProps} nativeID="workout-title-input" onChange={makeTextInputChangeHandler(setTitle)} onChangeText={setTitle} placeholder="训练项目" style={[styles.input, styles.tripleInput]} value={title} />
+          <TextInput {...durationInputWebProps} keyboardType="numeric" nativeID="workout-duration-input" onChange={makeTextInputChangeHandler(setDuration)} onChangeText={setDuration} placeholder="训练时长" style={[styles.input, styles.tripleInput]} value={duration} />
+          <TextInput {...kcalInputWebProps} keyboardType="numeric" nativeID="workout-kcal-input" onChange={makeTextInputChangeHandler(setKcal)} onChangeText={setKcal} placeholder="消耗热量" style={[styles.input, styles.tripleInput]} value={kcal} />
         </View>
 
         <Text style={styles.sectionLabel}>训练强度</Text>
@@ -193,8 +192,10 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
           })}
         </View>
 
-        <TextInput onChange={makeTextInputChangeHandler(setFeeling)} onChangeText={setFeeling} placeholder="自我感受" style={styles.input} value={feeling} />
-        <TextInput onChange={makeTextInputChangeHandler(setNotes)} onChangeText={setNotes} placeholder="备注" style={styles.input} value={notes} />
+        <View style={styles.doubleRow}>
+          <TextInput onChange={makeTextInputChangeHandler(setFeeling)} onChangeText={setFeeling} placeholder="自我感受" style={[styles.input, styles.halfInput]} value={feeling} />
+          <TextInput onChange={makeTextInputChangeHandler(setNotes)} onChangeText={setNotes} placeholder="备注" style={[styles.input, styles.halfInput]} value={notes} />
+        </View>
         <Text style={styles.muted}>热量第一版为手动输入，不作为准确测量值。</Text>
 
         <Pressable accessibilityRole="button" accessibilityLabel="保存记录" nativeID="workout-save-button" onPress={saveWorkout} style={styles.saveButton}>
@@ -406,12 +407,12 @@ const styles = StyleSheet.create({
     borderColor: "#e3e8ef",
     borderRadius: 18,
     borderWidth: 1,
-    gap: 14,
-    padding: 18
+    gap: 12,
+    padding: 14
   },
   cardTitle: {
     color: "#111827",
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "900"
   },
   cardTitleRow: {
@@ -436,8 +437,8 @@ const styles = StyleSheet.create({
     borderColor: "#e3e8ef",
     borderRadius: 999,
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 9
+    paddingHorizontal: 12,
+    paddingVertical: 7
   },
   chipActive: {
     backgroundColor: "#e2f2e2",
@@ -445,6 +446,7 @@ const styles = StyleSheet.create({
   },
   chipText: {
     color: "#697386",
+    fontSize: 13,
     fontWeight: "800"
   },
   chipTextActive: {
@@ -470,22 +472,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800"
   },
-  formGrid: {
+  tripleRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10
+    gap: 8
+  },
+  doubleRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
   },
   input: {
     backgroundColor: "#f8fafc",
     borderColor: "#e3e8ef",
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     color: "#111827",
     flexGrow: 1,
-    fontSize: 16,
-    minWidth: 150,
-    paddingHorizontal: 14,
-    paddingVertical: 12
+    fontSize: 14,
+    minWidth: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
+  tripleInput: {
+    flex: 1,
+    minWidth: 70
+  },
+  halfInput: {
+    flex: 1,
+    minWidth: 100
   },
   logBadge: {
     alignItems: "center",
@@ -531,11 +546,11 @@ const styles = StyleSheet.create({
   metric: {
     backgroundColor: "#f0f7f0",
     borderColor: "#d8e8d8",
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     flex: 1,
-    minWidth: 120,
-    padding: 16
+    minWidth: 100,
+    padding: 12
   },
   metricRow: {
     flexDirection: "row",
@@ -553,25 +568,26 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     color: "#7cb87c",
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: "900",
-    marginTop: 8
+    marginTop: 6
   },
   muted: {
     color: "#697386",
-    fontSize: 13,
-    lineHeight: 20
+    fontSize: 12,
+    lineHeight: 18
   },
   partButton: {
     alignItems: "center",
     backgroundColor: "#f8fafc",
     borderColor: "#e3e8ef",
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    gap: 4,
-    minWidth: 68,
-    paddingHorizontal: 10,
-    paddingVertical: 10
+    flex: 1,
+    gap: 3,
+    maxWidth: "32%",
+    minWidth: "28%",
+    paddingVertical: 8
   },
   partButtonActive: {
     backgroundColor: "#e2f2e2",
@@ -580,15 +596,15 @@ const styles = StyleSheet.create({
   partGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
-    justifyContent: "space-between"
+    gap: 8,
+    justifyContent: "flex-start"
   },
   partIcon: {
-    fontSize: 22
+    fontSize: 18
   },
   partText: {
     color: "#697386",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800"
   },
   partTextActive: {
@@ -597,27 +613,27 @@ const styles = StyleSheet.create({
   saveButton: {
     alignItems: "center",
     backgroundColor: "#7cb87c",
-    borderRadius: 14,
-    paddingVertical: 14
+    borderRadius: 12,
+    paddingVertical: 12
   },
   saveText: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "900"
   },
   sectionLabel: {
     color: "#111827",
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "900"
   },
   segment: {
     alignItems: "center",
     backgroundColor: "#f8fafc",
     borderColor: "#e3e8ef",
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     flex: 1,
-    paddingVertical: 12
+    paddingVertical: 10
   },
   segmentActive: {
     backgroundColor: "#7cb87c",
@@ -626,11 +642,11 @@ const styles = StyleSheet.create({
   segmentRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10
+    gap: 8
   },
   segmentText: {
     color: "#697386",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "900"
   },
   segmentTextActive: {

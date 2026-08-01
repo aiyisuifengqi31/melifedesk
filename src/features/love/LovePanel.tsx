@@ -63,6 +63,7 @@ export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: Ui
   const [anniversaryDate, setAnniversaryDate] = useState(todayIso());
   const [repeatYearly, setRepeatYearly] = useState(false);
   const [feedback, setFeedback] = useState("写下今天的小瞬间。");
+  const [diaryHeight, setDiaryHeight] = useState(44);
 
   const [diaryDatePickerOpen, setDiaryDatePickerOpen] = useState(false);
   const [anniversaryDatePickerOpen, setAnniversaryDatePickerOpen] = useState(false);
@@ -142,8 +143,9 @@ export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: Ui
             <TextInput
               multiline
               onChangeText={setContent}
+              onContentSizeChange={(event) => setDiaryHeight(event.nativeEvent.contentSize.height)}
               placeholder="今天发生了什么..."
-              style={[styles.input, styles.diaryInput]}
+              style={[styles.input, styles.diaryInput, { minHeight: Math.max(44, diaryHeight) }]}
               value={content}
             />
             <View style={styles.moodGrid}>
@@ -312,17 +314,17 @@ const styles = StyleSheet.create({
     borderColor: "#e3e8ef",
     borderRadius: 18,
     borderWidth: 1,
-    gap: 14,
-    padding: 18
+    gap: 12,
+    padding: 14
   },
   cardTitle: {
     color: "#111827",
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "900"
   },
   dateChevron: {
     color: "#697386",
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "900"
   },
   dateField: {
@@ -335,7 +337,7 @@ const styles = StyleSheet.create({
   },
   dateValue: {
     color: "#111827",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700"
   },
   deleteButton: {
@@ -369,7 +371,8 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
   diaryInput: {
-    minHeight: 150,
+    minHeight: 44,
+    paddingVertical: 10,
     textAlignVertical: "top"
   },
   diaryActions: {
@@ -410,39 +413,42 @@ const styles = StyleSheet.create({
   },
   feedback: {
     color: "#697386",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800"
   },
   hero: {
-    gap: 8
+    gap: 6
   },
   heroSub: {
     color: "#697386",
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "700"
   },
   heroTitle: {
     color: "#111827",
-    fontSize: 34,
+    fontSize: 26,
     fontWeight: "900"
   },
   input: {
     backgroundColor: "#f8fafc",
     borderColor: "#e3e8ef",
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     color: "#111827",
-    fontSize: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 13
+    fontSize: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10
   },
   moodChip: {
+    alignItems: "center",
     backgroundColor: "#ffffff",
     borderColor: "#e3e8ef",
     borderRadius: 999,
     borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 10
+    flex: 1,
+    minWidth: "28%",
+    maxWidth: "32%",
+    paddingVertical: 8
   },
   moodChipActive: {
     backgroundColor: "#eaf6ff",
@@ -451,24 +457,25 @@ const styles = StyleSheet.create({
   moodGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10
+    gap: 8,
+    justifyContent: "flex-start"
   },
   moodText: {
     color: "#111827",
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: "900"
   },
   primaryButton: {
     alignItems: "center",
     backgroundColor: "#7acbf0",
-    borderRadius: 14,
-    minWidth: 116,
-    paddingHorizontal: 22,
-    paddingVertical: 14
+    borderRadius: 12,
+    minWidth: 96,
+    paddingHorizontal: 18,
+    paddingVertical: 11
   },
   primaryText: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "900"
   },
   repeatRow: {
@@ -478,14 +485,14 @@ const styles = StyleSheet.create({
   },
   repeatText: {
     color: "#111827",
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "900"
   },
   saveRow: {
     alignItems: "center",
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12
+    gap: 10
   },
   stack: {
     gap: 18
@@ -510,23 +517,23 @@ const styles = StyleSheet.create({
   },
   tab: {
     alignItems: "center",
-    borderRadius: 14,
+    borderRadius: 12,
     flex: 1,
-    paddingVertical: 13
+    paddingVertical: 10
   },
   tabActive: {
     backgroundColor: "#ffffff"
   },
   tabs: {
     backgroundColor: "#f1f5f9",
-    borderRadius: 16,
+    borderRadius: 14,
     flexDirection: "row",
     gap: 4,
-    padding: 5
+    padding: 4
   },
   tabText: {
     color: "#697386",
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "900"
   },
   tabTextActive: {
@@ -552,17 +559,17 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     flex: 1,
-    minWidth: 130,
-    paddingVertical: 11
+    minWidth: 100,
+    paddingVertical: 9
   },
   visibilityRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10
+    gap: 8
   },
   visibilityText: {
     color: "#697386",
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "900"
   },
   visibilityTextActive: {

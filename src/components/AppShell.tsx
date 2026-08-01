@@ -69,6 +69,20 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
     }
   }, []);
 
+  useEffect(() => {
+    if (typeof document === "undefined" || !settingsOpen) {
+      return;
+    }
+    const handleClickOutside = (event: MouseEvent) => {
+      const sidebar = document.getElementById("sidebar");
+      if (sidebar && !sidebar.contains(event.target as Node)) {
+        setSettingsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [settingsOpen]);
+
   const handleNavigate = (href: NavItem["href"]) => {
     if (onNavigate) {
       onNavigate(href);
@@ -260,7 +274,7 @@ function createStyles(tokens: ReturnType<typeof getTheme>["tokens"][ColorMode], 
       zIndex: 20
     },
     sidebarTop: {
-      gap: 14
+      gap: 10
     },
     sidebarHeader: {
       alignItems: "center",
@@ -307,15 +321,15 @@ function createStyles(tokens: ReturnType<typeof getTheme>["tokens"][ColorMode], 
     },
     navList: {
       flexShrink: 1,
-      gap: 8
+      gap: 6
     },
     navItem: {
       alignItems: "center",
-      borderRadius: 16,
+      borderRadius: 14,
       justifyContent: "center",
-      minHeight: isMobile ? 62 : 54,
-      paddingHorizontal: 6,
-      paddingVertical: 6
+      minHeight: isMobile ? 52 : 46,
+      paddingHorizontal: 4,
+      paddingVertical: 4
     },
     navItemSelected: {
       backgroundColor: tokens.accent,
@@ -330,9 +344,10 @@ function createStyles(tokens: ReturnType<typeof getTheme>["tokens"][ColorMode], 
     },
     navLabel: {
       color: tokens.text,
-      fontSize: isMobile ? 10 : 12,
+      fontSize: isMobile ? 9 : 11,
       fontWeight: "800",
-      marginTop: 4,
+      lineHeight: isMobile ? 12 : 14,
+      marginTop: 2,
       textAlign: "center"
     },
     navLabelSelected: {

@@ -132,7 +132,7 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
         <View style={[styles.widget, styles.widgetLeft]}>
           <View style={styles.widgetHeader}>
             <Text style={styles.widgetIcon}>📌</Text>
-            <Text style={styles.widgetTitle}>今日计划</Text>
+            <Text style={styles.widgetTitle} numberOfLines={1}>今日计划</Text>
             <Pressable accessibilityRole="button" accessibilityLabel="查看全部待办" onPress={() => onNavigate?.("/plan")} style={styles.widgetMore}>
               <Text style={styles.widgetMoreText}>全部 →</Text>
             </Pressable>
@@ -170,7 +170,7 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
         <View style={[styles.widget, styles.widgetRight]}>
           <View style={styles.widgetHeader}>
             <Text style={styles.widgetIcon}>📝</Text>
-            <Text style={styles.widgetTitle}>备忘录</Text>
+            <Text style={styles.widgetTitle} numberOfLines={1}>备忘录</Text>
             <Pressable accessibilityRole="button" accessibilityLabel="查看全部备忘" onPress={() => setViewState("notes")} style={styles.widgetMore}>
               <Text style={styles.widgetMoreText}>全部 →</Text>
             </Pressable>
@@ -199,12 +199,6 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
             )}
           </Pressable>
         </View>
-      </View>
-
-      <View style={styles.quoteCard}>
-        <Text style={styles.quoteLabel}>每日一句 · DAILY ENGLISH</Text>
-        <Text style={styles.quoteEn}>Done is better than perfect.</Text>
-        <Text style={styles.quoteCn}>完成比完美更重要。</Text>
       </View>
 
       <View style={styles.summaryCard}>
@@ -251,12 +245,12 @@ function createStyles(tokens: UiTokens) {
     },
     greeting: {
       color: tokens.text,
-      fontSize: 24,
+      fontSize: 22,
       fontWeight: "900"
     },
     date: {
       color: tokens.textMuted,
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: "700",
       marginTop: 4
     },
@@ -267,8 +261,8 @@ function createStyles(tokens: UiTokens) {
       flexDirection: "row",
       gap: 6,
       justifyContent: "center",
-      minHeight: 42,
-      paddingHorizontal: 18,
+      minHeight: 38,
+      paddingHorizontal: 14,
       shadowColor: "#000000",
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.04,
@@ -277,20 +271,20 @@ function createStyles(tokens: UiTokens) {
     },
     progressText: {
       color: "#b08d2b",
-      fontSize: 15,
+      fontSize: 14,
       fontWeight: "900"
     },
     topWidgets: {
       flexDirection: "row",
-      gap: 12
+      gap: 10
     },
     widget: {
       backgroundColor: "#ffffff",
-      borderRadius: 22,
+      borderRadius: 18,
       flex: 1,
-      gap: 10,
-      minHeight: 170,
-      padding: 14,
+      gap: 8,
+      minHeight: 138,
+      padding: 12,
       shadowColor: "#7cb87c",
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.06,
@@ -298,62 +292,67 @@ function createStyles(tokens: UiTokens) {
       elevation: 2
     },
     widgetLeft: {
-      flex: 1.05
+      flex: 1
     },
     widgetRight: {
-      flex: 0.95
+      flex: 1
     },
     widgetHeader: {
       alignItems: "center",
       flexDirection: "row",
-      gap: 6,
+      gap: 5,
       marginBottom: 2
     },
     widgetIcon: {
-      fontSize: 16
+      fontSize: 15
     },
     widgetTitle: {
       color: tokens.text,
       flex: 1,
-      fontSize: 15,
+      flexShrink: 1,
+      fontSize: 14,
       fontWeight: "900"
     },
     widgetMore: {
-      alignSelf: "flex-start"
+      alignSelf: "flex-start",
+      flexShrink: 0
     },
     widgetMoreText: {
       color: tokens.textMuted,
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: "800"
     },
     todoInputRow: {
+      alignItems: "center",
       flexDirection: "row",
-      gap: 8
+      gap: 6
     },
     todoInput: {
       backgroundColor: "#f6faf6",
-      borderRadius: 12,
+      borderRadius: 10,
       color: tokens.text,
       flex: 1,
+      flexShrink: 1,
       fontSize: 13,
-      paddingHorizontal: 12,
-      paddingVertical: 8
+      minWidth: 0,
+      paddingHorizontal: 10,
+      paddingVertical: 7
     },
     todoAddButton: {
       alignItems: "center",
       backgroundColor: tokens.accent,
-      borderRadius: 12,
-      height: 36,
+      borderRadius: 10,
+      height: 32,
       justifyContent: "center",
-      width: 36
+      width: 32
     },
     todoAddText: {
       color: "#ffffff",
-      fontSize: 18,
+      fontSize: 16,
       fontWeight: "900"
     },
     todoList: {
-      gap: 8
+      gap: 6
     },
     todoRow: {
       alignItems: "center",
@@ -362,7 +361,7 @@ function createStyles(tokens: UiTokens) {
       flexDirection: "row",
       gap: 8,
       paddingHorizontal: 10,
-      paddingVertical: 8
+      paddingVertical: 6
     },
     todoCheck: {
       alignItems: "center",
@@ -405,35 +404,35 @@ function createStyles(tokens: UiTokens) {
     },
     emptyHint: {
       color: tokens.textMuted,
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: "700",
       textAlign: "center"
     },
     notesCard: {
       alignItems: "stretch",
       backgroundColor: "#f6faf6",
-      borderRadius: 16,
+      borderRadius: 14,
       flex: 1,
       justifyContent: "center",
-      padding: 12
+      padding: 10
     },
     notesPlaceholder: {
       color: tokens.textMuted,
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: "700"
     },
     notesRecordButton: {
       alignItems: "center",
       alignSelf: "flex-start",
       backgroundColor: tokens.accent,
-      borderRadius: 12,
-      marginTop: 10,
-      paddingHorizontal: 16,
-      paddingVertical: 8
+      borderRadius: 10,
+      marginTop: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 6
     },
     notesRecordText: {
       color: "#ffffff",
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: "900"
     },
     notesHint: {
@@ -442,12 +441,12 @@ function createStyles(tokens: UiTokens) {
       fontWeight: "700"
     },
     notesList: {
-      gap: 8
+      gap: 6
     },
     noteRow: {
       alignItems: "center",
       flexDirection: "row",
-      gap: 8
+      gap: 6
     },
     noteDot: {
       backgroundColor: tokens.accent,
@@ -458,7 +457,7 @@ function createStyles(tokens: UiTokens) {
     noteRowText: {
       color: tokens.text,
       flex: 1,
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: "700"
     },
     notesMore: {
@@ -469,9 +468,9 @@ function createStyles(tokens: UiTokens) {
     },
     summaryCard: {
       backgroundColor: "#ffffff",
-      borderRadius: 22,
-      gap: 14,
-      padding: 18,
+      borderRadius: 18,
+      gap: 12,
+      padding: 14,
       shadowColor: "#7cb87c",
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.06,
@@ -495,50 +494,28 @@ function createStyles(tokens: UiTokens) {
     },
     summaryValue: {
       color: tokens.accent,
-      fontSize: 28,
+      fontSize: 22,
       fontWeight: "900"
     },
     summaryLabel: {
       color: tokens.textMuted,
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: "800"
     },
     summaryDivider: {
       backgroundColor: tokens.border,
-      height: 36,
+      height: 28,
       width: 1
     },
     summaryLine: {
       backgroundColor: tokens.accentSoft,
-      borderRadius: 12,
+      borderRadius: 10,
       color: tokens.text,
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: "700",
-      lineHeight: 20,
-      paddingHorizontal: 14,
-      paddingVertical: 10
-    },
-    quoteCard: {
-      backgroundColor: "#d4e4d4",
-      borderRadius: 22,
-      gap: 8,
-      padding: 20
-    },
-    quoteLabel: {
-      color: "#5a7a5a",
-      fontSize: 12,
-      fontWeight: "900",
-      letterSpacing: 0.5
-    },
-    quoteEn: {
-      color: "#ffffff",
-      fontSize: 22,
-      fontWeight: "900"
-    },
-    quoteCn: {
-      color: "#f0f7f0",
-      fontSize: 15,
-      fontWeight: "700"
+      lineHeight: 18,
+      paddingHorizontal: 12,
+      paddingVertical: 8
     },
     dailyPickCard: {
       backgroundColor: "#ffffff",
@@ -722,8 +699,8 @@ function createStyles(tokens: UiTokens) {
     },
     spinnerCard: {
       backgroundColor: "#ffffff",
-      borderRadius: 22,
-      padding: 18,
+      borderRadius: 18,
+      padding: 14,
       shadowColor: "#7cb87c",
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.06,

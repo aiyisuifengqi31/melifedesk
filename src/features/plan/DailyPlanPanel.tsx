@@ -894,15 +894,15 @@ const styles = StyleSheet.create({
   addButton: {
     alignItems: "center",
     backgroundColor: "#78c9ee",
-    borderRadius: 14,
-    height: 54,
+    borderRadius: 12,
+    height: 44,
     justifyContent: "center",
-    width: 54
+    width: 44
   },
   addButtonText: {
     color: "#ffffff",
-    fontSize: 32,
-    lineHeight: 34
+    fontSize: 26,
+    lineHeight: 28
   },
   calendarArrow: {
     color: "#111827",
@@ -914,7 +914,7 @@ const styles = StyleSheet.create({
     borderColor: "#e3e6eb",
     borderRadius: 18,
     borderWidth: 1,
-    padding: 14
+    padding: 12
   },
   calendarTitle: {
     color: "#111827",
@@ -1134,7 +1134,7 @@ const styles = StyleSheet.create({
   },
   priorityFieldWrap: {
     position: "relative",
-    zIndex: 5
+    zIndex: 100
   },
   priorityInline: {
     alignItems: "center",
@@ -1152,10 +1152,10 @@ const styles = StyleSheet.create({
     position: "absolute",
     shadowColor: "#000000",
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 6,
-    zIndex: 20
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 10,
+    zIndex: 100
   },
   priorityOption: {
     alignItems: "center",
@@ -1178,7 +1178,8 @@ const styles = StyleSheet.create({
   },
   prioritySelector: {
     flexShrink: 0,
-    position: "relative"
+    position: "relative",
+    zIndex: 100
   },
   priorityText: {
     color: "#111827",
@@ -1194,15 +1195,16 @@ const styles = StyleSheet.create({
   quickInput: {
     backgroundColor: "#f8fafc",
     borderColor: "#e3e6eb",
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     color: "#111827",
     flex: 1,
-    fontSize: 16,
-    height: 54,
-    minWidth: 180,
-    paddingHorizontal: 16,
-    paddingVertical: 12
+    flexShrink: 1,
+    fontSize: 14,
+    height: 44,
+    minWidth: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 10
   },
   quickPriorityMenu: {
     right: 0,
@@ -1228,12 +1230,12 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   section: {
-    gap: 10,
-    marginTop: 14
+    gap: 8,
+    marginTop: 12
   },
   sectionTitle: {
     color: "#111827",
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "900"
   },
   selectedDatePill: {
@@ -1377,22 +1379,22 @@ const styles = StyleSheet.create({
     borderColor: "#e3e6eb",
     borderRadius: 18,
     borderWidth: 1,
-    gap: 14,
-    padding: 18
+    gap: 12,
+    padding: 14
   },
   todoHeader: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 10
+    gap: 8
   },
   todoIcon: {
     color: "#28aeea",
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "900"
   },
   todoTitle: {
     color: "#111827",
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: "900"
   },
   toggleOff: {
@@ -1409,7 +1411,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     justifyContent: "space-between",
-    padding: 18
+    padding: 14
   },
   weatherButton: {
     alignItems: "center",
@@ -1425,12 +1427,12 @@ const styles = StyleSheet.create({
   },
   weatherCity: {
     color: "#697386",
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "700"
   },
   weatherMeta: {
     color: "#697386",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700"
   },
   weatherPlaceholder: {
@@ -1488,8 +1490,8 @@ const styles = StyleSheet.create({
     borderColor: "#e3e6eb",
     borderRadius: 18,
     borderWidth: 1,
-    gap: 12,
-    padding: 18
+    gap: 10,
+    padding: 14
   },
   alarmDeleteButton: {
     alignItems: "center",
@@ -1550,11 +1552,11 @@ const styles = StyleSheet.create({
   alarmRow: {
     alignItems: "center",
     backgroundColor: "#f6faf6",
-    borderRadius: 14,
+    borderRadius: 12,
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingVertical: 12
+    paddingHorizontal: 12,
+    paddingVertical: 10
   },
   alarmRowInfo: {
     flex: 1,
@@ -1562,7 +1564,7 @@ const styles = StyleSheet.create({
   },
   alarmTime: {
     color: "#111827",
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "900"
   },
   alarmTimeInput: {
@@ -1582,7 +1584,7 @@ const styles = StyleSheet.create({
   },
   alarmTitle: {
     color: "#111827",
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "900"
   },
   alarmTitleWrap: {
