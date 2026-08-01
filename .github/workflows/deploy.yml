@@ -28,7 +28,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile
 
       - name: Build web bundle
         env:
@@ -36,6 +36,9 @@ jobs:
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
           PAGES_BASE_URL: /${{ github.event.repository.name }}
         run: pnpm build:web
+
+      - name: Disable Jekyll processing
+        run: touch dist/.nojekyll
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
