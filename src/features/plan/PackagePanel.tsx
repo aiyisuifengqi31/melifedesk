@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import type { UiTokens } from "@/shared/ui/primitives";
+import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
 import { createPackageId, hydratePackagesFromCloud, loadPackages, savePackages, type PackageItem, type PackageStorage } from "./packageStorage";
 
 type PackagePanelProps = {
@@ -24,6 +25,7 @@ export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
   const [items, setItems] = useState<PackageItem[]>(() => loadPackages(pkgStorage));
   const [form, setForm] = useState(emptyItem());
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const styles = useMemo(() => createStyles(themeTokens), [themeTokens]);
 
@@ -130,12 +132,16 @@ export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
             style={[styles.input, styles.inputHalf]}
             value={form.company}
           />
-          <TextInput
-            onChangeText={(text) => setForm((previous) => ({ ...previous, arrivalDate: text }))}
-            placeholder="到达日期"
-            style={[styles.input, styles.inputHalf]}
-            value={form.arrivalDate}
-          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="选择到达日期"
+            onPress={() => setDatePickerOpen(true)}
+            style={[styles.input, styles.inputHalf, styles.dateTrigger]}
+          >
+            <Text style={[styles.dateTriggerText, !form.arrivalDate ? styles.dateTriggerPlaceholder : null]} numberOfLines={1}>
+              {form.arrivalDate || "到达日期"}
+            </Text>
+          </Pressable>
         </View>
         <View style={styles.formRow}>
           <TextInput
@@ -185,19 +191,17 @@ export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
         </View>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.list}>
-        <View style={styles.listInner}>
-          {unpicked.length === 0 && picked.length === 0 ? (
-            <Text style={styles.empty}>还没有快递，添加一个吧</Text>
-          ) : null}
-          {unpicked.map((item) => (
-            <PackageCard key={item.id} item={item} />
-          ))}
-          {picked.length > 0 ? <View style={styles.divider} /> : null}
-          {picked.map((item) => (
-            <PackageCard key={item.id} item={item} />
-          ))}
-        </View>
+      <ScrollView showsVerticalScrollIndicator={false} style={styles.list} contentContainerStyle={styles.listInner}>
+        {unpicked.length === 0 && picked.length === 0 ? (
+          <Text style={styles.empty}>还没有快递，添加一个吧</Text>
+        ) : null}
+        {unpicked.map((item) => (
+          <PackageCard key={item.id} item={item} />
+        ))}
+        {picked.length > 0 ? <View style={styles.divider} /> : null}
+        {picked.map((item) => (
+          <PackageCard key={item.id} item={item} />
+        ))}
       </ScrollView>
 
       {expandedImage ? (
@@ -205,6 +209,17 @@ export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
           <Image resizeMode="contain" source={{ uri: expandedImage }} style={styles.expandedImage} />
         </Pressable>
       ) : null}
+
+      <DatePickerPopup
+        onCancel={() => setDatePickerOpen(false)}
+        onConfirm={(date) => {
+          setForm((previous) => ({ ...previous, arrivalDate: date }));
+          setDatePickerOpen(false);
+        }}
+        selectedDate={form.arrivalDate}
+        title="选择到达日期"
+        visible={datePickerOpen}
+      />
     </View>
   );
 }
@@ -263,6 +278,19 @@ function createStyles(tokens: UiTokens) {
       color: "#ffffff",
       fontSize: 12,
       fontWeight: "900"
+    },
+    dateTrigger: {
+      alignItems: "center",
+      flexDirection: "row",
+      justifyContent: "flex-start"
+    },
+    dateTriggerPlaceholder: {
+      color: "#9ca3af"
+    },
+    dateTriggerText: {
+      color: tokens.text,
+      fontSize: 13,
+      fontWeight: "700"
     },
     deleteButton: {
       alignItems: "center",
@@ -345,7 +373,7 @@ function createStyles(tokens: UiTokens) {
       borderWidth: 1,
       gap: 8,
       padding: 10,
-      width: 220
+      width: "100%"
     },
     itemCardDone: {
       opacity: 0.7
@@ -376,11 +404,12 @@ function createStyles(tokens: UiTokens) {
       gap: 8
     },
     list: {
-      flexGrow: 0
+      flexGrow: 0,
+      maxHeight: 320
     },
     listInner: {
       gap: 8,
-      paddingRight: 8
+      paddingBottom: 4
     },
     subtitle: {
       color: tokens.textMuted,

@@ -2,11 +2,21 @@ import { getSupabasePublicConfig } from "@/auth/supabaseConfig";
 import { buildUserSettingsPatch } from "@/auth/userSettings";
 
 describe("Task 2 auth client configuration", () => {
+  const savedUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const savedKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  const savedExtra = process.env.EXTRA_SECRET_VALUE;
+
+  afterAll(() => {
+    process.env.EXPO_PUBLIC_SUPABASE_URL = savedUrl;
+    process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = savedKey;
+    process.env.EXTRA_SECRET_VALUE = savedExtra;
+  });
+
   it("uses only public Supabase URL and anon key in client config", () => {
-    const config = getSupabasePublicConfig({
-      EXPO_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: "anon-key"
-    });
+    process.env.EXPO_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
+
+    const config = getSupabasePublicConfig();
 
     expect(config).toEqual({
       url: "https://example.supabase.co",
@@ -17,11 +27,11 @@ describe("Task 2 auth client configuration", () => {
   });
 
   it("returns no extra secret-like values from client config", () => {
-    const config = getSupabasePublicConfig({
-      EXPO_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: "anon-key",
-      EXTRA_SECRET_VALUE: "forbidden"
-    });
+    process.env.EXPO_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
+    process.env.EXTRA_SECRET_VALUE = "forbidden";
+
+    const config = getSupabasePublicConfig();
 
     expect(JSON.stringify(config)).not.toContain("forbidden");
   });

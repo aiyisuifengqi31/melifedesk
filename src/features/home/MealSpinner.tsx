@@ -2,9 +2,10 @@ import { useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SvgXml } from "react-native-svg";
 
-const WHEEL_SIZE = 240;
-const CENTER = WHEEL_SIZE / 2;
-const RADIUS = 110;
+const MAX_WHEEL_SIZE = 240;
+const WHEEL_PADDING = 24;
+const CENTER = (size: number) => size / 2;
+const RADIUS = (size: number) => size / 2 - 14;
 
 const PRESET_MEALS = ["火锅", "烧烤", "麻辣烫", "寿司", "汉堡", "沙拉", "披萨", "拉面"];
 
@@ -25,30 +26,33 @@ function describeArc(x: number, y: number, radius: number, startAngle: number, e
   return [`M ${x} ${y}`, `L ${start.x} ${start.y}`, `A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`, "Z"].join(" ");
 }
 
-function buildWheelSvg(options: string[]) {
+function buildWheelSvg(options: string[], size: number) {
   const count = Math.max(options.length, 1);
   const sliceAngle = 360 / count;
   const slices: string[] = [];
   const labels: string[] = [];
+  const center = CENTER(size);
+  const radius = RADIUS(size);
 
   for (let i = 0; i < count; i++) {
     const startAngle = i * sliceAngle;
     const endAngle = startAngle + sliceAngle;
     const color = COLORS[i % COLORS.length];
-    const path = describeArc(CENTER, CENTER, RADIUS, startAngle, endAngle);
+    const path = describeArc(center, center, radius, startAngle, endAngle);
     slices.push(`<path d="${path}" fill="${color}" stroke="#ffffff" stroke-width="2"/>`);
 
     const midAngle = startAngle + sliceAngle / 2;
-    const labelRadius = RADIUS * 0.62;
-    const labelPos = polarToCartesian(CENTER, CENTER, labelRadius, midAngle);
+    const labelRadius = radius * 0.62;
+    const labelPos = polarToCartesian(center, center, labelRadius, midAngle);
     const rotate = midAngle;
     const text = options[i] ?? "";
+    const fontSize = Math.max(11, Math.round(size / 18));
     labels.push(
-      `<text x="${labelPos.x}" y="${labelPos.y}" fill="#ffffff" font-size="13" font-weight="900" text-anchor="middle" dominant-baseline="middle" transform="rotate(${rotate} ${labelPos.x} ${labelPos.y})">${text}</text>`
+      `<text x="${labelPos.x}" y="${labelPos.y}" fill="#ffffff" font-size="${fontSize}" font-weight="900" text-anchor="middle" dominant-baseline="middle" transform="rotate(${rotate} ${labelPos.x} ${labelPos.y})">${text}</text>`
     );
   }
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${WHEEL_SIZE}" height="${WHEEL_SIZE}" viewBox="0 0 ${WHEEL_SIZE} ${WHEEL_SIZE}">${slices.join("")}${labels.join("")}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${slices.join("")}${labels.join("")}</svg>`;
 }
 
 export function MealSpinner() {
@@ -56,9 +60,11 @@ export function MealSpinner() {
   const [inputText, setInputText] = useState("");
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
   const rotation = useRef(new Animated.Value(0)).current;
   const currentRotation = useRef(0);
 
+  const wheelSize = Math.max(160, Math.min(MAX_WHEEL_SIZE, containerWidth - WHEEL_PADDING * 2));
   const validOptions = options.filter((o) => o.trim());
 
   const addOption = () => {
@@ -119,14 +125,14 @@ export function MealSpinner() {
   });
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={(event) => setContainerWidth(event.nativeEvent.layout.width)}>
       <Text style={styles.title}>今天吃什么</Text>
       <Text style={styles.subtitle}>输入几个选项，让转盘来决定</Text>
 
-      <View style={styles.wheelArea}>
+      <View style={[styles.wheelArea, { height: wheelSize + 24, width: wheelSize + 24 }]}>
         <View style={styles.pointer} />
-        <Animated.View style={[styles.wheel, { transform: [{ rotate: rotateInterpolate }] }]}>
-          <SvgXml height={WHEEL_SIZE} width={WHEEL_SIZE} xml={buildWheelSvg(validOptions)} />
+        <Animated.View style={[styles.wheel, { height: wheelSize, width: wheelSize, transform: [{ rotate: rotateInterpolate }] }]}>
+          <SvgXml height={wheelSize} width={wheelSize} xml={buildWheelSvg(validOptions, wheelSize)} />
         </Animated.View>
         <View style={styles.wheelCenter}>
           <Text style={styles.wheelCenterText}>GO</Text>
@@ -309,18 +315,14 @@ const styles = StyleSheet.create({
   },
   wheel: {
     alignItems: "center",
-    borderRadius: WHEEL_SIZE / 2,
-    height: WHEEL_SIZE,
+    borderRadius: MAX_WHEEL_SIZE / 2,
     justifyContent: "center",
-    overflow: "hidden",
-    width: WHEEL_SIZE
+    overflow: "hidden"
   },
   wheelArea: {
     alignItems: "center",
     alignSelf: "center",
-    height: WHEEL_SIZE + 24,
-    justifyContent: "center",
-    width: WHEEL_SIZE + 24
+    justifyContent: "center"
   },
   wheelCenter: {
     alignItems: "center",
