@@ -12,12 +12,12 @@ describe("primary navigation", () => {
     }
   });
 
-  it("switches routes when a navigation item is pressed", () => {
+  it("switches routes when a navigation item is pressed", async () => {
     render(<AppShell initialRoute="/plan" />);
 
-    fireEvent.press(screen.getByRole("button", { name: "运动健身" }));
+    fireEvent.press(screen.getByRole("button", { name: "运动\n健身" }));
 
-    expect(screen.getAllByText("运动健身").length).toBeGreaterThan(0);
+    expect(await screen.findByRole("button", { name: "今天训练了" })).toBeOnTheScreen();
   });
 
   it("keeps mobile sidebar width within the required range", () => {

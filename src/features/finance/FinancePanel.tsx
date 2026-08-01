@@ -71,6 +71,7 @@ export function FinancePanel({ storage }: FinancePanelProps) {
   const [savingDate, setSavingDate] = useState(todayIso());
   const [savingNote, setSavingNote] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [categoryType, setCategoryType] = useState<TransactionType>("expense");
   const [feedback, setFeedback] = useState("输入金额，选择分类后就能记一笔。");
 
   const [giftRecords, setGiftRecords] = useState<GiftRecord[]>(() => sortGiftRecords(loadGiftRecords(financeStorage)));
@@ -195,7 +196,7 @@ export function FinancePanel({ storage }: FinancePanelProps) {
       setFeedback("请输入分类名称。");
       return;
     }
-    if (allCategories.some((category) => category.name === name && category.transactionType === transactionType)) {
+    if (allCategories.some((category) => category.name === name && category.transactionType === categoryType)) {
       setFeedback("这个分类已经存在。");
       return;
     }
@@ -206,7 +207,7 @@ export function FinancePanel({ storage }: FinancePanelProps) {
         createTime: new Date().toISOString(),
         id: createFinanceId("category"),
         name,
-        transactionType
+        transactionType: categoryType
       }
     ];
     setCustomCategories(nextCategories);
@@ -305,11 +306,6 @@ export function FinancePanel({ storage }: FinancePanelProps) {
 
   return (
     <View style={styles.stack}>
-      <View style={styles.hero}>
-        <Text style={styles.heroTitle}>记账</Text>
-        <Text style={styles.heroSub}>记录每一笔支出，掌握消费动态</Text>
-      </View>
-
       <View style={styles.tabs}>
         <TabButton active={tab === "record"} label="记录" onPress={() => setTab("record")} />
         <TabButton active={tab === "stats"} label="统计" onPress={() => setTab("stats")} />
@@ -555,8 +551,15 @@ export function FinancePanel({ storage }: FinancePanelProps) {
         <>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>添加自定义分类</Text>
+            <View style={styles.segmentRow}>
+              {transactionTypeOptions.map((option) => (
+                <Pressable key={option.value} accessibilityRole="button" accessibilityLabel={option.label} onPress={() => setCategoryType(option.value)} style={[styles.segment, categoryType === option.value ? styles.segmentActive : null]}>
+                  <Text style={[styles.segmentText, categoryType === option.value ? styles.segmentTextActive : null]}>{option.label}</Text>
+                </Pressable>
+              ))}
+            </View>
             <View style={styles.formRow}>
-              <TextInput {...categoryInputWebProps} nativeID="finance-category-input" onChange={makeTextInputChangeHandler(setNewCategoryName)} onChangeText={setNewCategoryName} placeholder="分类名称" style={[styles.input, styles.flexInput]} value={newCategoryName} />
+              <TextInput {...categoryInputWebProps} nativeID="finance-category-input" onChange={makeTextInputChangeHandler(setNewCategoryName)} onChangeText={setNewCategoryName} placeholder={`${categoryType === "expense" ? "支出" : "收入"}分类名称`} style={[styles.input, styles.flexInput]} value={newCategoryName} />
               <Pressable accessibilityRole="button" accessibilityLabel="添加分类" onPress={addCategory} style={styles.squareButton}>
                 <Text style={styles.squareText}>+</Text>
               </Pressable>
@@ -567,6 +570,7 @@ export function FinancePanel({ storage }: FinancePanelProps) {
             <View key={`${category.transactionType}-${category.name}-${index}`} style={styles.categoryRow}>
               <Text style={[styles.categoryIcon, { backgroundColor: categoryColors[index % categoryColors.length] }]}>{category.name.slice(0, 1)}</Text>
               <Text style={styles.categoryRowName}>{category.name}</Text>
+              <Text style={[styles.categoryBadge, { color: category.transactionType === "expense" ? "#ef4444" : "#16a34a" }]}>{category.transactionType === "expense" ? "支出" : "收入"}</Text>
               <Text style={styles.categoryBadge}>{category.isSystem ? "内置" : "自定义"}</Text>
             </View>
           ))}
@@ -627,14 +631,17 @@ function GiftItem({ onDelete, record }: { onDelete: (giftId: string) => void; re
 }
 
 function CategoryPieChart({ shares }: { shares: ReturnType<typeof buildFinanceSummary>["categoryShares"] }) {
-  const radius = 48;
+  const size = 110;
+  const radius = 36;
+  const stroke = 18;
+  const center = size / 2;
   const circumference = 2 * Math.PI * radius;
   let offset = 0;
 
   return (
     <View accessibilityLabel="本月分类占比饼图" style={styles.piePanel}>
-      <Svg height={142} viewBox="0 0 142 142" width={142}>
-        <Circle cx={71} cy={71} fill="#ffffff" r={48} stroke="#eef2f7" strokeWidth={24} />
+      <Svg height={size} viewBox={`0 0 ${size} ${size}`} width={size}>
+        <Circle cx={center} cy={center} fill="#ffffff" r={radius} stroke="#eef2f7" strokeWidth={stroke} />
         {shares.map((share, index) => {
           const length = Math.max(share.ratio * circumference, shares.length === 1 ? circumference : 2);
           const dashOffset = -offset;
@@ -642,21 +649,21 @@ function CategoryPieChart({ shares }: { shares: ReturnType<typeof buildFinanceSu
           return (
             <Circle
               key={share.categoryName}
-              cx={71}
-              cy={71}
+              cx={center}
+              cy={center}
               fill="transparent"
               r={radius}
               rotation="-90"
-              origin="71, 71"
+              origin={`${center}, ${center}`}
               stroke={chartColors[index % chartColors.length]}
               strokeDasharray={`${length} ${circumference - length}`}
               strokeDashoffset={dashOffset}
               strokeLinecap="round"
-              strokeWidth={24}
+              strokeWidth={stroke}
             />
           );
         })}
-        <Circle cx={71} cy={71} fill="#ffffff" r={30} />
+        <Circle cx={center} cy={center} fill="#ffffff" r={radius - stroke / 2 - 2} />
       </Svg>
       <View style={styles.pieLegend}>
         {shares.map((share, index) => {
@@ -665,7 +672,7 @@ function CategoryPieChart({ shares }: { shares: ReturnType<typeof buildFinanceSu
           return (
             <View key={share.categoryName} style={styles.legendRow}>
               <View style={[styles.legendDot, { backgroundColor: color }]} />
-              <Text style={styles.legendName}>{share.categoryName}</Text>
+              <Text style={styles.legendName} numberOfLines={1}>{share.categoryName}</Text>
               <Text style={[styles.legendPercent, { color }]}>{percent}%</Text>
             </View>
           );
@@ -773,10 +780,8 @@ const styles = StyleSheet.create({
     borderColor: "#e3e8ef",
     borderRadius: 12,
     borderWidth: 1,
-    flex: 1,
+    flexBasis: "23%",
     gap: 4,
-    maxWidth: "23%",
-    minWidth: 64,
     paddingVertical: 7
   },
   categoryGrid: {
@@ -1069,7 +1074,7 @@ const styles = StyleSheet.create({
   lineChart: {
     flexDirection: "row",
     gap: 8,
-    height: 210
+    height: 140
   },
   linePoint: {
     backgroundColor: "#1fa8e2",
@@ -1157,12 +1162,12 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     flexDirection: "row",
-    gap: 18,
-    padding: 16
+    gap: 12,
+    padding: 12
   },
   pieLegend: {
     flex: 1,
-    gap: 10
+    gap: 8
   },
   legendRow: {
     alignItems: "center",
@@ -1171,19 +1176,19 @@ const styles = StyleSheet.create({
   },
   legendDot: {
     borderRadius: 999,
-    height: 12,
-    width: 12
+    height: 10,
+    width: 10
   },
   legendName: {
     color: "#111827",
     flex: 1,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "900"
   },
   legendPercent: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "900",
-    width: 48,
+    width: 40,
     textAlign: "right"
   },
   pieTitle: {

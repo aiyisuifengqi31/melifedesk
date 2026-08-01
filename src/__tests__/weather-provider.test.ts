@@ -22,7 +22,7 @@ describe("plan weather provider", () => {
 
     await expect(fetchOpenMeteoWeather({ fetcher, latitude: 39.9, longitude: 116.4 })).resolves.toEqual({
       apparentTemperature: 34,
-      description: "Cloudy",
+      description: "阴",
       humidity: 73,
       latitude: 39.9,
       locationLabel: "当前位置",
@@ -31,7 +31,8 @@ describe("plan weather provider", () => {
       status: "ready",
       temperature: 29,
       updatedAt: "2026-07-31T09:22",
-      unit: "°C"
+      unit: "°C",
+      weatherCode: 3
     });
 
     expect(fetcher).toHaveBeenCalledWith(expect.stringContaining("latitude=39.9"));

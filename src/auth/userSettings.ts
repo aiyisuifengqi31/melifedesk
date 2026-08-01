@@ -1,3 +1,4 @@
+import { isThemeId } from "@/theme/registry";
 import type { ColorMode, ThemeId } from "@/theme/types";
 
 export type UserSettingsInput = {
@@ -33,9 +34,18 @@ export function buildUserSettingsPatch(input: UserSettingsInput): UserSettingsPa
 
 export function readStoredThemeId(storage: Storage | undefined): ThemeId | null {
   const value = storage?.getItem("fanfan-guanguan.theme_id");
-  return value === "default" || value === "cat" || value === "dog" ? value : null;
+  return value && isThemeId(value) ? value : null;
 }
 
 export function writeStoredThemeId(storage: Storage | undefined, themeId: ThemeId) {
   storage?.setItem("fanfan-guanguan.theme_id", themeId);
+}
+
+export function readStoredColorMode(storage: Storage | undefined): ColorMode | null {
+  const value = storage?.getItem("fanfan-guanguan.color_mode");
+  return value === "light" || value === "dark" ? value : null;
+}
+
+export function writeStoredColorMode(storage: Storage | undefined, mode: ColorMode) {
+  storage?.setItem("fanfan-guanguan.color_mode", mode);
 }

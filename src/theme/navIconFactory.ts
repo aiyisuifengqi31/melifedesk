@@ -18,6 +18,34 @@ const palettes: Record<ThemeId, IconPalette> = {
   dog: {
     accent: "#d9902f",
     stroke: "#475569"
+  },
+  sakura: {
+    accent: "#f08ba8",
+    stroke: "#8a6b76"
+  },
+  ocean: {
+    accent: "#3f9fc9",
+    stroke: "#4d7183"
+  },
+  sunset: {
+    accent: "#f2793f",
+    stroke: "#8a6552"
+  },
+  lavender: {
+    accent: "#8b6fd4",
+    stroke: "#6f6685"
+  },
+  matcha: {
+    accent: "#6f9b45",
+    stroke: "#5d6b50"
+  },
+  midnight: {
+    accent: "#4c5fd7",
+    stroke: "#5a6284"
+  },
+  coral: {
+    accent: "#f2705d",
+    stroke: "#8a6259"
   }
 };
 

@@ -3,13 +3,20 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 
 import type { UiTokens } from "@/shared/ui/primitives";
 import { hydrateNotesFromCloud, loadNotes, type NoteItem } from "@/features/home/notesStorage";
-import { createTodoId, getDefaultTodoStorage, hydrateTodosFromCloud, loadLocalTodos, saveLocalTodos, type TodoTask, type TodoStorage } from "@/features/plan/todoStorage";
+import { createTodoId, getDefaultTodoStorage, hydrateTodosFromCloud, loadLocalTodos, saveLocalTodos, type TodoPriority, type TodoTask, type TodoStorage } from "@/features/plan/todoStorage";
 import type { NavItem } from "@/navigation/items";
 import { MealSpinner } from "./MealSpinner";
 import { NotesPanel } from "./NotesPanel";
 
 const EXAM_WRONG_KEY = "fanfan-guanguan.exam.wrongQuestions.v1";
 const MAX_HOME_NOTES = 3;
+
+const priorityOptions: Array<{ color: string; label: string; value: TodoPriority }> = [
+  { color: "#8fb3c9", label: "低", value: "low" },
+  { color: "#63a7f8", label: "普通", value: "normal" },
+  { color: "#ffb020", label: "高", value: "high" },
+  { color: "#ef4444", label: "紧急", value: "urgent" }
+];
 
 type HomePanelProps = {
   onNavigate?: (href: NavItem["href"]) => void;
@@ -36,6 +43,7 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
   const todoStorage = useMemo(() => storage ?? getDefaultTodoStorage(), [storage]);
   const [todos, setTodos] = useState<TodoTask[]>(() => loadLocalTodos(todoStorage));
   const [newTodo, setNewTodo] = useState("");
+  const [todoPriority, setTodoPriority] = useState<TodoPriority>("normal");
   const [viewState, setViewState] = useState<ViewState>("home");
 
   const styles = useMemo(() => createStyles(themeTokens), [themeTokens]);
@@ -58,11 +66,12 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
       createTime: new Date().toISOString(),
       deadline: null,
       id: createTodoId(),
-      priority: "normal",
+      priority: todoPriority,
       title
     };
     persistTodos([task, ...todos]);
     setNewTodo("");
+    setTodoPriority("normal");
   };
 
   const displayedTodos = todos.slice(0, 4);
@@ -136,6 +145,23 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
             <Pressable accessibilityRole="button" accessibilityLabel="查看全部待办" onPress={() => onNavigate?.("/plan")} style={styles.widgetMore}>
               <Text style={styles.widgetMoreText}>全部 →</Text>
             </Pressable>
+          </View>
+
+          <View style={styles.priorityRow}>
+            {priorityOptions.map((option) => {
+              const active = todoPriority === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  accessibilityRole="button"
+                  accessibilityLabel={`优先级：${option.label}`}
+                  onPress={() => setTodoPriority(option.value)}
+                  style={[styles.priorityChip, active ? { backgroundColor: option.color, borderColor: option.color } : null]}
+                >
+                  <Text style={[styles.priorityChipText, active ? styles.priorityChipTextActive : null]}>{option.label}</Text>
+                </Pressable>
+              );
+            })}
           </View>
 
           <View style={styles.todoInputRow}>
@@ -321,6 +347,27 @@ function createStyles(tokens: UiTokens) {
       color: tokens.textMuted,
       fontSize: 11,
       fontWeight: "800"
+    },
+    priorityRow: {
+      flexDirection: "row",
+      gap: 6
+    },
+    priorityChip: {
+      alignItems: "center",
+      backgroundColor: "#f6faf6",
+      borderColor: "#e3e8e3",
+      borderRadius: 999,
+      borderWidth: 1,
+      flex: 1,
+      paddingVertical: 5
+    },
+    priorityChipText: {
+      color: tokens.textMuted,
+      fontSize: 11,
+      fontWeight: "900"
+    },
+    priorityChipTextActive: {
+      color: "#ffffff"
     },
     todoInputRow: {
       alignItems: "center",

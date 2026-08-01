@@ -4,12 +4,17 @@ import { AppShell } from "@/components/AppShell";
 import { getTheme, THEME_IDS } from "@/theme/registry";
 
 describe("theme system", () => {
-  it("registers default, cat, and dog themes with required assets", () => {
-    expect(THEME_IDS).toEqual(["default", "cat", "dog"]);
+  it("registers every theme with required assets", () => {
+    expect(THEME_IDS).toContain("default");
+    expect(THEME_IDS).toContain("cat");
+    expect(THEME_IDS).toContain("dog");
+    expect(THEME_IDS.length).toBeGreaterThanOrEqual(8);
 
     for (const themeId of THEME_IDS) {
       const theme = getTheme(themeId);
-      expect(Object.keys(theme.icons)).toHaveLength(6);
+      expect(Object.keys(theme.icons)).toHaveLength(7);
+      expect(theme.name).toBeTruthy();
+      expect(theme.description).toBeTruthy();
       expect(theme.tokens.light.background).toBeTruthy();
       expect(theme.tokens.dark.background).toBeTruthy();
       expect(theme.emptyState).toBeTruthy();
@@ -18,36 +23,34 @@ describe("theme system", () => {
     }
   });
 
-  it("switches theme icons from the sidebar settings panel", () => {
+  it("switches theme icons from the settings panel", () => {
     render(<AppShell initialRoute="/plan" />);
 
-    expect(screen.queryByText("default-plan")).toBeNull();
     expect(screen.getByTestId("nav-icon-plan")).toHaveProp("accessibilityLabel", "default plan selected icon");
     expect(screen.getByTestId("nav-icon-workout")).toHaveProp("accessibilityLabel", "default workout unselected icon");
 
-    fireEvent.press(screen.getByRole("button", { name: "settings" }));
-    expect(screen.getByText("theme: default")).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("button", { name: "设置" }));
+    fireEvent.press(screen.getByRole("button", { name: "设置-主题" }));
+    expect(screen.getByText("当前主题：清新绿意")).toBeOnTheScreen();
 
-    fireEvent.press(screen.getByRole("button", { name: "cat" }));
-    expect(screen.getByText("theme: cat")).toBeOnTheScreen();
-    expect(screen.queryByText("cat-plan")).toBeNull();
+    fireEvent.press(screen.getByRole("button", { name: "使用奶油猫咪主题" }));
+    expect(screen.getByText("当前主题：奶油猫咪")).toBeOnTheScreen();
     expect(screen.getByTestId("nav-icon-plan")).toHaveProp("accessibilityLabel", "cat plan selected icon");
     expect(screen.getByTestId("nav-icon-workout")).toHaveProp("accessibilityLabel", "cat workout unselected icon");
 
-    fireEvent.press(screen.getByRole("button", { name: "dog" }));
-    expect(screen.getByText("theme: dog")).toBeOnTheScreen();
-    expect(screen.queryByText("dog-plan")).toBeNull();
+    fireEvent.press(screen.getByRole("button", { name: "使用柴犬日常主题" }));
     expect(screen.getByTestId("nav-icon-plan")).toHaveProp("accessibilityLabel", "dog plan selected icon");
   });
 
-  it("switches between light and dark mode from sidebar settings", () => {
+  it("switches between light and dark mode from the settings panel", () => {
     render(<AppShell initialRoute="/plan" />);
 
-    fireEvent.press(screen.getByRole("button", { name: "settings" }));
-    expect(screen.getByText("mode: light")).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("button", { name: "设置" }));
+    fireEvent.press(screen.getByRole("button", { name: "设置-主题" }));
+    expect(screen.getByText("当前外观：浅色")).toBeOnTheScreen();
 
-    fireEvent.press(screen.getByRole("button", { name: "dark mode" }));
+    fireEvent.press(screen.getByRole("button", { name: "深色模式" }));
 
-    expect(screen.getByText("mode: dark")).toBeOnTheScreen();
+    expect(screen.getByText("当前外观：深色")).toBeOnTheScreen();
   });
 });

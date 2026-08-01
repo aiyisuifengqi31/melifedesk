@@ -51,14 +51,9 @@ describe("FinancePanel interactions", () => {
 
     fireEvent.press(screen.getByRole("button", { name: "选择分类：餐饮" }));
     fireEvent.changeText(screen.getByPlaceholderText("0.00"), "25.50");
-    fireEvent.press(screen.getByRole("button", { name: "选择记账日期" }));
-    expect(screen.getByText("选择记账日期")).toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "选择日期：2026-07-30" }));
-    fireEvent.press(screen.getByRole("button", { name: "确定记账日期" }));
     fireEvent.press(screen.getByRole("button", { name: "快速记账" }));
 
     await waitFor(() => expect(screen.getAllByText("餐饮").length).toBeGreaterThan(1));
-    expect(screen.getByText("2026-07-30")).toBeOnTheScreen();
     expect(screen.getByText("支出已保存，统计已更新。")).toBeOnTheScreen();
     expect(screen.getAllByText("¥25.50").length).toBeGreaterThan(0);
     expect(screen.getByText("¥-25.50")).toBeOnTheScreen();

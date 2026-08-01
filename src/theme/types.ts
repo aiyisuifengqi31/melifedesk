@@ -1,6 +1,16 @@
 import type { RouteKey } from "@/navigation/items";
 
-export type ThemeId = "default" | "cat" | "dog";
+export type ThemeId =
+  | "cat"
+  | "coral"
+  | "default"
+  | "dog"
+  | "lavender"
+  | "matcha"
+  | "midnight"
+  | "ocean"
+  | "sakura"
+  | "sunset";
 export type ColorMode = "light" | "dark";
 
 export type ThemeTokens = {
@@ -28,6 +38,7 @@ export type ThemeSvgResource = {
 export type ThemeDefinition = {
   id: ThemeId;
   name: string;
+  description: string;
   tokens: Record<ColorMode, ThemeTokens>;
   icons: Record<RouteKey, NavIconResource>;
   emptyState: string;

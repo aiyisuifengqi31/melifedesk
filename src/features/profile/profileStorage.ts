@@ -2,7 +2,9 @@ import { hydrateFromCloud, saveCloudValue } from "@/features/sync/cloudSync";
 
 export type AppProfile = {
   avatarUri?: string;
+  birthday?: string;
   displayName: string;
+  motto?: string;
 };
 
 export const PROFILE_STORAGE_KEY = "fanfan-guanguan.profile.v1";
@@ -46,7 +48,9 @@ export function loadProfile(storage: ProfileStorage = getDefaultProfileStorage()
     const parsed = JSON.parse(raw) as Partial<AppProfile>;
     return {
       avatarUri: typeof parsed.avatarUri === "string" ? parsed.avatarUri : undefined,
-      displayName: typeof parsed.displayName === "string" && parsed.displayName.trim() ? parsed.displayName : DEFAULT_DISPLAY_NAME
+      birthday: typeof parsed.birthday === "string" ? parsed.birthday : undefined,
+      displayName: typeof parsed.displayName === "string" && parsed.displayName.trim() ? parsed.displayName : DEFAULT_DISPLAY_NAME,
+      motto: typeof parsed.motto === "string" ? parsed.motto : undefined
     };
   } catch {
     return { displayName: DEFAULT_DISPLAY_NAME };

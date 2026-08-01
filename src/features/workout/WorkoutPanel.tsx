@@ -32,11 +32,30 @@ const intensityOptions: Array<{ label: string; value: WorkoutIntensity }> = [
   { label: "适中", value: "moderate" },
   { label: "高强度", value: "hard" }
 ];
+
+type ChartPeriod = "month" | "week" | "year";
+
+const chartPeriodOptions: Array<{ label: string; value: ChartPeriod }> = [
+  { label: "近7天", value: "week" },
+  { label: "近一月", value: "month" },
+  { label: "近一年", value: "year" }
+];
+const chartPeriodTitle: Record<ChartPeriod, string> = {
+  month: "近一个月训练时长",
+  week: "近7天训练时长",
+  year: "近一年训练时长"
+};
 const titleInputWebProps = { id: "workout-title-input" } as object;
 const durationInputWebProps = { id: "workout-duration-input" } as object;
 const kcalInputWebProps = { id: "workout-kcal-input" } as object;
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+const toLocalIso = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+const todayIso = () => toLocalIso(new Date());
 
 export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const workoutStorage = useMemo(() => storage ?? getDefaultWorkoutStorage(), [storage]);
@@ -50,9 +69,11 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const [feeling, setFeeling] = useState("");
   const [notes, setNotes] = useState("");
   const [feedback, setFeedback] = useState("选择部位、填写时长和热量后保存训练记录。");
+  const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("week");
 
   const stats = useMemo(() => buildWorkoutStats(logs), [logs]);
-  const sevenDays = useMemo(() => buildSevenDayBars(logs), [logs]);
+  const chartBars = useMemo(() => buildPeriodBars(logs, chartPeriod), [chartPeriod, logs]);
+  const chartTotal = useMemo(() => chartBars.reduce((sum, bar) => sum + bar.minutes, 0), [chartBars]);
 
   const persistLogs = (nextLogs: WorkoutLog[]) => {
     const sorted = sortWorkoutLogs(nextLogs);
@@ -205,22 +226,41 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       </View>
 
       <View style={styles.metricRow}>
-        <Metric title="本周训练" unit="分钟" value={String(stats.weekMinutes)} />
-        <Metric title="本周消耗" unit="千卡" value={String(stats.weekKcal)} />
+        <Metric compact title="本周训练" unit="分钟" value={String(stats.weekMinutes)} />
+        <Metric compact title="本周消耗" unit="千卡" value={String(stats.weekKcal)} />
       </View>
 
-      <View style={styles.card}>
-        <View style={styles.cardTitleRow}>
-          <Text style={styles.chartIcon}>▥</Text>
-          <Text style={styles.cardTitle}>近7天训练时长</Text>
+      <View style={styles.chartCard}>
+        <View style={styles.chartHeader}>
+          <View style={styles.cardTitleRow}>
+            <Text style={styles.chartIcon}>▥</Text>
+            <Text style={styles.chartTitle}>{chartPeriodTitle[chartPeriod]}</Text>
+          </View>
+          <Text style={styles.chartTotal}>合计 {chartTotal} 分钟</Text>
         </View>
-        <View style={styles.chart}>
-          {sevenDays.map((day) => (
-            <View key={day.date} style={styles.barColumn}>
-              <View style={styles.barTrack}>
-                <View style={[styles.barFill, { height: `${day.height}%` }]} />
+        <View style={styles.periodRow}>
+          {chartPeriodOptions.map((option) => {
+            const selected = chartPeriod === option.value;
+            return (
+              <Pressable
+                key={option.value}
+                accessibilityLabel={`查看${option.label}训练时长`}
+                accessibilityRole="button"
+                onPress={() => setChartPeriod(option.value)}
+                style={[styles.periodChip, selected ? styles.periodChipActive : null]}
+              >
+                <Text style={[styles.periodChipText, selected ? styles.periodChipTextActive : null]}>{option.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={[styles.chart, chartPeriod === "week" ? null : styles.chartDense]}>
+          {chartBars.map((bar) => (
+            <View key={bar.key} style={styles.barColumn}>
+              <View style={[styles.barTrack, chartPeriod === "week" ? null : styles.barTrackDense]}>
+                <View style={[styles.barFill, { height: `${bar.height}%` }]} />
               </View>
-              <Text style={styles.barLabel}>{day.label}</Text>
+              <Text style={[styles.barLabel, chartPeriod === "year" ? styles.barLabelTiny : null]}>{bar.label}</Text>
             </View>
           ))}
         </View>
@@ -258,11 +298,14 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   );
 }
 
-function Metric({ title, unit, value }: { title: string; unit: string; value: string }) {
+function Metric({ compact = false, title, unit, value }: { compact?: boolean; title: string; unit: string; value: string }) {
   return (
-    <View style={styles.metric}>
-      <Text style={styles.metricTitle}>{title}</Text>
-      <Text style={styles.metricValue}>{value}<Text style={styles.metricUnit}> {unit}</Text></Text>
+    <View style={[styles.metric, compact ? styles.metricCompact : null]}>
+      <Text style={[styles.metricTitle, compact ? styles.metricTitleCompact : null]}>{title}</Text>
+      <Text style={[styles.metricValue, compact ? styles.metricValueCompact : null]}>
+        {value}
+        <Text style={[styles.metricUnit, compact ? styles.metricUnitCompact : null]}> {unit}</Text>
+      </Text>
     </View>
   );
 }
@@ -270,7 +313,7 @@ function Metric({ title, unit, value }: { title: string; unit: string; value: st
 function buildWorkoutStats(logs: WorkoutLog[]) {
   const now = new Date();
   const weekStart = startOfWeek(now);
-  const thirtyDaysAgo = shiftDate(now, -29).toISOString().slice(0, 10);
+  const thirtyDaysAgo = toLocalIso(shiftDate(now, -29));
   const weekLogs = logs.filter((log) => new Date(`${log.sessionDate}T00:00:00`).getTime() >= weekStart.getTime() && log.status === "trained");
   const monthLogs = logs.filter((log) => log.sessionDate >= thirtyDaysAgo && log.status === "trained");
   const partCounts = new Map<string, number>();
@@ -292,25 +335,55 @@ function buildWorkoutStats(logs: WorkoutLog[]) {
   };
 }
 
-function buildSevenDayBars(logs: WorkoutLog[]) {
-  const days = Array.from({ length: 7 }, (_, index) => shiftDate(new Date(), index - 6));
+function buildPeriodBars(logs: WorkoutLog[], period: ChartPeriod) {
   const byDate = new Map<string, number>();
 
   for (const log of logs) {
     byDate.set(log.sessionDate, (byDate.get(log.sessionDate) ?? 0) + (log.status === "trained" ? log.durationMinutes : 0));
   }
 
-  const maxMinutes = Math.max(10, ...days.map((day) => byDate.get(day.toISOString().slice(0, 10)) ?? 0));
+  const today = new Date();
+  const buckets: Array<{ key: string; label: string; minutes: number }> = [];
 
-  return days.map((day) => {
-    const date = day.toISOString().slice(0, 10);
-    const minutes = byDate.get(date) ?? 0;
-    return {
-      date,
-      height: Math.max(minutes ? 10 : 0, Math.round((minutes / maxMinutes) * 100)),
-      label: date.slice(5)
-    };
-  });
+  if (period === "week") {
+    for (let index = 6; index >= 0; index -= 1) {
+      const date = toLocalIso(shiftDate(today, -index));
+      buckets.push({ key: date, label: date.slice(5).replace("-", "/"), minutes: byDate.get(date) ?? 0 });
+    }
+  } else if (period === "month") {
+    for (let group = 5; group >= 0; group -= 1) {
+      const start = shiftDate(today, -(group * 5 + 4));
+      let minutes = 0;
+
+      for (let offset = 0; offset < 5; offset += 1) {
+        minutes += byDate.get(toLocalIso(shiftDate(start, offset))) ?? 0;
+      }
+
+      const startIso = toLocalIso(start);
+      buckets.push({ key: startIso, label: startIso.slice(5).replace("-", "/"), minutes });
+    }
+  } else {
+    for (let index = 11; index >= 0; index -= 1) {
+      const month = new Date(today.getFullYear(), today.getMonth() - index, 1);
+      const prefix = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
+      let minutes = 0;
+
+      for (const [date, value] of byDate) {
+        if (date.startsWith(prefix)) {
+          minutes += value;
+        }
+      }
+
+      buckets.push({ key: prefix, label: String(month.getMonth() + 1), minutes });
+    }
+  }
+
+  const maxMinutes = Math.max(10, ...buckets.map((bucket) => bucket.minutes));
+
+  return buckets.map((bucket) => ({
+    ...bucket,
+    height: Math.max(bucket.minutes ? 8 : 0, Math.round((bucket.minutes / maxMinutes) * 100))
+  }));
 }
 
 function countStreakDays(logs: WorkoutLog[]) {
@@ -318,7 +391,7 @@ function countStreakDays(logs: WorkoutLog[]) {
   let streak = 0;
   let cursor = new Date();
 
-  while (trainedDates.has(cursor.toISOString().slice(0, 10))) {
+  while (trainedDates.has(toLocalIso(cursor))) {
     streak += 1;
     cursor = shiftDate(cursor, -1);
   }
@@ -377,7 +450,7 @@ const styles = StyleSheet.create({
   barColumn: {
     alignItems: "center",
     flex: 1,
-    gap: 8
+    gap: 5
   },
   barFill: {
     backgroundColor: "#7cb87c",
@@ -390,17 +463,24 @@ const styles = StyleSheet.create({
   },
   barLabel: {
     color: "#697386",
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: "700"
+  },
+  barLabelTiny: {
+    fontSize: 9
   },
   barTrack: {
     backgroundColor: "#f4f7fb",
     borderColor: "#e6edf5",
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
-    height: 160,
+    height: 88,
     overflow: "hidden",
-    width: "68%"
+    width: "70%"
+  },
+  barTrackDense: {
+    borderRadius: 4,
+    width: "84%"
   },
   card: {
     backgroundColor: "#ffffff",
@@ -423,14 +503,65 @@ const styles = StyleSheet.create({
   chart: {
     alignItems: "flex-end",
     flexDirection: "row",
-    gap: 10,
-    minHeight: 200,
-    paddingTop: 8
+    gap: 6,
+    minHeight: 110,
+    paddingTop: 2
+  },
+  chartCard: {
+    backgroundColor: "#ffffff",
+    borderColor: "#e3e8ef",
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
+  chartDense: {
+    gap: 3
+  },
+  chartHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
   },
   chartIcon: {
     color: "#7cb87c",
-    fontSize: 24,
+    fontSize: 16,
     fontWeight: "900"
+  },
+  chartTitle: {
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  chartTotal: {
+    color: "#7cb87c",
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  periodChip: {
+    backgroundColor: "#f4f7fb",
+    borderColor: "#e6edf5",
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4
+  },
+  periodChipActive: {
+    backgroundColor: "#e2f2e2",
+    borderColor: "#7cb87c"
+  },
+  periodChipText: {
+    color: "#697386",
+    fontSize: 11,
+    fontWeight: "800"
+  },
+  periodChipTextActive: {
+    color: "#5a8a5a"
+  },
+  periodRow: {
+    flexDirection: "row",
+    gap: 6
   },
   chip: {
     backgroundColor: "#f8fafc",
@@ -552,25 +683,41 @@ const styles = StyleSheet.create({
     minWidth: 100,
     padding: 12
   },
+  metricCompact: {
+    borderRadius: 12,
+    minWidth: 84,
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
   metricRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 14
+    gap: 10
   },
   metricTitle: {
     color: "#697386",
     fontSize: 16,
     fontWeight: "800"
   },
+  metricTitleCompact: {
+    fontSize: 12
+  },
   metricUnit: {
     color: "#7cb87c",
     fontSize: 16
+  },
+  metricUnitCompact: {
+    fontSize: 11
   },
   metricValue: {
     color: "#7cb87c",
     fontSize: 24,
     fontWeight: "900",
     marginTop: 6
+  },
+  metricValueCompact: {
+    fontSize: 18,
+    marginTop: 2
   },
   muted: {
     color: "#697386",

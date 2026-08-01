@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import { saveUserSettings } from "@/auth/authRepository";
 import { getSupabaseClient } from "@/auth/supabaseClient";
-import { readStoredThemeId, writeStoredThemeId } from "@/auth/userSettings";
+import { readStoredColorMode, readStoredThemeId, writeStoredColorMode, writeStoredThemeId } from "@/auth/userSettings";
+import { SettingsPanel } from "@/features/settings/SettingsPanel";
 import { getPublicAppConfig } from "@/config/app";
 import { hydrateProfileFromCloud, loadProfile, openImagePicker, saveProfile, type AppProfile } from "@/features/profile/profileStorage";
 import { ExamPanel } from "@/features/exam/ExamPanel";
@@ -14,7 +15,7 @@ import { LovePanel } from "@/features/love/LovePanel";
 import { DailyPlanPanel } from "@/features/plan/DailyPlanPanel";
 import { WorkoutPanel } from "@/features/workout/WorkoutPanel";
 import { NAV_ITEMS, type NavItem, routeToKey } from "@/navigation/items";
-import { getTheme, THEME_IDS } from "@/theme/registry";
+import { getTheme } from "@/theme/registry";
 import type { ColorMode, ThemeId } from "@/theme/types";
 import { ThemedNavIcon } from "./ThemedNavIcon";
 
@@ -34,9 +35,8 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const [collapsed, setCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [themeId, setThemeId] = useState<ThemeId>(() => readStoredThemeId(typeof window === "undefined" ? undefined : window.localStorage) ?? "default");
-  const [mode, setMode] = useState<ColorMode>("light");
+  const [mode, setMode] = useState<ColorMode>(() => readStoredColorMode(typeof window === "undefined" ? undefined : window.localStorage) ?? "light");
   const [profile, setProfile] = useState<AppProfile>(() => loadProfile());
-  const [profileNameDraft, setProfileNameDraft] = useState(profile.displayName);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +44,6 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
       .then((next) => {
         if (!cancelled) {
           setProfile(next);
-          setProfileNameDraft(next.displayName);
         }
       })
       .catch(() => {});
@@ -69,20 +68,6 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
     }
   }, []);
 
-  useEffect(() => {
-    if (typeof document === "undefined" || !settingsOpen) {
-      return;
-    }
-    const handleClickOutside = (event: MouseEvent) => {
-      const sidebar = document.getElementById("sidebar");
-      if (sidebar && !sidebar.contains(event.target as Node)) {
-        setSettingsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [settingsOpen]);
-
   const handleNavigate = (href: NavItem["href"]) => {
     if (onNavigate) {
       onNavigate(href);
@@ -103,6 +88,21 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
     const { data } = await client.auth.getUser();
     if (data.user) {
       await saveUserSettings(client, data.user.id, { themeId: nextThemeId });
+    }
+  };
+
+  const handleColorModeChange = async (nextMode: ColorMode) => {
+    setMode(nextMode);
+    writeStoredColorMode(typeof window === "undefined" ? undefined : window.localStorage, nextMode);
+
+    const client = getSupabaseClient();
+    if (!client) {
+      return;
+    }
+
+    const { data } = await client.auth.getUser();
+    if (data.user) {
+      await saveUserSettings(client, data.user.id, { colorMode: nextMode });
     }
   };
 
@@ -151,45 +151,9 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
         </View>
 
         <View style={styles.sidebarFooter}>
-          {settingsOpen ? (
-            <View nativeID="settings-panel" style={styles.settingsPanel}>
-              <Text style={styles.settingsTitle}>设置</Text>
-              <Text nativeID="sidebar-current-theme" style={styles.settingsMeta}>theme: {themeId}</Text>
-              <Text nativeID="sidebar-theme-mode" style={styles.settingsMeta}>mode: {mode}</Text>
-              <Text style={styles.settingsLabel}>昵称</Text>
-              <View style={styles.nameEditRow}>
-                <TextInput
-                  accessibilityLabel="编辑昵称"
-                  onChangeText={setProfileNameDraft}
-                  placeholder="昵称"
-                  style={styles.nameInput}
-                  value={profileNameDraft}
-                />
-                <Pressable accessibilityRole="button" accessibilityLabel="保存昵称" onPress={() => {
-                  const next = { ...profile, displayName: profileNameDraft.trim() || "帆帆和关关" };
-                  setProfile(next);
-                  setProfileNameDraft(next.displayName);
-                  saveProfile(next);
-                }} style={styles.nameSaveButton}>
-                  <Text style={styles.nameSaveText}>保存</Text>
-                </Pressable>
-              </View>
-              <View style={styles.settingsButtonGrid}>
-                {THEME_IDS.map((id) => (
-                  <Pressable key={id} accessibilityRole="button" accessibilityLabel={id} onPress={() => void handleThemeChange(id)} style={styles.settingsButton}>
-                    <Text style={styles.settingsButtonText}>{id}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Pressable accessibilityRole="button" accessibilityLabel="dark mode" onPress={() => setMode((value) => (value === "light" ? "dark" : "light"))} style={styles.settingsWideButton}>
-                <Text style={styles.settingsButtonText}>{mode === "light" ? "dark" : "light"}</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="settings"
+            accessibilityLabel="设置"
             nativeID="sidebar-settings-button"
             onPress={() => setSettingsOpen((value) => !value)}
             style={styles.settingsFab}
@@ -209,6 +173,19 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
         {activeKey === "fun" ? <EntertainmentPanel themeTokens={tokens} /> : null}
         {activeKey !== "home" && activeKey !== "plan" && activeKey !== "workout" && activeKey !== "finance" && activeKey !== "love" && activeKey !== "exam" && activeKey !== "fun" ? <GenericModuleSkeleton themeEmptyState={theme.emptyState} styles={styles} /> : null}
       </ScrollView>
+
+      {settingsOpen ? (
+        <SettingsPanel
+          colorMode={mode}
+          onClose={() => setSettingsOpen(false)}
+          onColorModeChange={(next) => void handleColorModeChange(next)}
+          onProfileChange={setProfile}
+          onThemeChange={(next) => void handleThemeChange(next)}
+          profile={profile}
+          themeId={themeId}
+          tokens={tokens}
+        />
+      ) : null}
     </View>
   );
 }
@@ -246,7 +223,6 @@ function GenericModuleSkeleton({ themeEmptyState, styles }: { themeEmptyState: s
 
 function createStyles(tokens: ReturnType<typeof getTheme>["tokens"][ColorMode], sidebarWidth: number, isMobile: boolean, viewportHeight: number) {
   const compactSidebar = isMobile || sidebarWidth < 160;
-  const settingsPanelWidth = isMobile || sidebarWidth < 160 ? 210 : sidebarWidth - 20;
 
   return StyleSheet.create({
     root: {
@@ -369,93 +345,6 @@ function createStyles(tokens: ReturnType<typeof getTheme>["tokens"][ColorMode], 
     settingsFabText: {
       color: tokens.accent,
       fontSize: compactSidebar ? 11 : 13,
-      fontWeight: "800"
-    },
-    settingsPanel: {
-      backgroundColor: tokens.surface,
-      borderColor: tokens.border,
-      borderRadius: 16,
-      borderWidth: 1,
-      bottom: 52,
-      left: isMobile || sidebarWidth < 160 ? 0 : undefined,
-      padding: 12,
-      position: "absolute",
-      shadowColor: "#000000",
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.08,
-      shadowRadius: 16,
-      elevation: 4,
-      width: settingsPanelWidth,
-      zIndex: 10
-    },
-    settingsTitle: {
-      color: tokens.text,
-      fontSize: 14,
-      fontWeight: "900",
-      marginBottom: 6
-    },
-    settingsLabel: {
-      color: tokens.text,
-      fontSize: 13,
-      fontWeight: "800",
-      marginBottom: 6,
-      marginTop: 10
-    },
-    nameEditRow: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: 8
-    },
-    nameInput: {
-      backgroundColor: "#f6faf6",
-      borderRadius: 10,
-      color: tokens.text,
-      flex: 1,
-      fontSize: 14,
-      paddingHorizontal: 10,
-      paddingVertical: 9
-    },
-    nameSaveButton: {
-      alignItems: "center",
-      backgroundColor: tokens.accent,
-      borderRadius: 10,
-      justifyContent: "center",
-      paddingHorizontal: 14,
-      paddingVertical: 9
-    },
-    nameSaveText: {
-      color: "#ffffff",
-      fontSize: 13,
-      fontWeight: "900"
-    },
-    settingsMeta: {
-      color: tokens.textMuted,
-      fontSize: 12,
-      marginBottom: 4
-    },
-    settingsButtonGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 6,
-      marginTop: 6
-    },
-    settingsButton: {
-      backgroundColor: tokens.accentSoft,
-      borderRadius: 10,
-      paddingHorizontal: 10,
-      paddingVertical: 7
-    },
-    settingsWideButton: {
-      alignItems: "center",
-      backgroundColor: tokens.accent,
-      borderRadius: 10,
-      marginTop: 8,
-      paddingHorizontal: 8,
-      paddingVertical: 8
-    },
-    settingsButtonText: {
-      color: tokens.text,
-      fontSize: 12,
       fontWeight: "800"
     },
     content: {
