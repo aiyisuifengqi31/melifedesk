@@ -72,7 +72,7 @@ export function FinancePanel({ storage }: FinancePanelProps) {
   const [savingNote, setSavingNote] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categoryType, setCategoryType] = useState<TransactionType>("expense");
-  const [feedback, setFeedback] = useState("输入金额，选择分类后就能记一笔。");
+  const [feedback, setFeedback] = useState("");
 
   const [giftRecords, setGiftRecords] = useState<GiftRecord[]>(() => sortGiftRecords(loadGiftRecords(financeStorage)));
   const [giftDirection, setGiftDirection] = useState<GiftDirection>("sent");
@@ -368,7 +368,7 @@ export function FinancePanel({ storage }: FinancePanelProps) {
             <Pressable accessibilityRole="button" accessibilityLabel="快速记账" nativeID="finance-save-button" onPress={saveTransaction} style={styles.primaryButton}>
               <Text style={styles.primaryText}>记一笔</Text>
             </Pressable>
-            <Text nativeID="finance-feedback" style={styles.feedback}>{feedback}</Text>
+            {feedback ? <Text nativeID="finance-feedback" style={styles.feedback}>{feedback}</Text> : null}
           </View>
 
           <View style={styles.card}>
@@ -786,7 +786,7 @@ const styles = StyleSheet.create({
     borderColor: "#e3e8ef",
     borderRadius: 12,
     borderWidth: 1,
-    flexBasis: "23%",
+    flexBasis: "22%",
     gap: 4,
     paddingVertical: 7
   },

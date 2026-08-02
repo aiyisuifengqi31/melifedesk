@@ -32,6 +32,7 @@ const sharedDark: ThemeTokens = {
 function buildIcons(themeId: ThemeId): Record<RouteKey, NavIconResource> {
   return {
     home: createNavIconResource(themeId, "home"),
+    todos: createNavIconResource(themeId, "todos"),
     plan: createNavIconResource(themeId, "plan"),
     workout: createNavIconResource(themeId, "workout"),
     finance: createNavIconResource(themeId, "finance"),

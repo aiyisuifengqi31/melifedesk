@@ -1,17 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import type { UiTokens } from "@/shared/ui/primitives";
-import { hydrateNotesFromCloud, loadNotes, type NoteItem } from "@/features/home/notesStorage";
-import { createTodoId, getDefaultTodoStorage, hydrateTodosFromCloud, loadLocalTodos, saveLocalTodos, type TodoPriority, type TodoTask, type TodoStorage } from "@/features/plan/todoStorage";
+import { hydrateNotesFromCloud, loadNotes, saveNotes, type NoteItem } from "@/features/home/notesStorage";
+import { getDefaultTodoStorage, hydrateTodosFromCloud, loadLocalTodos, type TodoTask, type TodoStorage } from "@/features/plan/todoStorage";
 import type { NavItem } from "@/navigation/items";
 import { MealSpinner } from "./MealSpinner";
 import { NotesPanel } from "./NotesPanel";
 
-const EXAM_WRONG_KEY = "fanfan-guanguan.exam.wrongQuestions.v1";
-const MAX_HOME_NOTES = 3;
 const WIDGET_HEIGHT = 210;
-const LIST_HEIGHT = 136;
+const LIST_HEIGHT = 156;
 
 type HomePanelProps = {
   onNavigate?: (href: NavItem["href"]) => void;
@@ -37,43 +35,13 @@ function greeting(): string {
 export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) {
   const todoStorage = useMemo(() => storage ?? getDefaultTodoStorage(), [storage]);
   const [todos, setTodos] = useState<TodoTask[]>(() => loadLocalTodos(todoStorage));
-  const [newTodo, setNewTodo] = useState("");
   const [viewState, setViewState] = useState<ViewState>("home");
+  const [notes, setNotes] = useState<NoteItem[]>(() => loadNotes());
 
   const styles = useMemo(() => createStyles(themeTokens), [themeTokens]);
 
-  const persistTodos = (next: TodoTask[]) => {
-    setTodos(next);
-    saveLocalTodos(next, todoStorage);
-  };
-
-  const toggleTodo = (id: string) => {
-    const next = todos.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t));
-    persistTodos(next);
-  };
-
-  const deleteTodo = (id: string) => {
-    persistTodos(todos.filter((t) => t.id !== id));
-  };
-
-  const addTodo = () => {
-    const title = newTodo.trim();
-    if (!title) return;
-    const task: TodoTask = {
-      completed: false,
-      createTime: new Date().toISOString(),
-      deadline: null,
-      id: createTodoId(),
-      priority: "normal",
-      title
-    };
-    persistTodos([task, ...todos]);
-    setNewTodo("");
-  };
-
-  const displayedTodos = todos;
   const completedCount = todos.filter((t) => t.completed).length;
-  const [notesCount, setNotesCount] = useState(() => loadNotes().length);
+  const notesCount = notes.length;
 
   useEffect(() => {
     let cancelled = false;
@@ -85,9 +53,9 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
       })
       .catch(() => {});
     hydrateNotesFromCloud()
-      .then(() => {
+      .then((next) => {
         if (!cancelled) {
-          setNotesCount(loadNotes().length);
+          setNotes(next);
         }
       })
       .catch(() => {});
@@ -95,16 +63,6 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
       cancelled = true;
     };
   }, [todoStorage]);
-  const wrongCount = useMemo(() => {
-    if (typeof window === "undefined") {
-      return 0;
-    }
-    try {
-      return (JSON.parse(window.localStorage.getItem(EXAM_WRONG_KEY) ?? "[]") as unknown[]).length;
-    } catch {
-      return 0;
-    }
-  }, []);
   const pendingCount = todos.length - completedCount;
   const summaryLine = useMemo(() => {
     if (todos.length === 0) return "今天还没有安排，给自己列三件小事吧。";
@@ -112,6 +70,14 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
     if (completedCount === 0) return `还有 ${pendingCount} 件待办没动，先挑一件开始吧。`;
     return `已完成 ${completedCount} 件，还剩 ${pendingCount} 件，保持节奏。`;
   }, [completedCount, pendingCount, todos.length]);
+
+  const deleteNote = (note: NoteItem) => {
+    const confirmed = typeof window === "undefined" || !("confirm" in window) ? true : window.confirm("确定删除这条备忘吗？");
+    if (!confirmed) return;
+    const next = notes.filter((item) => item.id !== note.id);
+    setNotes(next);
+    saveNotes(next);
+  };
 
   if (viewState === "notes") {
     return (
@@ -134,88 +100,10 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
         </View>
       </View>
 
-      <View style={styles.topWidgets}>
-        <View style={[styles.widget, styles.widgetLeft]}>
-          <View style={styles.widgetHeader}>
-            <Text style={styles.widgetIcon}>📌</Text>
-            <Text style={styles.widgetTitle} numberOfLines={1}>今日待办</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="查看全部待办" onPress={() => onNavigate?.("/plan")} style={styles.widgetMore}>
-              <Text style={styles.widgetMoreText}>全部 →</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.todoInputRow}>
-            <TextInput
-              onChangeText={setNewTodo}
-              onSubmitEditing={addTodo}
-              placeholder="添加待办..."
-              style={styles.todoInput}
-              value={newTodo}
-            />
-            <Pressable accessibilityRole="button" accessibilityLabel="添加待办" onPress={addTodo} style={styles.todoAddButton}>
-              <Text style={styles.todoAddText}>+</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.todoList}>
-            {displayedTodos.length === 0 ? (
-              <Text style={styles.emptyHint}>还没有待办，添加一个吧</Text>
-            ) : (
-              displayedTodos.map((todo) => (
-                <View key={todo.id} style={styles.todoRow}>
-                  <Pressable accessibilityRole="button" accessibilityLabel={`切换待办状态：${todo.title}`} onPress={() => toggleTodo(todo.id)} style={styles.todoCheckWrap}>
-                    <View style={[styles.todoCheck, todo.completed ? styles.todoCheckActive : null]}>
-                      {todo.completed ? <Text style={styles.todoCheckMark}>✓</Text> : null}
-                    </View>
-                  </Pressable>
-                  <Text style={[styles.todoTitle, todo.completed ? styles.todoTitleDone : null]} numberOfLines={1}>{todo.title}</Text>
-                  <Pressable accessibilityRole="button" accessibilityLabel={`删除待办：${todo.title}`} onPress={() => deleteTodo(todo.id)} style={styles.todoDelete}>
-                    <Text style={styles.todoDeleteText}>×</Text>
-                  </Pressable>
-                </View>
-              ))
-            )}
-          </View>
-        </View>
-
-        <View style={[styles.widget, styles.widgetRight]}>
-          <View style={styles.widgetHeader}>
-            <Text style={styles.widgetIcon}>📝</Text>
-            <Text style={styles.widgetTitle} numberOfLines={1}>备忘录</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="查看全部备忘" onPress={() => setViewState("notes")} style={styles.widgetMore}>
-              <Text style={styles.widgetMoreText}>全部 →</Text>
-            </Pressable>
-          </View>
-
-          <Pressable accessibilityRole="button" accessibilityLabel="记一条备忘" onPress={() => setViewState("notes")} style={styles.notesCard}>
-            {notesCount === 0 ? (
-              <>
-                <Text style={styles.notesPlaceholder}>闪过的念头、待买清单...</Text>
-                <View style={styles.notesRecordButton}>
-                  <Text style={styles.notesRecordText}>记一条</Text>
-                </View>
-              </>
-            ) : (
-              <View style={styles.notesList}>
-                {loadNotes().slice(0, MAX_HOME_NOTES).map((note) => (
-                  <View key={note.id} style={styles.noteRow}>
-                    <View style={styles.noteDot} />
-                    <Text style={styles.noteRowText} numberOfLines={1}>{note.title || note.content}</Text>
-                  </View>
-                ))}
-                {notesCount > MAX_HOME_NOTES ? (
-                  <Text style={styles.notesMore}>还有 {notesCount - MAX_HOME_NOTES} 条</Text>
-                ) : null}
-              </View>
-            )}
-          </Pressable>
-        </View>
-      </View>
-
       <View style={styles.summaryCard}>
         <View style={styles.summaryHeader}>
           <Text style={styles.widgetIcon}>📊</Text>
-          <Text style={styles.widgetTitle}>今日总结 · 生活控制中心</Text>
+          <Text style={styles.widgetTitle}>生活控制中心</Text>
         </View>
         <View style={styles.summaryGrid}>
           <View style={styles.summaryStat}>
@@ -227,13 +115,60 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
             <Text style={styles.summaryValue}>{notesCount}</Text>
             <Text style={styles.summaryLabel}>备忘录</Text>
           </View>
-          <View style={styles.summaryDivider} />
-          <View style={styles.summaryStat}>
-            <Text style={styles.summaryValue}>{wrongCount}</Text>
-            <Text style={styles.summaryLabel}>错题本</Text>
-          </View>
         </View>
         <Text style={styles.summaryLine}>{summaryLine}</Text>
+      </View>
+
+      <View style={styles.topWidgets}>
+        <Pressable accessibilityRole="button" accessibilityLabel="打开每日待办" onPress={() => onNavigate?.("/todos")} style={[styles.widget, styles.widgetLeft]}>
+          <View style={styles.widgetHeader}>
+            <Text style={styles.widgetIcon}>📌</Text>
+            <Text style={styles.widgetTitle} numberOfLines={1}>今日待办</Text>
+            <View style={styles.widgetMore}>
+              <Text style={styles.widgetMoreText}>全部 →</Text>
+            </View>
+          </View>
+          <View style={styles.todoSummaryBox}>
+            <Text style={styles.todoSummaryValue}>{pendingCount}</Text>
+            <Text style={styles.todoSummaryLabel}>件未完成</Text>
+            <Text style={styles.todoSummaryHint}>进入每日待办添加、编辑、完成或删除任务</Text>
+          </View>
+        </Pressable>
+
+        <View style={[styles.widget, styles.widgetRight]}>
+          <View style={styles.widgetHeader}>
+            <Text style={styles.widgetIcon}>📝</Text>
+            <Text style={styles.widgetTitle} numberOfLines={1}>备忘录</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="查看全部备忘" onPress={() => setViewState("notes")} style={styles.widgetMore}>
+              <Text style={styles.widgetMoreText}>全部 →</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.notesCard}>
+            {notesCount === 0 ? (
+              <Pressable accessibilityRole="button" accessibilityLabel="记一条备忘" onPress={() => setViewState("notes")} style={styles.notesEmpty}>
+                <Text style={styles.notesPlaceholder}>闪过的念头、待买清单...</Text>
+                <View style={styles.notesRecordButton}>
+                  <Text style={styles.notesRecordText}>记一条</Text>
+                </View>
+              </Pressable>
+            ) : (
+              <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} contentContainerStyle={styles.notesList}>
+                {notes.map((note) => (
+                  <View key={note.id} style={styles.noteRow}>
+                    <Pressable accessibilityRole="button" accessibilityLabel={`打开备忘：${note.title || note.content}`} onPress={() => setViewState("notes")} style={styles.noteBody}>
+                      <Text style={styles.noteRowText} numberOfLines={2}>{note.title || note.content}</Text>
+                      <Text style={styles.noteTime}>{note.createTime.slice(0, 10)}</Text>
+                    </Pressable>
+                    <Pressable accessibilityRole="button" accessibilityLabel={`删除备忘：${note.title || note.content}`} onPress={() => deleteNote(note)} style={styles.noteDeleteButton}>
+                      <Text style={styles.noteDeleteText}>×</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
       </View>
 
       <View style={styles.spinnerCard}>
@@ -444,8 +379,11 @@ function createStyles(tokens: UiTokens) {
       backgroundColor: "#f6faf6",
       borderRadius: 14,
       height: LIST_HEIGHT,
-      justifyContent: "center",
       padding: 10
+    },
+    notesEmpty: {
+      flex: 1,
+      justifyContent: "center"
     },
     notesPlaceholder: {
       color: tokens.textMuted,
@@ -472,14 +410,23 @@ function createStyles(tokens: UiTokens) {
       fontWeight: "700"
     },
     notesList: {
-      gap: 6,
-      height: LIST_HEIGHT - 20,
-      overflow: "scroll"
+      gap: 8,
+      paddingBottom: 2
     },
     noteRow: {
       alignItems: "center",
+      backgroundColor: "#ffffff",
+      borderColor: tokens.border,
+      borderRadius: 12,
+      borderWidth: 1,
       flexDirection: "row",
-      gap: 6
+      gap: 8,
+      padding: 8
+    },
+    noteBody: {
+      flex: 1,
+      gap: 3,
+      minWidth: 0
     },
     noteDot: {
       backgroundColor: tokens.accent,
@@ -491,13 +438,27 @@ function createStyles(tokens: UiTokens) {
       color: tokens.text,
       flex: 1,
       fontSize: 12,
+      fontWeight: "800",
+      lineHeight: 16
+    },
+    noteTime: {
+      color: tokens.textMuted,
+      fontSize: 10,
       fontWeight: "700"
     },
-    notesMore: {
-      color: tokens.textMuted,
-      fontSize: 12,
-      fontWeight: "800",
-      marginLeft: 14
+    noteDeleteButton: {
+      alignItems: "center",
+      backgroundColor: "#fee2e2",
+      borderRadius: 10,
+      height: 34,
+      justifyContent: "center",
+      width: 34
+    },
+    noteDeleteText: {
+      color: "#dc2626",
+      fontSize: 18,
+      fontWeight: "900",
+      lineHeight: 22
     },
     summaryCard: {
       backgroundColor: "#ffffff",
@@ -739,6 +700,33 @@ function createStyles(tokens: UiTokens) {
       shadowOpacity: 0.06,
       shadowRadius: 16,
       elevation: 2
+    },
+    todoSummaryBox: {
+      alignItems: "center",
+      backgroundColor: "#f6faf6",
+      borderRadius: 14,
+      flex: 1,
+      gap: 6,
+      justifyContent: "center",
+      padding: 14
+    },
+    todoSummaryHint: {
+      color: tokens.textMuted,
+      fontSize: 12,
+      fontWeight: "700",
+      lineHeight: 17,
+      textAlign: "center"
+    },
+    todoSummaryLabel: {
+      color: tokens.text,
+      fontSize: 14,
+      fontWeight: "900"
+    },
+    todoSummaryValue: {
+      color: tokens.accent,
+      fontSize: 34,
+      fontWeight: "900",
+      lineHeight: 38
     }
   });
 }

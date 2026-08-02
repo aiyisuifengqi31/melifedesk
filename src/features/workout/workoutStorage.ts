@@ -4,12 +4,12 @@ export type WorkoutIntensity = "easy" | "moderate" | "hard";
 export type WorkoutLog = {
   createTime: string;
   durationMinutes: number;
-  feeling: string;
+  feeling?: string;
   id: string;
   intensity: WorkoutIntensity;
   kcal: number;
   kcalSource: "manual" | "estimated";
-  notes: string;
+  notes?: string;
   parts: string[];
   remoteId?: string | null;
   sessionDate: string;

@@ -8,9 +8,8 @@ describe("Task 3 and Task 4 pages", () => {
 
     expect(screen.getByText("当前城市天气")).toBeOnTheScreen();
     expect(screen.getByRole("button", { name: "获取当前城市天气" })).toBeOnTheScreen();
-    expect(screen.getByText("今日待办")).toBeOnTheScreen();
-    expect(screen.getByText("待办")).toBeOnTheScreen();
-    expect(screen.getByText("已完成 0")).toBeOnTheScreen();
+    expect(screen.queryByText("今日待办")).toBeNull();
+    expect(screen.queryByText("已完成 0")).toBeNull();
   });
 
   it("renders the workout workspace controls", () => {

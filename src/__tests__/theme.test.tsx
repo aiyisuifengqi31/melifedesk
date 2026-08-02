@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 
 import { AppShell } from "@/components/AppShell";
+import { NAV_ITEMS } from "@/navigation/items";
 import { getTheme, THEME_IDS } from "@/theme/registry";
 
 describe("theme system", () => {
@@ -12,7 +13,7 @@ describe("theme system", () => {
 
     for (const themeId of THEME_IDS) {
       const theme = getTheme(themeId);
-      expect(Object.keys(theme.icons)).toHaveLength(7);
+      expect(Object.keys(theme.icons)).toHaveLength(NAV_ITEMS.length);
       expect(theme.name).toBeTruthy();
       expect(theme.description).toBeTruthy();
       expect(theme.tokens.light.background).toBeTruthy();

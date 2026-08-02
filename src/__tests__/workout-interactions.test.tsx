@@ -44,6 +44,13 @@ describe("workout storage", () => {
 });
 
 describe("WorkoutPanel interactions", () => {
+  it("does not render removed feeling or notes fields", () => {
+    render(<WorkoutPanel storage={makeStorage()} />);
+
+    expect(screen.queryByPlaceholderText("自我感受")).toBeNull();
+    expect(screen.queryByPlaceholderText("备注")).toBeNull();
+  });
+
   it("creates, persists, and deletes a real workout log", async () => {
     const storage = makeStorage();
     const { rerender } = render(<WorkoutPanel storage={storage} />);

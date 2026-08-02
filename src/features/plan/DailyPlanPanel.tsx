@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import type { UiTokens } from "@/shared/ui/primitives";
-import { hydrateTodosFromCloud, loadLocalTodos, saveLocalTodos, type TodoStorage, type TodoTask } from "@/features/plan/todoStorage";
 import { getHolidayLabel, isWeekend } from "@/features/plan/holidays";
 import { resolveCurrentCityWeather, weatherEmoji, type WeatherState } from "@/features/plan/weatherProvider";
 import { PackagePanel } from "./PackagePanel";
 
 type DailyPlanPanelProps = {
-  storage?: TodoStorage;
+  storage?: unknown;
   themeTokens: UiTokens;
 };
 
@@ -20,54 +19,14 @@ type MonthDay = {
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
-const priorityOptions: Array<{ color: string; label: string; value: string }> = [
-  { color: "#8fb3c9", label: "低", value: "low" },
-  { color: "#63a7f8", label: "普通", value: "normal" },
-  { color: "#ffb020", label: "高", value: "high" },
-  { color: "#ef4444", label: "紧急", value: "urgent" }
-];
-
-export function DailyPlanPanel({ storage, themeTokens }: DailyPlanPanelProps) {
-  const todoStorage = useMemo(() => storage ?? getDefaultTodoStorage(), [storage]);
-  const [tasks, setTasks] = useState<TodoTask[]>(() => loadLocalTodos(todoStorage));
+export function DailyPlanPanel({ themeTokens }: DailyPlanPanelProps) {
   const [weather, setWeather] = useState<WeatherState>({ message: "点击后获取当前城市实时天气。", status: "idle" });
-
-  useEffect(() => {
-    let cancelled = false;
-    hydrateTodosFromCloud(todoStorage)
-      .then((next) => {
-        if (!cancelled) {
-          setTasks(next);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [todoStorage]);
-
-  const persistTasks = (nextTasks: TodoTask[]) => {
-    const sorted = sortTodos(nextTasks);
-    setTasks(sorted);
-    saveLocalTodos(sorted, todoStorage);
-  };
-
-  const toggleTask = (taskId: string) => {
-    const nextTasks = tasks.map((task) => (task.id === taskId ? { ...task, completed: !task.completed } : task));
-    persistTasks(nextTasks);
-  };
-
-  const deleteTask = (taskId: string) => {
-    persistTasks(tasks.filter((task) => task.id !== taskId));
-  };
 
   const loadWeather = async () => {
     setWeather({ message: "正在读取当前城市天气...", status: "loading" });
     setWeather(await resolveCurrentCityWeather());
   };
 
-  const pendingTasks = tasks.filter((task) => !task.completed);
-  const completedTasks = tasks.filter((task) => task.completed);
   const today = todayIso();
 
   return (
@@ -77,72 +36,7 @@ export function DailyPlanPanel({ storage, themeTokens }: DailyPlanPanelProps) {
       <MonthCalendar onSelectDate={(date) => { /* 选中日期，未来可联动筛选当日待办 */ }} selectedDate={today} />
 
       <PackagePanel themeTokens={themeTokens} />
-
-      <View style={styles.todoCard}>
-        <View style={styles.todoHeader}>
-          <Text style={styles.todoIcon}>☑</Text>
-          <Text style={styles.todoTitle}>今日待办</Text>
-        </View>
-        <TaskSection emptyText="暂时没有待办，去首页添加一个吧。" onDelete={deleteTask} onToggle={toggleTask} tasks={pendingTasks} title="待办" />
-        <TaskSection emptyText="完成的任务会移动到这里。" onDelete={deleteTask} onToggle={toggleTask} tasks={completedTasks} title={`已完成 ${completedTasks.length}`} />
-      </View>
     </ScrollView>
-  );
-}
-
-function TaskSection({
-  emptyText,
-  onDelete,
-  onToggle,
-  tasks,
-  title
-}: {
-  emptyText: string;
-  onDelete: (taskId: string) => void;
-  onToggle: (taskId: string) => void;
-  tasks: TodoTask[];
-  title: string;
-}) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {tasks.length === 0 ? <Text style={styles.emptyText}>{emptyText}</Text> : null}
-      {tasks.map((task) => (
-        <TaskCard key={task.id} onDelete={onDelete} onToggle={onToggle} task={task} />
-      ))}
-    </View>
-  );
-}
-
-function TaskCard({ onDelete, onToggle, task }: { onDelete: (taskId: string) => void; onToggle: (taskId: string) => void; task: TodoTask }) {
-  const statusText = task.completed ? "已完成" : "待办";
-  const priority = getPriorityMeta(task.priority);
-
-  return (
-    <Pressable onLongPress={() => onDelete(task.id)} style={styles.taskCard}>
-      <Pressable
-        accessibilityRole="checkbox"
-        accessibilityLabel={`${task.completed ? "恢复" : "完成"}任务：${task.title}`}
-        accessibilityState={{ checked: task.completed }}
-        onPress={() => onToggle(task.id)}
-        style={[styles.checkbox, task.completed ? styles.checkboxChecked : null]}
-      >
-        <Text style={styles.checkboxText}>{task.completed ? "✓" : ""}</Text>
-      </Pressable>
-      <View style={styles.taskBody}>
-        <Text style={[styles.taskTitle, task.completed ? styles.taskTitleDone : null]}>{task.title}</Text>
-        <View style={styles.taskMetaRow}>
-          <View style={styles.taskPriority}>
-            <Text style={[styles.priorityDotSmall, { color: priority.color }]}>●</Text>
-            <Text style={styles.taskPriorityText}>{priority.label}</Text>
-          </View>
-          <Text style={styles.taskMeta}>{formatMeta(task, statusText)}</Text>
-        </View>
-      </View>
-      <Pressable accessibilityRole="button" accessibilityLabel={`删除任务：${task.title}`} onPress={() => onDelete(task.id)} style={styles.moreButton}>
-        <Text style={styles.moreText}>删除</Text>
-      </Pressable>
-    </Pressable>
   );
 }
 
@@ -242,16 +136,6 @@ function MonthCalendar({ onSelectDate, selectedDate }: { onSelectDate?: (date: s
   );
 }
 
-function getPriorityMeta(priority: string) {
-  return priorityOptions.find((option) => option.value === priority) ?? priorityOptions[1];
-}
-
-function formatMeta(task: TodoTask, statusText: string) {
-  const dateText = task.deadline ? task.deadline.slice(0, 10) : "无截止日期";
-  const timeText = task.remindAt ? task.remindAt.slice(11, 16) : "无提醒";
-  return `${dateText} ${timeText} · ${statusText}`;
-}
-
 function parseIsoDate(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day);
@@ -273,28 +157,6 @@ function buildMonthDays(year: number, monthIndex: number): MonthDay[] {
       inMonth: date.getMonth() === monthIndex
     };
   });
-}
-
-function sortTodos(tasks: TodoTask[]) {
-  return [...tasks].sort((left, right) => {
-    if (left.completed !== right.completed) {
-      return left.completed ? 1 : -1;
-    }
-    const leftTime = left.deadline ?? left.createTime;
-    const rightTime = right.deadline ?? right.createTime;
-    return leftTime.localeCompare(rightTime);
-  });
-}
-
-function getDefaultTodoStorage() {
-  if (typeof window !== "undefined" && window.localStorage) {
-    return window.localStorage;
-  }
-  return {
-    getItem: () => null,
-    removeItem: () => {},
-    setItem: () => {}
-  };
 }
 
 const styles = StyleSheet.create({

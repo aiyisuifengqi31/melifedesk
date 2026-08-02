@@ -66,8 +66,6 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const [duration, setDuration] = useState("10");
   const [kcal, setKcal] = useState("200");
   const [intensity, setIntensity] = useState<WorkoutIntensity>("moderate");
-  const [feeling, setFeeling] = useState("");
-  const [notes, setNotes] = useState("");
   const [feedback, setFeedback] = useState("选择部位、填写时长和热量后保存训练记录。");
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("week");
 
@@ -107,12 +105,10 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
     const log: WorkoutLog = {
       createTime: new Date().toISOString(),
       durationMinutes: status === "rest" ? 0 : durationMinutes,
-      feeling: feeling.trim(),
       id: createWorkoutId(),
       intensity,
       kcal: status === "rest" ? 0 : kcalValue,
       kcalSource: "manual",
-      notes: notes.trim(),
       parts,
       sessionDate: todayIso(),
       status,
@@ -123,8 +119,6 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
     persistLogs(nextLogs);
     setFeedback(status === "rest" ? "今天已记录为休息。" : "训练记录已保存。");
     setTitle("");
-    setFeeling("");
-    setNotes("");
 
     const client = getSupabaseClient();
     if (!client) {
@@ -138,11 +132,9 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
 
     const { data, error } = await createWorkoutSession(client, userData.user.id, {
       durationMinutes: log.durationMinutes,
-      feeling: log.feeling || null,
       intensity: log.intensity,
       kcal: log.kcal,
       kcalSource: "manual",
-      notes: log.notes || null,
       sessionDate: log.sessionDate,
       title: log.title,
       visibility: "private"
@@ -213,10 +205,6 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
           })}
         </View>
 
-        <View style={styles.doubleRow}>
-          <TextInput onChange={makeTextInputChangeHandler(setFeeling)} onChangeText={setFeeling} placeholder="自我感受" style={[styles.input, styles.halfInput]} value={feeling} />
-          <TextInput onChange={makeTextInputChangeHandler(setNotes)} onChangeText={setNotes} placeholder="备注" style={[styles.input, styles.halfInput]} value={notes} />
-        </View>
         <Text style={styles.muted}>热量第一版为手动输入，不作为准确测量值。</Text>
 
         <Pressable accessibilityRole="button" accessibilityLabel="保存记录" nativeID="workout-save-button" onPress={saveWorkout} style={styles.saveButton}>
@@ -637,13 +625,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#e2f2e2",
     borderRadius: 12,
-    height: 52,
+    height: 44,
     justifyContent: "center",
-    width: 52
+    width: 44
   },
   logBadgeText: {
     color: "#5a8a5a",
-    fontSize: 17,
+    fontSize: 14,
     fontWeight: "900"
   },
   logBody: {
@@ -652,7 +640,7 @@ const styles = StyleSheet.create({
   },
   logDate: {
     color: "#697386",
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "700"
   },
   logItem: {
@@ -661,18 +649,21 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
-    gap: 14,
-    padding: 12
+    flexWrap: "wrap",
+    gap: 10,
+    padding: 10
   },
   logMeta: {
     color: "#697386",
-    fontSize: 14,
-    fontWeight: "700"
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17
   },
   logTitle: {
     color: "#111827",
-    fontSize: 18,
-    fontWeight: "900"
+    fontSize: 15,
+    fontWeight: "900",
+    lineHeight: 20
   },
   metric: {
     backgroundColor: "#f0f7f0",

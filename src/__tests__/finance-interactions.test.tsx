@@ -38,6 +38,13 @@ describe("finance storage", () => {
 });
 
 describe("FinancePanel interactions", () => {
+  it("uses four-column category buttons and does not show the old input hint", () => {
+    render(<FinancePanel storage={makeStorage()} />);
+
+    expect(screen.queryByText(/输入金额/)).toBeNull();
+    expect(screen.getByRole("button", { name: "选择分类：餐饮" })).toHaveStyle({ flexBasis: "22%" });
+  });
+
   it("creates expense and income details, updates summary, and recalculates after deletion", async () => {
     const storage = makeStorage();
     render(<FinancePanel storage={storage} />);
