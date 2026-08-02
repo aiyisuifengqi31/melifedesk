@@ -117,6 +117,33 @@ describe("love diary cloud sharing", () => {
     expect(writeLocal).toHaveBeenCalledWith(diaries);
   });
 
+  it("migrates legacy local diaries into the shared table when cloud is empty", async () => {
+    const { calls, client } = createDiaryClient({ coupleId: "couple-1", rows: [] });
+    const localDiary: DiaryEntry = {
+      content: "旧版本本地日记",
+      createTime: "2026-08-02T08:00:00.000Z",
+      date: "2026-08-02",
+      id: "33333333-3333-4333-8333-333333333333",
+      mood: "开心",
+      visibility: "private"
+    };
+
+    const diaries = await loadDiariesFromCloud([localDiary], jest.fn(), client as never);
+
+    expect(diaries).toEqual([{ ...localDiary, visibility: "couple_read" }]);
+    expect(calls.upsert[0]).toEqual({
+      opts: { onConflict: "id" },
+      rows: [
+        expect.objectContaining({
+          body: "旧版本本地日记",
+          couple_id: "couple-1",
+          id: "33333333-3333-4333-8333-333333333333",
+          visibility: "couple_read"
+        })
+      ]
+    });
+  });
+
   it("soft deletes through the diary permission RPC", async () => {
     const { calls, client } = createDiaryClient();
 

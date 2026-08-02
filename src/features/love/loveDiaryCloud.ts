@@ -35,6 +35,16 @@ export async function loadDiariesFromCloud(
 
   if (error || !Array.isArray(data)) return localDiaries;
 
+  if (data.length === 0 && localDiaries.length > 0) {
+    const activeCoupleId = await getActiveCoupleId(session.client, session.userId);
+    if (activeCoupleId) {
+      const migratedDiaries = localDiaries.map((entry) => ({ ...entry, visibility: "couple_read" as const }));
+      await upsertOwnedDiaries(session.client, session.userId, activeCoupleId, migratedDiaries);
+      writeLocal(migratedDiaries);
+      return migratedDiaries;
+    }
+  }
+
   const diaries = data.map((row) => mapDiaryRow(row as DiaryRow));
   writeLocal(diaries);
   return diaries;
@@ -48,24 +58,7 @@ export async function saveDiariesToCloud(
   if (!session) return;
 
   const activeCoupleId = await getActiveCoupleId(session.client, session.userId);
-  const rows = entries
-    .filter((entry) => !entry.ownerUserId || entry.ownerUserId === session.userId)
-    .map((entry) => {
-      const canShare = entry.visibility !== "private" && Boolean(activeCoupleId);
-      return {
-        ...(isUuid(entry.id) ? { id: entry.id } : {}),
-        body: entry.content,
-        couple_id: canShare ? activeCoupleId : null,
-        entry_date: entry.date,
-        owner_user_id: session.userId,
-        tags: entry.mood ? [`mood:${entry.mood}`] : [],
-        updated_at: new Date().toISOString(),
-        visibility: canShare ? entry.visibility : "private"
-      };
-    });
-
-  if (rows.length === 0) return;
-  await session.client.from("diary_entries").upsert(rows, { onConflict: "id" });
+  await upsertOwnedDiaries(session.client, session.userId, activeCoupleId, entries);
 }
 
 export async function deleteDiaryFromCloud(
@@ -80,6 +73,32 @@ export async function deleteDiaryFromCloud(
 export async function getCurrentLoveUserId(client: LoveClient | null = getSupabaseClient()): Promise<string | null> {
   const session = await getLoveSession(client);
   return session?.userId ?? null;
+}
+
+async function upsertOwnedDiaries(
+  client: LoveClient,
+  userId: string,
+  activeCoupleId: string | null,
+  entries: DiaryEntry[]
+) {
+  const rows = entries
+    .filter((entry) => !entry.ownerUserId || entry.ownerUserId === userId)
+    .map((entry) => {
+      const canShare = entry.visibility !== "private" && Boolean(activeCoupleId);
+      return {
+        ...(isUuid(entry.id) ? { id: entry.id } : {}),
+        body: entry.content,
+        couple_id: canShare ? activeCoupleId : null,
+        entry_date: entry.date,
+        owner_user_id: userId,
+        tags: entry.mood ? [`mood:${entry.mood}`] : [],
+        updated_at: new Date().toISOString(),
+        visibility: canShare ? entry.visibility : "private"
+      };
+    });
+
+  if (rows.length === 0) return;
+  await client.from("diary_entries").upsert(rows, { onConflict: "id" });
 }
 
 async function getLoveSession(client: LoveClient | null): Promise<{ client: LoveClient; userId: string } | null> {
