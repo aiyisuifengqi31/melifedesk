@@ -99,7 +99,7 @@ describe("cloud backed storage", () => {
     expect(hydrateFromCloud).toHaveBeenCalledWith(WORKOUT_STORAGE_KEY, [log], expect.any(Function));
   });
 
-  it("syncs love diaries and anniversaries through the cloud key-value store", async () => {
+  it("keeps love anniversaries in the key-value store while diaries use the shared diary table", async () => {
     const storage = makeStorage();
     const diary: DiaryEntry = {
       content: "今天一起散步",
@@ -120,9 +120,9 @@ describe("cloud backed storage", () => {
     saveAnniversaries([anniversary], storage);
     await hydrateLoveFromCloud(storage);
 
-    expect(saveCloudValue).toHaveBeenCalledWith(DIARY_KEY, [diary]);
     expect(saveCloudValue).toHaveBeenCalledWith(ANNIVERSARY_KEY, [anniversary]);
-    expect(hydrateFromCloud).toHaveBeenCalledWith(DIARY_KEY, [diary], expect.any(Function));
+    expect(saveCloudValue).not.toHaveBeenCalledWith(DIARY_KEY, [diary]);
+    expect(hydrateFromCloud).not.toHaveBeenCalledWith(DIARY_KEY, [diary], expect.any(Function));
     expect(hydrateFromCloud).toHaveBeenCalledWith(ANNIVERSARY_KEY, [anniversary], expect.any(Function));
   });
 

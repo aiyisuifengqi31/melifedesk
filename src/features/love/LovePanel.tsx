@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { hydrateFromCloud, saveCloudValue } from "@/features/sync/cloudSync";
+import { deleteDiaryFromCloud, getCurrentLoveUserId, loadDiariesFromCloud, saveDiariesToCloud } from "./loveDiaryCloud";
 
 type LoveTab = "diary" | "anniversary";
 type DiaryVisibility = "private" | "couple_read";
@@ -13,6 +14,7 @@ export type DiaryEntry = {
   date: string;
   id: string;
   mood: string;
+  ownerUserId?: string;
   visibility: DiaryVisibility;
 };
 
@@ -59,7 +61,8 @@ export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: Ui
   const [content, setContent] = useState("");
   const [mood, setMood] = useState("开心");
   const [date, setDate] = useState(todayIso());
-  const [visibility, setVisibility] = useState<DiaryVisibility>("private");
+  const [visibility, setVisibility] = useState<DiaryVisibility>("couple_read");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [anniversaryTitle, setAnniversaryTitle] = useState("");
   const [anniversaryDate, setAnniversaryDate] = useState(todayIso());
   const [repeatYearly, setRepeatYearly] = useState(false);
@@ -72,6 +75,9 @@ export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: Ui
 
   useEffect(() => {
     let cancelled = false;
+    void getCurrentLoveUserId().then((userId) => {
+      if (!cancelled) setCurrentUserId(userId);
+    });
     void hydrateLoveFromCloud(loveStorage).then((next) => {
       if (!cancelled && !localDirtyRef.current) {
         setDiaries(next.diaries);
@@ -96,6 +102,7 @@ export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: Ui
       date,
       id: createLoveId("diary"),
       mood,
+      ownerUserId: currentUserId ?? undefined,
       visibility
     };
     const nextEntries = [entry, ...diaries];
@@ -132,6 +139,7 @@ export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: Ui
     setDiaries(nextEntries);
     localDirtyRef.current = true;
     saveDiaries(nextEntries, loveStorage);
+    void deleteDiaryFromCloud(id);
     setFeedback("日记已删除。");
   };
 
@@ -316,7 +324,7 @@ function loadArray<T>(storage: LoveStorage, key: string) {
 
 export function saveDiaries(entries: DiaryEntry[], storage: LoveStorage = getDefaultLoveStorage()) {
   storage.setItem(DIARY_KEY, JSON.stringify(entries));
-  void saveCloudValue(DIARY_KEY, entries);
+  void saveDiariesToCloud(entries);
 }
 
 export function saveAnniversaries(entries: AnniversaryEntry[], storage: LoveStorage = getDefaultLoveStorage()) {
@@ -328,17 +336,25 @@ export async function hydrateLoveFromCloud(storage: LoveStorage = getDefaultLove
   const localDiaries = loadArray<DiaryEntry>(storage, DIARY_KEY);
   const localAnniversaries = loadArray<AnniversaryEntry>(storage, ANNIVERSARY_KEY);
   const [diaries, anniversaries] = await Promise.all([
-    hydrateFromCloud<DiaryEntry[]>(DIARY_KEY, localDiaries, (value) => saveDiaries(value, storage)),
+    loadDiariesFromCloud(localDiaries, (value) => writeDiariesLocal(value, storage)),
     hydrateFromCloud<AnniversaryEntry[]>(ANNIVERSARY_KEY, localAnniversaries, (value) => saveAnniversaries(value, storage))
   ]);
   return { anniversaries, diaries };
+}
+
+function writeDiariesLocal(entries: DiaryEntry[], storage: LoveStorage) {
+  storage.setItem(DIARY_KEY, JSON.stringify(entries));
 }
 
 function createLoveId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
   }
-  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (token) => {
+    const value = Math.floor(Math.random() * 16);
+    const hex = token === "x" ? value : (value & 0x3) | 0x8;
+    return hex.toString(16);
+  });
 }
 
 export function clearLoveMemoryForTests() {
