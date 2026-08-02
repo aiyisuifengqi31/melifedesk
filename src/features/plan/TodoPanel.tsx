@@ -14,6 +14,7 @@ import {
 } from "@/features/plan/todoStorage";
 
 type TodoPanelProps = {
+  onClose?: () => void;
   storage?: TodoStorage;
   themeTokens: UiTokens;
 };
@@ -33,7 +34,7 @@ function formatToday(): string {
   return `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 ${weekDays[now.getDay()]}`;
 }
 
-export function TodoPanel({ storage, themeTokens }: TodoPanelProps) {
+export function TodoPanel({ onClose, storage, themeTokens }: TodoPanelProps) {
   const todoStorage = useMemo(() => storage ?? getDefaultTodoStorage(), [storage]);
   const [tasks, setTasks] = useState<TodoTask[]>(() => sortTodos(loadLocalTodos(todoStorage)));
   const [newTitle, setNewTitle] = useState("");
@@ -105,8 +106,17 @@ export function TodoPanel({ storage, themeTokens }: TodoPanelProps) {
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.page}>
       <View style={styles.headerCard}>
-        <Text style={styles.title}>每日待办</Text>
-        <Text style={styles.date}>{formatToday()}</Text>
+        <View style={styles.headerTop}>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>每日待办</Text>
+            <Text style={styles.date}>{formatToday()}</Text>
+          </View>
+          {onClose ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="返回首页" onPress={onClose} style={styles.backButton}>
+              <Text style={styles.backText}>返回</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
 
       <View style={styles.addCard}>
@@ -305,6 +315,19 @@ function createStyles(tokens: UiTokens) {
       gap: 10,
       padding: 12
     },
+    backButton: {
+      alignItems: "center",
+      backgroundColor: tokens.accentSoft,
+      borderRadius: 12,
+      justifyContent: "center",
+      minHeight: 38,
+      paddingHorizontal: 14
+    },
+    backText: {
+      color: tokens.accent,
+      fontSize: 13,
+      fontWeight: "900"
+    },
     checkbox: {
       alignItems: "center",
       borderColor: tokens.border,
@@ -361,6 +384,17 @@ function createStyles(tokens: UiTokens) {
       borderWidth: 1,
       gap: 6,
       padding: 16
+    },
+    headerText: {
+      flex: 1,
+      gap: 6,
+      minWidth: 0
+    },
+    headerTop: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 10,
+      justifyContent: "space-between"
     },
     input: {
       backgroundColor: "#f6faf6",

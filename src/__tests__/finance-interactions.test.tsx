@@ -43,6 +43,8 @@ describe("FinancePanel interactions", () => {
 
     expect(screen.queryByText(/输入金额/)).toBeNull();
     expect(screen.getByRole("button", { name: "选择分类：餐饮" })).toHaveStyle({ flexBasis: "22%" });
+    expect(screen.getByText("快速记一笔")).toBeOnTheScreen();
+    expect(screen.getByTestId("finance-summary-panel")).toHaveStyle({ flexDirection: "row" });
   });
 
   it("creates expense and income details, updates summary, and recalculates after deletion", async () => {

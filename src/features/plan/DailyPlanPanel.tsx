@@ -162,7 +162,7 @@ function buildMonthDays(year: number, monthIndex: number): MonthDay[] {
 const styles = StyleSheet.create({
   calendarArrow: {
     color: "#111827",
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "500"
   },
   calendarCard: {
@@ -170,18 +170,18 @@ const styles = StyleSheet.create({
     borderColor: "#e3e6eb",
     borderRadius: 18,
     borderWidth: 1,
-    padding: 12
+    padding: 10
   },
   calendarTitle: {
     color: "#111827",
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: "900"
   },
   calendarTop: {
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 10
+    marginBottom: 6
   },
   checkbox: {
     alignItems: "center",
@@ -204,9 +204,9 @@ const styles = StyleSheet.create({
   dayCell: {
     alignItems: "center",
     flexBasis: "14.285%",
-    height: 46,
+    height: 38,
     justifyContent: "center",
-    paddingVertical: 4
+    paddingVertical: 2
   },
   dayCellSelected: {
     backgroundColor: "#28aeea",
@@ -218,9 +218,9 @@ const styles = StyleSheet.create({
   },
   dayText: {
     color: "#111827",
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "800",
-    lineHeight: 20,
+    lineHeight: 16,
     textAlign: "center"
   },
   emptyText: {
@@ -229,11 +229,11 @@ const styles = StyleSheet.create({
     lineHeight: 20
   },
   holidayPlaceholder: {
-    height: 11
+    height: 9
   },
   holidayText: {
     color: "#ef4444",
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: "800",
     marginTop: 1,
     textAlign: "center"
@@ -418,9 +418,9 @@ const styles = StyleSheet.create({
   },
   weekRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 4,
     justifyContent: "space-between",
-    marginBottom: 12
+    marginBottom: 8
   },
   weekendDay: {
     color: "#ef4444"

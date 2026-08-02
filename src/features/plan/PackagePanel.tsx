@@ -20,6 +20,10 @@ const emptyItem = (): Omit<PackageItem, "id" | "createTime"> => ({
   pickupLocation: ""
 });
 
+export function isPackageDraftAddable(form: Omit<PackageItem, "id" | "createTime">): boolean {
+  return Boolean(form.company.trim() || form.image || form.pickupCode.trim() || form.pickupLocation.trim());
+}
+
 export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
   const pkgStorage = useMemo(() => storage ?? getDefaultPackageStorage(), [storage]);
   const [items, setItems] = useState<PackageItem[]>(() => loadPackages(pkgStorage));
@@ -58,13 +62,13 @@ export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
 
   const addItem = () => {
     const company = form.company.trim();
-    if (!company) return;
+    if (!isPackageDraftAddable(form)) return;
     const item: PackageItem = {
       ...form,
-      company,
+      company: company || "待取快递",
       createTime: new Date().toISOString(),
       id: createPackageId(),
-      orderNumber: form.orderNumber.trim(),
+      orderNumber: "",
       pickupCode: form.pickupCode.trim(),
       pickupLocation: form.pickupLocation.trim()
     };
@@ -100,7 +104,6 @@ export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
             <Text style={[styles.itemCompany, item.pickedUp ? styles.itemDoneText : null]} numberOfLines={1}>{item.company}</Text>
             <Text style={styles.itemMeta} numberOfLines={1}>📍 {item.pickupLocation || "未填"}</Text>
             <Text style={styles.itemMeta} numberOfLines={1}>🔑 {item.pickupCode || "未填"}</Text>
-            {item.orderNumber ? <Text style={styles.itemMeta} numberOfLines={1}>🧾 {item.orderNumber}</Text> : null}
             <Text style={styles.itemMeta} numberOfLines={1}>📅 {item.arrivalDate}</Text>
           </View>
           {item.image ? (
@@ -157,17 +160,16 @@ export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
             value={form.pickupCode}
           />
         </View>
-        <TextInput
-          onChangeText={(text) => setForm((previous) => ({ ...previous, orderNumber: text }))}
-          placeholder="订单编号（可选）"
-          style={styles.input}
-          value={form.orderNumber}
-        />
         <View style={styles.imageRow}>
           {form.image ? (
-            <Pressable onPress={() => setExpandedImage(form.image)} style={styles.thumbnailWrap}>
-              <Image source={{ uri: form.image }} style={styles.thumbnail} />
-            </Pressable>
+            <View style={styles.imagePickedRow}>
+              <Pressable onPress={() => setExpandedImage(form.image)} style={styles.thumbnailWrap}>
+                <Image source={{ uri: form.image }} style={styles.thumbnail} />
+              </Pressable>
+              <Pressable onPress={() => fileInputRef.current?.click()} style={styles.replaceImageButton}>
+                <Text style={styles.uploadText}>更换截图</Text>
+              </Pressable>
+            </View>
           ) : (
             <Pressable
               onPress={() => fileInputRef.current?.click()}
@@ -241,8 +243,10 @@ function createStyles(tokens: UiTokens) {
       alignItems: "center",
       backgroundColor: tokens.accent,
       borderRadius: 12,
-      flex: 1,
       justifyContent: "center",
+      minHeight: 40,
+      minWidth: 86,
+      paddingHorizontal: 14,
       paddingVertical: 10
     },
     addText: {
@@ -322,7 +326,9 @@ function createStyles(tokens: UiTokens) {
       gap: 8
     },
     formRow: {
+      alignItems: "center",
       flexDirection: "row",
+      flexWrap: "wrap",
       gap: 8
     },
     header: {
@@ -347,7 +353,20 @@ function createStyles(tokens: UiTokens) {
     imageRow: {
       alignItems: "center",
       flexDirection: "row",
+      flexWrap: "wrap",
       gap: 8
+    },
+    imagePickedRow: {
+      alignItems: "center",
+      backgroundColor: "#f0f7f0",
+      borderColor: tokens.border,
+      borderRadius: 12,
+      borderWidth: 1,
+      flex: 1,
+      flexDirection: "row",
+      gap: 8,
+      minWidth: 150,
+      padding: 5
     },
     input: {
       backgroundColor: "#f8fafc",
@@ -356,11 +375,14 @@ function createStyles(tokens: UiTokens) {
       borderWidth: 1,
       color: tokens.text,
       fontSize: 13,
+      minHeight: 38,
       paddingHorizontal: 12,
-      paddingVertical: 8
+      paddingVertical: 7
     },
     inputHalf: {
-      flex: 1
+      flex: 1,
+      flexBasis: "46%",
+      minWidth: 120
     },
     itemBody: {
       flex: 1,
@@ -420,8 +442,8 @@ function createStyles(tokens: UiTokens) {
     },
     thumbnail: {
       borderRadius: 10,
-      height: 40,
-      width: 40
+      height: 38,
+      width: 38
     },
     thumbnailWrap: {
       borderRadius: 10
@@ -439,12 +461,20 @@ function createStyles(tokens: UiTokens) {
       borderStyle: "dashed",
       borderWidth: 1,
       flex: 1,
+      minHeight: 40,
+      minWidth: 150,
       paddingVertical: 10
     },
     uploadText: {
       color: tokens.accent,
       fontSize: 13,
       fontWeight: "900"
+    },
+    replaceImageButton: {
+      alignItems: "center",
+      flex: 1,
+      justifyContent: "center",
+      minHeight: 32
     }
   });
 }

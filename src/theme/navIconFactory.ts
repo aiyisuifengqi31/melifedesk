@@ -54,11 +54,6 @@ const motifs: Record<RouteKey, string> = {
     '<path d="M28 38l12-10 12 10"/>',
     '<path d="M32 40v10h16V40"/>'
   ].join(""),
-  todos: [
-    '<rect x="27" y="29" width="26" height="26" rx="4"/>',
-    '<path d="M33 37l4 4 9-9"/>',
-    '<path d="M33 48h14"/>'
-  ].join(""),
   plan: [
     '<rect x="27" y="30" width="26" height="24" rx="3"/>',
     '<path d="M27 39h26"/>',

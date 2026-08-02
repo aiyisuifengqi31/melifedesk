@@ -1,4 +1,4 @@
-export type RouteKey = "home" | "todos" | "plan" | "workout" | "finance" | "love" | "exam" | "fun";
+export type RouteKey = "home" | "plan" | "workout" | "finance" | "love" | "exam" | "fun";
 
 export type NavItem = {
   key: RouteKey;
@@ -8,7 +8,6 @@ export type NavItem = {
 
 export const NAV_ITEMS: NavItem[] = [
   { key: "home", label: "首页", href: "/home" },
-  { key: "todos", label: "每日\n待办", href: "/todos" },
   { key: "plan", label: "每日\n计划", href: "/plan" },
   { key: "workout", label: "运动\n健身", href: "/workout" },
   { key: "finance", label: "收支\n记账", href: "/finance" },

@@ -719,13 +719,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#f8fafc",
     borderColor: "#e3e8ef",
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
+    flexDirection: "row",
     flex: 1,
-    gap: 3,
+    gap: 6,
     maxWidth: "32%",
     minWidth: "28%",
-    paddingVertical: 8
+    justifyContent: "center",
+    minHeight: 34,
+    paddingHorizontal: 8,
+    paddingVertical: 6
   },
   partButtonActive: {
     backgroundColor: "#e2f2e2",
@@ -738,12 +742,14 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start"
   },
   partIcon: {
-    fontSize: 18
+    fontSize: 15,
+    lineHeight: 18
   },
   partText: {
     color: "#697386",
     fontSize: 12,
-    fontWeight: "800"
+    fontWeight: "800",
+    lineHeight: 16
   },
   partTextActive: {
     color: "#5a8a5a"

@@ -49,6 +49,9 @@ describe("WorkoutPanel interactions", () => {
 
     expect(screen.queryByPlaceholderText("自我感受")).toBeNull();
     expect(screen.queryByPlaceholderText("备注")).toBeNull();
+    expect(screen.getByRole("button", { name: "选择背" })).toHaveStyle({
+      flexDirection: "row"
+    });
   });
 
   it("creates, persists, and deletes a real workout log", async () => {

@@ -320,17 +320,26 @@ export function FinancePanel({ storage }: FinancePanelProps) {
         <TabButton active={tab === "category"} label="分类" onPress={() => setTab("category")} />
       </View>
 
-      <View style={styles.metricGrid}>
-        <Metric count={`${todayExpenseCount} 笔`} title="今日支出" value={`¥${summary.todayExpense}`} />
-        <Metric count={`${monthExpenseCount} 笔`} title="本月支出" value={`¥${summary.monthExpense}`} />
-        <Metric count={`${monthIncomeCount} 笔`} title="本月收入" value={`¥${summary.monthIncome}`} />
-        <Metric count="收入 - 支出" title="本月结余" value={`¥${summary.monthBalance}`} />
+      <View style={styles.overviewCard}>
+        <View style={styles.overviewHeader}>
+          <Text style={styles.overviewTitle}>支出</Text>
+          <Text style={styles.overviewSubTitle}>今日与本月概览</Text>
+        </View>
+        <View testID="finance-summary-panel" style={styles.metricGrid}>
+          <Metric count={`${todayExpenseCount} 笔`} title="今日支出" value={`¥${summary.todayExpense}`} />
+          <Metric count={`${monthExpenseCount} 笔`} title="本月支出" value={`¥${summary.monthExpense}`} />
+          <Metric count={`${monthIncomeCount} 笔`} title="本月收入" value={`¥${summary.monthIncome}`} />
+          <Metric count="收入 - 支出" title="本月结余" value={`¥${summary.monthBalance}`} />
+        </View>
       </View>
 
       {tab === "record" ? (
         <>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>{transactionType === "expense" ? "今日支出" : "今日收入"}</Text>
+          <View style={[styles.card, styles.quickRecordCard]}>
+            <View style={styles.quickHeader}>
+              <Text style={styles.cardTitle}>快速记一笔</Text>
+              <Text style={styles.quickTypePill}>{transactionType === "expense" ? "今日支出" : "今日收入"}</Text>
+            </View>
             <View style={styles.segmentRow}>
               {transactionTypeOptions.map((option) => (
                 <Pressable key={option.value} accessibilityRole="button" accessibilityLabel={option.label} onPress={() => {
@@ -1110,16 +1119,16 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   metric: {
-    alignItems: "center",
-    backgroundColor: "#eaf6ff",
-    borderColor: "#d7eaf7",
+    alignItems: "flex-start",
+    backgroundColor: "#f8fbff",
+    borderColor: "#e1eef8",
     borderRadius: 12,
     borderWidth: 1,
     flex: 1,
     flexBasis: "23%",
     minWidth: 0,
-    paddingHorizontal: 6,
-    paddingVertical: 10
+    paddingHorizontal: 8,
+    paddingVertical: 9
   },
   metricCount: {
     color: "#697386",
@@ -1143,6 +1152,35 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: 2
   },
+  overviewCard: {
+    backgroundColor: "#ffffff",
+    borderColor: "#d7eaf7",
+    borderRadius: 18,
+    borderWidth: 1,
+    elevation: 2,
+    gap: 12,
+    padding: 12,
+    shadowColor: "#1fa8e2",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14
+  },
+  overviewHeader: {
+    alignItems: "flex-end",
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "space-between"
+  },
+  overviewSubTitle: {
+    color: "#697386",
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  overviewTitle: {
+    color: "#111827",
+    fontSize: 20,
+    fontWeight: "900"
+  },
   noteInput: {
     minHeight: 64,
     textAlignVertical: "top"
@@ -1157,6 +1195,24 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 16,
     fontWeight: "900"
+  },
+  quickHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between"
+  },
+  quickRecordCard: {
+    gap: 14
+  },
+  quickTypePill: {
+    backgroundColor: "#eaf6ff",
+    borderRadius: 999,
+    color: "#1677a8",
+    fontSize: 12,
+    fontWeight: "900",
+    paddingHorizontal: 10,
+    paddingVertical: 5
   },
   pieHint: {
     color: "#697386",

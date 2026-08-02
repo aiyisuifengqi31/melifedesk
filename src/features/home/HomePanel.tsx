@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { hydrateNotesFromCloud, loadNotes, saveNotes, type NoteItem } from "@/features/home/notesStorage";
 import { getDefaultTodoStorage, hydrateTodosFromCloud, loadLocalTodos, type TodoTask, type TodoStorage } from "@/features/plan/todoStorage";
-import type { NavItem } from "@/navigation/items";
+import { TodoPanel } from "@/features/plan/TodoPanel";
 import { MealSpinner } from "./MealSpinner";
 import { NotesPanel } from "./NotesPanel";
 
@@ -12,12 +12,11 @@ const WIDGET_HEIGHT = 210;
 const LIST_HEIGHT = 156;
 
 type HomePanelProps = {
-  onNavigate?: (href: NavItem["href"]) => void;
   storage?: TodoStorage;
   themeTokens: UiTokens;
 };
 
-type ViewState = "home" | "notes";
+type ViewState = "home" | "notes" | "todos";
 
 function formatToday(): string {
   const now = new Date();
@@ -32,7 +31,7 @@ function greeting(): string {
   return "晚上好";
 }
 
-export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) {
+export function HomePanel({ storage, themeTokens }: HomePanelProps) {
   const todoStorage = useMemo(() => storage ?? getDefaultTodoStorage(), [storage]);
   const [todos, setTodos] = useState<TodoTask[]>(() => loadLocalTodos(todoStorage));
   const [viewState, setViewState] = useState<ViewState>("home");
@@ -87,6 +86,14 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
     );
   }
 
+  if (viewState === "todos") {
+    return (
+      <View style={styles.page}>
+        <TodoPanel onClose={() => setViewState("home")} storage={todoStorage} themeTokens={themeTokens} />
+      </View>
+    );
+  }
+
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.page}>
       <View style={styles.header}>
@@ -120,7 +127,7 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
       </View>
 
       <View style={styles.topWidgets}>
-        <Pressable accessibilityRole="button" accessibilityLabel="打开每日待办" onPress={() => onNavigate?.("/todos")} style={[styles.widget, styles.widgetLeft]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="打开每日待办" onPress={() => setViewState("todos")} style={[styles.widget, styles.widgetLeft]}>
           <View style={styles.widgetHeader}>
             <Text style={styles.widgetIcon}>📌</Text>
             <Text style={styles.widgetTitle} numberOfLines={1}>今日待办</Text>
@@ -128,11 +135,29 @@ export function HomePanel({ onNavigate, storage, themeTokens }: HomePanelProps) 
               <Text style={styles.widgetMoreText}>全部 →</Text>
             </View>
           </View>
-          <View style={styles.todoSummaryBox}>
-            <Text style={styles.todoSummaryValue}>{pendingCount}</Text>
-            <Text style={styles.todoSummaryLabel}>件未完成</Text>
-            <Text style={styles.todoSummaryHint}>进入每日待办添加、编辑、完成或删除任务</Text>
-          </View>
+          {todos.length === 0 ? (
+            <View style={styles.todoSummaryBox}>
+              <Text style={styles.emptyHint}>今天还没有待办，点进来添加第一件小事。</Text>
+            </View>
+          ) : (
+            <View style={styles.todoPreviewList}>
+              {todos.slice(0, 4).map((todo) => (
+                <View key={todo.id} style={styles.todoRow}>
+                  <View style={styles.todoCheckWrap}>
+                    <View style={[styles.todoCheck, todo.completed ? styles.todoCheckActive : null]}>
+                      {todo.completed ? <Text style={styles.todoCheckMark}>✓</Text> : null}
+                    </View>
+                  </View>
+                  <Text style={[styles.todoTitle, todo.completed ? styles.todoTitleDone : null]} numberOfLines={1}>{todo.title}</Text>
+                </View>
+              ))}
+              {todos.length > 4 ? (
+                <View style={styles.todoTag}>
+                  <Text style={styles.todoTagText}>还有 {todos.length - 4} 条，进入查看</Text>
+                </View>
+              ) : null}
+            </View>
+          )}
         </Pressable>
 
         <View style={[styles.widget, styles.widgetRight]}>
@@ -302,6 +327,15 @@ function createStyles(tokens: UiTokens) {
       gap: 6,
       height: LIST_HEIGHT,
       overflow: "scroll"
+    },
+    todoPreviewList: {
+      backgroundColor: "#f6faf6",
+      borderRadius: 14,
+      flex: 1,
+      gap: 7,
+      justifyContent: "center",
+      overflow: "hidden",
+      padding: 10
     },
     todoRow: {
       alignItems: "center",

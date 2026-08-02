@@ -3,7 +3,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react-nativ
 import type { UiTokens } from "@/shared/ui/primitives";
 
 import { AppShell } from "@/components/AppShell";
+import { HomePanel } from "@/features/home/HomePanel";
 import { DailyPlanPanel } from "@/features/plan/DailyPlanPanel";
+import { TodoPanel } from "@/features/plan/TodoPanel";
 import { loadLocalTodos, saveLocalTodos, type TodoTask } from "@/features/plan/todoStorage";
 
 const storageKey = "fanfan-guanguan.todos.v1";
@@ -77,7 +79,7 @@ describe("Todo route interactions", () => {
     installWindowStorage();
   });
 
-  it("adds, edits, completes, restores, persists, and deletes tasks on the independent todo page", async () => {
+  it("keeps daily todos out of the primary navigation and opens them from the home card", async () => {
     const seeded: TodoTask = {
       completed: false,
       createTime: "2026-07-31T08:00:00.000Z",
@@ -89,7 +91,36 @@ describe("Todo route interactions", () => {
     };
     saveLocalTodos([seeded], window.localStorage);
 
-    const { rerender } = render(<AppShell initialRoute="/todos" />);
+    render(<HomePanel storage={window.localStorage} themeTokens={testTokens} />);
+
+    expect(screen.getByText("今日待办")).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("button", { name: "打开每日待办" }));
+
+    expect(screen.getByText("每日待办")).toBeOnTheScreen();
+    expect(await screen.findByText("复盘页面交互")).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("button", { name: "返回首页" }));
+    expect(screen.getByText("生活控制中心")).toBeOnTheScreen();
+  });
+
+  it("does not expose a standalone daily todo navigation tab", () => {
+    render(<AppShell initialRoute="/home" />);
+
+    expect(screen.queryByRole("button", { name: "每日\n待办" })).toBeNull();
+  });
+
+  it("adds, edits, completes, restores, persists, and deletes tasks on the home-opened todo page", async () => {
+    const seeded: TodoTask = {
+      completed: false,
+      createTime: "2026-07-31T08:00:00.000Z",
+      deadline: "2026-08-01T10:30:00.000Z",
+      id: "task-1",
+      priority: "urgent",
+      remindAt: "2026-08-01T09:30:00.000Z",
+      title: "复盘页面交互"
+    };
+    saveLocalTodos([seeded], window.localStorage);
+
+    const { rerender } = render(<TodoPanel storage={window.localStorage} themeTokens={testTokens} />);
 
     expect(screen.getByText("每日待办")).toBeOnTheScreen();
     expect(await screen.findByText("复盘页面交互")).toBeOnTheScreen();
@@ -109,7 +140,7 @@ describe("Todo route interactions", () => {
     fireEvent.press(screen.getByRole("button", { name: "保存编辑" }));
     await waitFor(() => expect(screen.getByText("复盘首页待办")).toBeOnTheScreen());
 
-    rerender(<AppShell initialRoute="/todos" />);
+    rerender(<TodoPanel storage={window.localStorage} themeTokens={testTokens} />);
     expect(await screen.findAllByText("复盘首页待办")).toHaveLength(1);
     expect(loadLocalTodos(window.localStorage)[0]?.title).toBe("复盘首页待办");
 

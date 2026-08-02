@@ -13,7 +13,6 @@ import { FinancePanel } from "@/features/finance/FinancePanel";
 import { HomePanel } from "@/features/home/HomePanel";
 import { LovePanel } from "@/features/love/LovePanel";
 import { DailyPlanPanel } from "@/features/plan/DailyPlanPanel";
-import { TodoPanel } from "@/features/plan/TodoPanel";
 import { WorkoutPanel } from "@/features/workout/WorkoutPanel";
 import { NAV_ITEMS, type NavItem, routeToKey } from "@/navigation/items";
 import { getTheme } from "@/theme/registry";
@@ -222,15 +221,14 @@ function PageContent({
 }) {
   return (
     <>
-      {activeKey === "home" ? <HomePanel themeTokens={tokens} onNavigate={handleNavigate} /> : null}
-      {activeKey === "todos" ? <TodoPanel themeTokens={tokens} /> : null}
+      {activeKey === "home" ? <HomePanel themeTokens={tokens} /> : null}
       {activeKey === "plan" ? <DailyPlanPanel themeTokens={tokens} /> : null}
       {activeKey === "workout" ? <WorkoutPanel /> : null}
       {activeKey === "finance" ? <FinancePanel /> : null}
       {activeKey === "love" ? <LovePanel themeTokens={tokens} /> : null}
       {activeKey === "exam" ? <ExamPanel themeTokens={tokens} /> : null}
       {activeKey === "fun" ? <EntertainmentPanel themeTokens={tokens} /> : null}
-      {activeKey !== "home" && activeKey !== "todos" && activeKey !== "plan" && activeKey !== "workout" && activeKey !== "finance" && activeKey !== "love" && activeKey !== "exam" && activeKey !== "fun" ? <GenericModuleSkeleton themeEmptyState={themeEmptyState} styles={styles} /> : null}
+      {activeKey !== "home" && activeKey !== "plan" && activeKey !== "workout" && activeKey !== "finance" && activeKey !== "love" && activeKey !== "exam" && activeKey !== "fun" ? <GenericModuleSkeleton themeEmptyState={themeEmptyState} styles={styles} /> : null}
     </>
   );
 }
