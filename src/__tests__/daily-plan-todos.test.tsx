@@ -112,14 +112,13 @@ describe("Todo route interactions", () => {
     expect(screen.queryByRole("button", { name: "每日\n待办" })).toBeNull();
   });
 
-  it("shows a compact life control center with an interactive pet beside it", () => {
+  it("keeps the life control center compact without the removed pet widget", () => {
     render(<HomePanel storage={window.localStorage} themeTokens={testTokens} />);
 
     expect(screen.getByTestId("home-control-strip")).toHaveStyle({ flexDirection: "row" });
-    expect(screen.getByRole("button", { name: "切换为小猫" })).toBeOnTheScreen();
-    expect(screen.getByRole("button", { name: "切换为小狗" })).toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "摸摸小宠物" }));
-    expect(screen.getByText("脸红了，想再被夸一次。")).toBeOnTheScreen();
+    expect(screen.queryByRole("button", { name: "切换为小猫" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "切换为小狗" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "摸摸小宠物" })).toBeNull();
   });
 
   it("adds, edits, completes, restores, persists, and deletes tasks on the home-opened todo page", async () => {

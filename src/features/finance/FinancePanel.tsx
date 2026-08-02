@@ -41,6 +41,23 @@ const incomeCategories = ["生活费", "工资", "奖学金", "兼职", "红包"
 const giftEventTypes = ["婚礼", "订婚", "生日", "满月", "乔迁", "升学", "丧事", "节日", "其他"];
 const categoryColors = ["#d8f8e7", "#fff3ce", "#ffe2e7", "#dfeeff", "#ffe6f3", "#eee5ff", "#d8f7f6", "#eef2f7"];
 const chartColors = ["#1fa8e2", "#f59e0b", "#84cc16", "#fb7185", "#a78bfa", "#14b8a6", "#f97316", "#6366f1"];
+const categoryIcons: Record<string, string> = {
+  买菜: "🥬",
+  加油: "⛽",
+  餐饮: "🍽",
+  出行: "🚕",
+  随份子: "🎁",
+  购物: "🛍",
+  医疗: "✚",
+  更多: "⋯",
+  生活费: "🏠",
+  工资: "💼",
+  奖学金: "🎓",
+  兼职: "🧰",
+  红包: "🧧",
+  退款: "↩",
+  其他: "•"
+};
 
 function getCategoryColor(categoryName: string, index?: number): string {
   if (index !== undefined) return chartColors[index % chartColors.length];
@@ -361,7 +378,6 @@ export function FinancePanel({ storage }: FinancePanelProps) {
           <Metric count={`${todayExpenseCount} 笔`} title="今日支出" value={`¥${summary.todayExpense}`} />
           <Metric count={`${monthExpenseCount} 笔`} title="本月支出" value={`¥${summary.monthExpense}`} />
           <Metric count={`${monthIncomeCount} 笔`} title="本月收入" value={`¥${summary.monthIncome}`} />
-          <Metric count="收入 - 支出" title="本月结余" value={`¥${summary.monthBalance}`} />
         </View>
       </View>
 
@@ -385,8 +401,8 @@ export function FinancePanel({ storage }: FinancePanelProps) {
             <View style={styles.categoryGrid}>
               {categories.map((category, index) => (
                 <Pressable key={category} accessibilityRole="button" accessibilityLabel={`选择分类：${category}`} onPress={() => setSelectedCategory(category)} style={[styles.categoryButton, selectedCategory === category ? styles.categorySelected : null]}>
-                  <Text style={[styles.categoryIcon, { backgroundColor: categoryColors[index % categoryColors.length] }]}>{category.slice(0, 1)}</Text>
-                  <Text style={styles.categoryName}>{category}</Text>
+                  <Text style={[styles.categoryIcon, { backgroundColor: categoryColors[index % categoryColors.length] }]}>{categoryIcons[category] ?? category.slice(0, 1)}</Text>
+                  <Text style={styles.categoryName} numberOfLines={2}>{category}</Text>
                 </Pressable>
               ))}
             </View>
@@ -467,7 +483,6 @@ export function FinancePanel({ storage }: FinancePanelProps) {
               );
             })}
             {summary.categoryShares.length > 0 ? <CategoryPieChart shares={summary.categoryShares} /> : null}
-            <Text style={styles.formula}>本月结余 = 本月收入 ¥{summary.monthIncome} - 本月支出 ¥{summary.monthExpense}</Text>
           </View>
         </>
       ) : null}
@@ -638,7 +653,7 @@ function TabButton({ active, label, onPress }: { active: boolean; label: string;
 function Metric({ count, title, value }: { count: string; title: string; value: string }) {
   const compactValue = value.length > 9;
   return (
-    <View style={styles.metric}>
+    <View testID={`finance-metric-${title}`} style={styles.metric}>
       <Text style={styles.metricTitle}>{title}</Text>
       <Text numberOfLines={1} style={[styles.metricValue, compactValue ? styles.metricValueCompact : null]}>{value}</Text>
       <Text style={styles.metricCount}>{count}</Text>
@@ -829,7 +844,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     flexBasis: "22%",
-    gap: 4,
+    flexDirection: "row",
+    gap: 5,
+    justifyContent: "center",
+    minWidth: 0,
+    paddingHorizontal: 4,
     paddingVertical: 7
   },
   categoryGrid: {
@@ -839,18 +858,24 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start"
   },
   categoryIcon: {
+    alignItems: "center",
     borderRadius: 999,
     color: "#1599d3",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "900",
+    minWidth: 24,
     overflow: "hidden",
+    textAlign: "center",
     paddingHorizontal: 7,
     paddingVertical: 4
   },
   categoryName: {
     color: "#697386",
+    flexShrink: 1,
     fontSize: 11,
-    fontWeight: "800"
+    fontWeight: "800",
+    lineHeight: 14,
+    minWidth: 0
   },
   categoryRow: {
     alignItems: "center",
@@ -1090,11 +1115,6 @@ const styles = StyleSheet.create({
     gap: 4,
     minWidth: 120
   },
-  formula: {
-    color: "#697386",
-    fontSize: 14,
-    fontWeight: "800"
-  },
   hero: {
     gap: 6
   },
@@ -1158,7 +1178,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     flex: 1,
-    flexBasis: "23%",
+    flexBasis: "31%",
     minWidth: 0,
     overflow: "hidden",
     paddingHorizontal: 8,

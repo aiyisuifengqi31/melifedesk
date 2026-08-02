@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import { saveUserSettings } from "@/auth/authRepository";
@@ -17,7 +17,7 @@ import { WorkoutPanel } from "@/features/workout/WorkoutPanel";
 import { NAV_ITEMS, type NavItem, routeToKey } from "@/navigation/items";
 import { getTheme } from "@/theme/registry";
 import type { ColorMode, ThemeId } from "@/theme/types";
-import { loadBackground, saveBackground, type BackgroundSource, getImageSource } from "@/theme/background";
+import { hydrateBackgroundFromCloud, loadBackground, saveBackground, type BackgroundSource, getImageSource } from "@/theme/background";
 import { ThemedNavIcon } from "./ThemedNavIcon";
 
 type AppShellProps = {
@@ -39,6 +39,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const [mode, setMode] = useState<ColorMode>(() => readStoredColorMode(typeof window === "undefined" ? undefined : window.localStorage) ?? "light");
   const [profile, setProfile] = useState<AppProfile>(() => loadProfile());
   const [background, setBackground] = useState<BackgroundSource | null>(() => loadBackground());
+  const backgroundDirtyRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +47,20 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
       .then((next) => {
         if (!cancelled) {
           setProfile(next);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    hydrateBackgroundFromCloud()
+      .then((next) => {
+        if (!cancelled && !backgroundDirtyRef.current) {
+          setBackground(next);
         }
       })
       .catch(() => {});
@@ -110,6 +125,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   };
 
   const handleBackgroundChange = (nextBackground: BackgroundSource | null) => {
+    backgroundDirtyRef.current = true;
     setBackground(nextBackground);
     saveBackground(nextBackground);
   };

@@ -17,18 +17,6 @@ type HomePanelProps = {
 };
 
 type ViewState = "home" | "notes" | "todos";
-type PetKind = "cat" | "dog";
-
-const petCopy: Record<PetKind, { emoji: string; name: string }> = {
-  cat: { emoji: "🐱", name: "小猫" },
-  dog: { emoji: "🐶", name: "小狗" }
-};
-
-const petLines = [
-  "我在这里陪你整理今天。",
-  "脸红了，想再被夸一次。",
-  "今天也要慢慢变好。"
-];
 
 const todoPriorityLabels: Record<TodoTask["priority"], string> = {
   high: "重要",
@@ -55,8 +43,6 @@ export function HomePanel({ storage, themeTokens }: HomePanelProps) {
   const [todos, setTodos] = useState<TodoTask[]>(() => loadLocalTodos(todoStorage));
   const [viewState, setViewState] = useState<ViewState>("home");
   const [notes, setNotes] = useState<NoteItem[]>(() => loadNotes());
-  const [petKind, setPetKind] = useState<PetKind>("cat");
-  const [petLineIndex, setPetLineIndex] = useState(0);
 
   const styles = useMemo(() => createStyles(themeTokens), [themeTokens]);
 
@@ -152,22 +138,6 @@ export function HomePanel({ storage, themeTokens }: HomePanelProps) {
             </View>
           </View>
           <Text style={styles.summaryLine} numberOfLines={2}>{summaryLine}</Text>
-        </View>
-
-        <View style={styles.petCard}>
-          <View style={styles.petTop}>
-            <Pressable accessibilityRole="button" accessibilityLabel="切换为小猫" onPress={() => setPetKind("cat")} style={[styles.petChoice, petKind === "cat" ? styles.petChoiceActive : null]}>
-              <Text style={styles.petChoiceText}>猫</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel="切换为小狗" onPress={() => setPetKind("dog")} style={[styles.petChoice, petKind === "dog" ? styles.petChoiceActive : null]}>
-              <Text style={styles.petChoiceText}>狗</Text>
-            </Pressable>
-          </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="摸摸小宠物" onPress={() => setPetLineIndex((index) => (index + 1) % petLines.length)} style={styles.petBody}>
-            <Text style={styles.petEmoji}>{petCopy[petKind].emoji}</Text>
-            <Text style={styles.petName}>{petCopy[petKind].name}</Text>
-          </Pressable>
-          <Text style={styles.petSpeech} numberOfLines={2}>{petLines[petLineIndex]}</Text>
         </View>
       </View>
 
@@ -635,69 +605,6 @@ function createStyles(tokens: UiTokens) {
       lineHeight: 18,
       paddingHorizontal: 12,
       paddingVertical: 8
-    },
-    petBody: {
-      alignItems: "center",
-      flex: 1,
-      justifyContent: "center"
-    },
-    petCard: {
-      alignItems: "stretch",
-      backgroundColor: "#ffffff",
-      borderRadius: 18,
-      flex: 1,
-      flexBasis: "48%",
-      gap: 8,
-      minHeight: 132,
-      minWidth: 180,
-      padding: 12,
-      shadowColor: "#7cb87c",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.06,
-      shadowRadius: 16,
-      elevation: 2
-    },
-    petChoice: {
-      alignItems: "center",
-      backgroundColor: "#f6faf6",
-      borderRadius: 999,
-      minHeight: 28,
-      paddingHorizontal: 12,
-      justifyContent: "center"
-    },
-    petChoiceActive: {
-      backgroundColor: tokens.accentSoft
-    },
-    petChoiceText: {
-      color: tokens.accent,
-      fontSize: 12,
-      fontWeight: "900"
-    },
-    petEmoji: {
-      fontSize: 34,
-      lineHeight: 38
-    },
-    petName: {
-      color: tokens.text,
-      fontSize: 12,
-      fontWeight: "900",
-      marginTop: 2
-    },
-    petSpeech: {
-      backgroundColor: "#f6faf6",
-      borderRadius: 12,
-      color: tokens.textMuted,
-      fontSize: 12,
-      fontWeight: "800",
-      lineHeight: 16,
-      paddingHorizontal: 10,
-      paddingVertical: 7,
-      textAlign: "center"
-    },
-    petTop: {
-      flexDirection: "row",
-      gap: 8,
-      justifyContent: "flex-end"
     },
     dailyPickCard: {
       backgroundColor: "#ffffff",

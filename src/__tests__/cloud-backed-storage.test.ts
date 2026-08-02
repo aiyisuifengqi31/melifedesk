@@ -11,6 +11,26 @@ import {
   WORKOUT_STORAGE_KEY,
   type WorkoutLog
 } from "@/features/workout/workoutStorage";
+import {
+  ANNIVERSARY_KEY,
+  DIARY_KEY,
+  hydrateLoveFromCloud,
+  saveAnniversaries,
+  saveDiaries,
+  type AnniversaryEntry,
+  type DiaryEntry
+} from "@/features/love/LovePanel";
+import {
+  hydrateIdiomCheckinFromCloud,
+  IDIOM_CHECKIN_KEY,
+  saveIdiomCheckin
+} from "@/features/exam/idiomData";
+import {
+  BACKGROUND_STORAGE_KEY,
+  hydrateBackgroundFromCloud,
+  saveBackground,
+  type BackgroundSource
+} from "@/theme/background";
 
 jest.mock("@/features/sync/cloudSync", () => ({
   hydrateFromCloud: jest.fn(async (_key: string, localValue: unknown) => localValue),
@@ -31,6 +51,10 @@ function makeStorage() {
 
 describe("cloud backed storage", () => {
   beforeEach(() => {
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: makeStorage()
+    });
     jest.clearAllMocks();
   });
 
@@ -73,5 +97,52 @@ describe("cloud backed storage", () => {
 
     expect(saveCloudValue).toHaveBeenCalledWith(WORKOUT_STORAGE_KEY, [log]);
     expect(hydrateFromCloud).toHaveBeenCalledWith(WORKOUT_STORAGE_KEY, [log], expect.any(Function));
+  });
+
+  it("syncs love diaries and anniversaries through the cloud key-value store", async () => {
+    const storage = makeStorage();
+    const diary: DiaryEntry = {
+      content: "今天一起散步",
+      createTime: "2026-08-02T08:00:00.000Z",
+      date: "2026-08-02",
+      id: "diary-cloud",
+      mood: "开心",
+      visibility: "couple_read"
+    };
+    const anniversary: AnniversaryEntry = {
+      date: "2026-08-02",
+      id: "anniversary-cloud",
+      repeatYearly: true,
+      title: "第一次旅行"
+    };
+
+    saveDiaries([diary], storage);
+    saveAnniversaries([anniversary], storage);
+    await hydrateLoveFromCloud(storage);
+
+    expect(saveCloudValue).toHaveBeenCalledWith(DIARY_KEY, [diary]);
+    expect(saveCloudValue).toHaveBeenCalledWith(ANNIVERSARY_KEY, [anniversary]);
+    expect(hydrateFromCloud).toHaveBeenCalledWith(DIARY_KEY, [diary], expect.any(Function));
+    expect(hydrateFromCloud).toHaveBeenCalledWith(ANNIVERSARY_KEY, [anniversary], expect.any(Function));
+  });
+
+  it("syncs idiom check-ins through the cloud key-value store", async () => {
+    const state = { dates: ["2026-08-02"], learnedIds: ["idiom-1"] };
+
+    saveIdiomCheckin(state);
+    await hydrateIdiomCheckinFromCloud();
+
+    expect(saveCloudValue).toHaveBeenCalledWith(IDIOM_CHECKIN_KEY, state);
+    expect(hydrateFromCloud).toHaveBeenCalledWith(IDIOM_CHECKIN_KEY, state, expect.any(Function));
+  });
+
+  it("syncs background selection through the cloud key-value store", async () => {
+    const source: BackgroundSource = { kind: "preset", uri: "/melifedesk/backgrounds/theme-dogs.jpg" };
+
+    saveBackground(source);
+    await hydrateBackgroundFromCloud();
+
+    expect(saveCloudValue).toHaveBeenCalledWith(BACKGROUND_STORAGE_KEY, source);
+    expect(hydrateFromCloud).toHaveBeenCalledWith(BACKGROUND_STORAGE_KEY, source, expect.any(Function));
   });
 });

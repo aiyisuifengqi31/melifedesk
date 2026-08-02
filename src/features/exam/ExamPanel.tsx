@@ -13,6 +13,7 @@ import {
 import {
   HEBEI_IDIOMS,
   IDIOM_PAIRS,
+  hydrateIdiomCheckinFromCloud,
   idiomStreak,
   loadIdiomCheckin,
   saveIdiomCheckin,
@@ -74,6 +75,11 @@ export function ExamPanel({ themeTokens }: { themeTokens: UiTokens }) {
     void hydrateStudyFromCloud().then((next) => {
       if (alive) {
         setStudy(next);
+      }
+    });
+    void hydrateIdiomCheckinFromCloud().then((next) => {
+      if (alive) {
+        setCheckin(next);
       }
     });
     return () => {

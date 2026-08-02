@@ -1,3 +1,5 @@
+import { hydrateFromCloud, saveCloudValue } from "@/features/sync/cloudSync";
+
 export type BackgroundSource =
   | { kind: "preset"; uri: string }
   | { kind: "custom"; uri: string };
@@ -9,7 +11,8 @@ export type BackgroundOption = {
   thumbnail?: string;
 };
 
-const STORAGE_KEY = "fanfan-guanguan.background.v1";
+export const BACKGROUND_STORAGE_KEY = "fanfan-guanguan.background.v1";
+const EMPTY_BACKGROUND: BackgroundSource = { kind: "preset", uri: "" };
 
 // 背景图作为静态文件随构建拷贝到 dist/backgrounds/，运行时按部署基路径拼接前缀。
 function assetBase(): string {
@@ -56,7 +59,7 @@ export function loadBackground(): BackgroundSource | null {
   if (typeof window === "undefined" || !window.localStorage) {
     return null;
   }
-  const raw = window.localStorage.getItem(STORAGE_KEY);
+  const raw = window.localStorage.getItem(BACKGROUND_STORAGE_KEY);
   if (!raw) {
     return null;
   }
@@ -75,11 +78,14 @@ export function saveBackground(source: BackgroundSource | null) {
   if (typeof window === "undefined" || !window.localStorage) {
     return;
   }
-  if (!source || !source.uri) {
-    window.localStorage.removeItem(STORAGE_KEY);
-  } else {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(source));
-  }
+  const next = source ?? EMPTY_BACKGROUND;
+  window.localStorage.setItem(BACKGROUND_STORAGE_KEY, JSON.stringify(next));
+  void saveCloudValue(BACKGROUND_STORAGE_KEY, next);
+}
+
+export async function hydrateBackgroundFromCloud(): Promise<BackgroundSource | null> {
+  const local = loadBackground();
+  return hydrateFromCloud<BackgroundSource | null>(BACKGROUND_STORAGE_KEY, local, (value) => saveBackground(value));
 }
 
 export function findBackgroundOption(source: BackgroundSource | null): BackgroundOption | undefined {

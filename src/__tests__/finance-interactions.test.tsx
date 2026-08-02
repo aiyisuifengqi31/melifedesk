@@ -42,9 +42,22 @@ describe("FinancePanel interactions", () => {
     render(<FinancePanel storage={makeStorage()} />);
 
     expect(screen.queryByText(/输入金额/)).toBeNull();
-    expect(screen.getByRole("button", { name: "选择分类：餐饮" })).toHaveStyle({ flexBasis: "22%" });
+    expect(screen.getByRole("button", { name: "选择分类：餐饮" })).toHaveStyle({
+      flexBasis: "22%",
+      flexDirection: "row"
+    });
     expect(screen.getByText("快速记一笔")).toBeOnTheScreen();
     expect(screen.getByTestId("finance-summary-panel")).toHaveStyle({ flexDirection: "row" });
+  });
+
+  it("shows only three summary metrics after removing monthly balance", () => {
+    render(<FinancePanel storage={makeStorage()} />);
+
+    expect(screen.getAllByText("今日支出").length).toBeGreaterThan(0);
+    expect(screen.getByText("本月支出")).toBeOnTheScreen();
+    expect(screen.getByText("本月收入")).toBeOnTheScreen();
+    expect(screen.queryByText("本月结余")).toBeNull();
+    expect(screen.getByTestId("finance-metric-今日支出")).toHaveStyle({ flexBasis: "31%" });
   });
 
   it("keeps large summary amounts inside their metric cards", () => {
@@ -75,7 +88,7 @@ describe("FinancePanel interactions", () => {
     expect(screen.getAllByText("今日支出").length).toBeGreaterThan(0);
     expect(screen.getByText("本月支出")).toBeOnTheScreen();
     expect(screen.getByText("本月收入")).toBeOnTheScreen();
-    expect(screen.getByText("本月结余")).toBeOnTheScreen();
+    expect(screen.queryByText("本月结余")).toBeNull();
     expect(screen.queryByText("今日收入")).toBeNull();
     expect(screen.queryByText("预算剩余")).toBeNull();
 
@@ -86,12 +99,12 @@ describe("FinancePanel interactions", () => {
     await waitFor(() => expect(screen.getAllByText("餐饮").length).toBeGreaterThan(1));
     expect(screen.getByText("支出已保存，统计已更新。")).toBeOnTheScreen();
     expect(screen.getAllByText("¥25.50").length).toBeGreaterThan(0);
-    expect(screen.getByText("¥-25.50")).toBeOnTheScreen();
+    expect(screen.queryByText("¥-25.50")).toBeNull();
 
     fireEvent.press(screen.getByRole("button", { name: "统计" }));
     expect(screen.getByText("近7天支出趋势")).toBeOnTheScreen();
     expect(screen.getByText("本月分类占比")).toBeOnTheScreen();
-    expect(screen.getByText("本月结余 = 本月收入 ¥0.00 - 本月支出 ¥25.50")).toBeOnTheScreen();
+    expect(screen.queryByText(/本月结余/)).toBeNull();
 
     fireEvent.press(screen.getByRole("button", { name: "记录" }));
     expect(screen.getByRole("button", { name: "支出明细" })).toBeOnTheScreen();

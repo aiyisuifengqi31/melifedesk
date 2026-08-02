@@ -1,3 +1,5 @@
+import { hydrateFromCloud, saveCloudValue } from "@/features/sync/cloudSync";
+
 export type IdiomEntry = {
   freq: number;
   id: string;
@@ -191,6 +193,12 @@ export function loadIdiomCheckin(): IdiomCheckinState {
 
 export function saveIdiomCheckin(state: IdiomCheckinState) {
   getStorage()?.setItem(IDIOM_CHECKIN_KEY, JSON.stringify(state));
+  void saveCloudValue(IDIOM_CHECKIN_KEY, state);
+}
+
+export async function hydrateIdiomCheckinFromCloud(): Promise<IdiomCheckinState> {
+  const local = loadIdiomCheckin();
+  return hydrateFromCloud<IdiomCheckinState>(IDIOM_CHECKIN_KEY, local, (value) => saveIdiomCheckin(value));
 }
 
 export function idiomStreak(dates: string[]): number {

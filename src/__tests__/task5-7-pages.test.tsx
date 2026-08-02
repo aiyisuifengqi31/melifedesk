@@ -6,9 +6,10 @@ describe("Task 5 and Task 7 pages", () => {
   it("renders the finance workspace controls", () => {
     render(<FinancePanel />);
 
-    for (const label of ["记录", "统计", "份子", "储蓄", "分类", "今日支出", "本月支出", "本月收入", "本月结余", "支出明细", "收入明细"]) {
+    for (const label of ["记录", "统计", "份子", "储蓄", "分类", "今日支出", "本月支出", "本月收入", "支出明细", "收入明细"]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
+    expect(screen.queryByText("本月结余")).toBeNull();
     expect(screen.queryByText("今日收入")).toBeNull();
     expect(screen.queryByText("预算剩余")).toBeNull();
     expect(screen.getByPlaceholderText("0.00")).toBeOnTheScreen();

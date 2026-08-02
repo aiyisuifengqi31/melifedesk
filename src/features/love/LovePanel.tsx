@@ -1,12 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
 import type { UiTokens } from "@/shared/ui/primitives";
+import { hydrateFromCloud, saveCloudValue } from "@/features/sync/cloudSync";
 
 type LoveTab = "diary" | "anniversary";
 type DiaryVisibility = "private" | "couple_read";
 
-type DiaryEntry = {
+export type DiaryEntry = {
   content: string;
   createTime: string;
   date: string;
@@ -15,20 +16,20 @@ type DiaryEntry = {
   visibility: DiaryVisibility;
 };
 
-type AnniversaryEntry = {
+export type AnniversaryEntry = {
   date: string;
   id: string;
   repeatYearly: boolean;
   title: string;
 };
 
-type LoveStorage = {
+export type LoveStorage = {
   getItem: (key: string) => string | null;
   setItem: (key: string, value: string) => void;
 };
 
-const DIARY_KEY = "fanfan-guanguan.love.diaries.v1";
-const ANNIVERSARY_KEY = "fanfan-guanguan.love.anniversaries.v1";
+export const DIARY_KEY = "fanfan-guanguan.love.diaries.v1";
+export const ANNIVERSARY_KEY = "fanfan-guanguan.love.anniversaries.v1";
 const moods = ["开心", "甜蜜", "平静", "难过", "生气", "疲惫"];
 const moodIcons: Record<string, string> = {
   开心: "😊",
@@ -64,9 +65,23 @@ export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: Ui
   const [repeatYearly, setRepeatYearly] = useState(false);
   const [feedback, setFeedback] = useState("写下今天的小瞬间。");
   const [diaryHeight, setDiaryHeight] = useState(44);
+  const localDirtyRef = useRef(false);
 
   const [diaryDatePickerOpen, setDiaryDatePickerOpen] = useState(false);
   const [anniversaryDatePickerOpen, setAnniversaryDatePickerOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void hydrateLoveFromCloud(loveStorage).then((next) => {
+      if (!cancelled && !localDirtyRef.current) {
+        setDiaries(next.diaries);
+        setAnniversaries(next.anniversaries);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loveStorage]);
 
   const saveDiary = () => {
     const cleanContent = content.trim();
@@ -85,7 +100,8 @@ export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: Ui
     };
     const nextEntries = [entry, ...diaries];
     setDiaries(nextEntries);
-    loveStorage.setItem(DIARY_KEY, JSON.stringify(nextEntries));
+    localDirtyRef.current = true;
+    saveDiaries(nextEntries, loveStorage);
     setContent("");
     setFeedback("日记已保存。");
   };
@@ -105,7 +121,8 @@ export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: Ui
     };
     const nextEntries = [entry, ...anniversaries];
     setAnniversaries(nextEntries);
-    loveStorage.setItem(ANNIVERSARY_KEY, JSON.stringify(nextEntries));
+    localDirtyRef.current = true;
+    saveAnniversaries(nextEntries, loveStorage);
     setAnniversaryTitle("");
     setFeedback("纪念日已添加。");
   };
@@ -113,14 +130,16 @@ export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: Ui
   const deleteDiary = (id: string) => {
     const nextEntries = diaries.filter((entry) => entry.id !== id);
     setDiaries(nextEntries);
-    loveStorage.setItem(DIARY_KEY, JSON.stringify(nextEntries));
+    localDirtyRef.current = true;
+    saveDiaries(nextEntries, loveStorage);
     setFeedback("日记已删除。");
   };
 
   const deleteAnniversary = (id: string) => {
     const nextEntries = anniversaries.filter((entry) => entry.id !== id);
     setAnniversaries(nextEntries);
-    loveStorage.setItem(ANNIVERSARY_KEY, JSON.stringify(nextEntries));
+    localDirtyRef.current = true;
+    saveAnniversaries(nextEntries, loveStorage);
     setFeedback("纪念日已删除。");
   };
 
@@ -293,6 +312,26 @@ function loadArray<T>(storage: LoveStorage, key: string) {
   } catch {
     return [];
   }
+}
+
+export function saveDiaries(entries: DiaryEntry[], storage: LoveStorage = getDefaultLoveStorage()) {
+  storage.setItem(DIARY_KEY, JSON.stringify(entries));
+  void saveCloudValue(DIARY_KEY, entries);
+}
+
+export function saveAnniversaries(entries: AnniversaryEntry[], storage: LoveStorage = getDefaultLoveStorage()) {
+  storage.setItem(ANNIVERSARY_KEY, JSON.stringify(entries));
+  void saveCloudValue(ANNIVERSARY_KEY, entries);
+}
+
+export async function hydrateLoveFromCloud(storage: LoveStorage = getDefaultLoveStorage()): Promise<{ anniversaries: AnniversaryEntry[]; diaries: DiaryEntry[] }> {
+  const localDiaries = loadArray<DiaryEntry>(storage, DIARY_KEY);
+  const localAnniversaries = loadArray<AnniversaryEntry>(storage, ANNIVERSARY_KEY);
+  const [diaries, anniversaries] = await Promise.all([
+    hydrateFromCloud<DiaryEntry[]>(DIARY_KEY, localDiaries, (value) => saveDiaries(value, storage)),
+    hydrateFromCloud<AnniversaryEntry[]>(ANNIVERSARY_KEY, localAnniversaries, (value) => saveAnniversaries(value, storage))
+  ]);
+  return { anniversaries, diaries };
 }
 
 function createLoveId(prefix: string) {
