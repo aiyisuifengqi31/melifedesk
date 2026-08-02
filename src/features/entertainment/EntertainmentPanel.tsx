@@ -320,12 +320,11 @@ function createStyles(tokens: UiTokens) {
       gap: 10
     },
     floatingTabs: {
-      bottom: 14,
+      bottom: 10,
       elevation: 10,
-      left: 86,
-      maxWidth: 500,
+      left: 76,
       position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
-      right: 14,
+      right: 10,
       shadowColor: "#000000",
       shadowOffset: { width: 0, height: 8 },
       shadowOpacity: 0.12,
@@ -470,7 +469,8 @@ function createStyles(tokens: UiTokens) {
       borderRadius: 14,
       flexDirection: "row",
       gap: 4,
-      padding: 4
+      padding: 4,
+      width: "auto"
     },
     trendBody: {
       flex: 1,

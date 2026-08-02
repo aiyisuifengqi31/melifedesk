@@ -153,6 +153,14 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
 
   return (
     <View style={styles.root}>
+      {quickMenuOpen ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="关闭快捷入口背景"
+          onPress={() => setQuickMenuOpen(false)}
+          style={styles.quickDismissLayer}
+        />
+      ) : null}
       <View testID="primary-sidebar" nativeID="sidebar" style={styles.sidebar}>
         <View style={styles.sidebarTop}>
           <View style={styles.sidebarHeader}>
@@ -466,20 +474,28 @@ function createStyles(tokens: ReturnType<typeof getTheme>["tokens"][ColorMode], 
       position: "relative"
     },
     quickActionFinance: {
-      bottom: 8,
-      left: compactSidebar ? 68 : sidebarWidth - 12
+      bottom: 14,
+      left: compactSidebar ? 82 : sidebarWidth - 2
     },
     quickActionNotes: {
-      bottom: 98,
-      left: compactSidebar ? 34 : sidebarWidth - 78
+      bottom: 200,
+      left: compactSidebar ? 34 : sidebarWidth - 84
     },
     quickActionPackages: {
-      bottom: 48,
-      left: compactSidebar ? 82 : sidebarWidth + 2
+      bottom: 76,
+      left: compactSidebar ? 104 : sidebarWidth + 18
     },
     quickActionTodos: {
-      bottom: 84,
-      left: compactSidebar ? 80 : sidebarWidth - 8
+      bottom: 138,
+      left: compactSidebar ? 82 : sidebarWidth - 2
+    },
+    quickDismissLayer: {
+      bottom: 0,
+      left: 0,
+      position: "absolute",
+      right: 0,
+      top: 0,
+      zIndex: 12
     },
     quickDock: {
       alignItems: "center",
@@ -509,10 +525,10 @@ function createStyles(tokens: ReturnType<typeof getTheme>["tokens"][ColorMode], 
     },
     quickMenu: {
       bottom: 8,
-      height: 160,
+      height: 260,
       left: 0,
       position: "absolute",
-      width: compactSidebar ? 150 : sidebarWidth + 72,
+      width: compactSidebar ? 174 : sidebarWidth + 92,
       zIndex: 90
     },
     settingsFab: {
