@@ -53,7 +53,7 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
   useEffect(() => {
     const timer = setTimeout(() => {
       onStart();
-    }, 2000);
+    }, 800);
     return () => clearTimeout(timer);
   }, [onStart]);
 
