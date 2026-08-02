@@ -1,5 +1,7 @@
 import { getSupabasePublicConfig } from "@/auth/supabaseConfig";
+import { buildSupabaseClientOptions } from "@/auth/supabaseClient";
 import { buildUserSettingsPatch } from "@/auth/userSettings";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 describe("Task 2 auth client configuration", () => {
   const savedUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -49,5 +51,16 @@ describe("Task 2 auth client configuration", () => {
       workspace_title: "今天一起变强"
     });
     expect(JSON.stringify(patch)).not.toContain("app_name_override");
+  });
+
+  it("uses native persistent auth storage for Android app builds", () => {
+    expect(buildSupabaseClientOptions("android").auth).toMatchObject({
+      autoRefreshToken: true,
+      detectSessionInUrl: false,
+      persistSession: true,
+      storage: AsyncStorage
+    });
+    expect(buildSupabaseClientOptions("web").auth.storage).toBeUndefined();
+    expect(buildSupabaseClientOptions("web").auth.detectSessionInUrl).toBe(true);
   });
 });
