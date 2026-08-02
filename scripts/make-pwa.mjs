@@ -9,6 +9,8 @@ import {
   readdirSync,
   statSync,
   mkdirSync,
+  renameSync,
+  rmSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -61,6 +63,18 @@ if (existsSync(bgSrcDir)) {
 }
 
 // 3) 写入 manifest.json
+// GitHub Pages can be inconsistent with framework-generated underscore paths.
+// Serve the Expo runtime from a plain directory and rewrite generated HTML below.
+const expoRuntimeDir = join(dist, '_expo');
+const publishedRuntimeDir = join(dist, 'expo-static');
+if (existsSync(expoRuntimeDir)) {
+  if (existsSync(publishedRuntimeDir)) {
+    rmSync(publishedRuntimeDir, { recursive: true, force: true });
+  }
+  renameSync(expoRuntimeDir, publishedRuntimeDir);
+  console.log('[make-pwa] 已重命名运行时目录 _expo -> expo-static');
+}
+
 const manifest = {
   name: NAME,
   short_name: SHORT,
@@ -157,6 +171,7 @@ const swScript = `<script>if('serviceWorker' in navigator){window.addEventListen
 let injected = 0;
 for (const file of htmlFiles) {
   let html = readFileSync(file, 'utf8');
+  html = html.replaceAll(withBase('/_expo/'), withBase('/expo-static/'));
   if (html.includes('serviceWorker.register')) continue; // 已注入，跳过
   if (html.includes('</head>')) {
     html = html.replace('</head>', `${tags}${swScript}</head>`);
