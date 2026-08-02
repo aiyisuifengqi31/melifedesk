@@ -12,6 +12,8 @@ const WIDGET_HEIGHT = 210;
 const LIST_HEIGHT = 156;
 
 type HomePanelProps = {
+  shortcutNonce?: number;
+  shortcutView?: "notes" | "todos";
   storage?: TodoStorage;
   themeTokens: UiTokens;
 };
@@ -38,7 +40,7 @@ function greeting(): string {
   return "晚上好";
 }
 
-export function HomePanel({ storage, themeTokens }: HomePanelProps) {
+export function HomePanel({ shortcutNonce, shortcutView, storage, themeTokens }: HomePanelProps) {
   const todoStorage = useMemo(() => storage ?? getDefaultTodoStorage(), [storage]);
   const [todos, setTodos] = useState<TodoTask[]>(() => loadLocalTodos(todoStorage));
   const [viewState, setViewState] = useState<ViewState>("home");
@@ -48,6 +50,12 @@ export function HomePanel({ storage, themeTokens }: HomePanelProps) {
 
   const completedCount = todos.filter((t) => t.completed).length;
   const notesCount = notes.length;
+
+  useEffect(() => {
+    if (shortcutView) {
+      setViewState(shortcutView);
+    }
+  }, [shortcutNonce, shortcutView]);
 
   useEffect(() => {
     let cancelled = false;

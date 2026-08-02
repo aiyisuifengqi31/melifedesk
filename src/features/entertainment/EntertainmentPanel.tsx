@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import type { UiTokens } from "@/shared/ui/primitives";
 import {
@@ -60,18 +60,6 @@ export function EntertainmentPanel({ themeTokens: tokens }: EntertainmentPanelPr
       <View style={styles.hero}>
         <Text style={styles.heroTitle}>娱乐</Text>
         <Text style={styles.heroSub}>实时热榜、穿搭灵感与妆容教程</Text>
-      </View>
-
-      <View style={styles.tabs}>
-        <Pressable accessibilityRole="button" accessibilityLabel="热点推荐" onPress={() => setTab("trend")} style={[styles.tab, tab === "trend" ? styles.tabActive : null]}>
-          <Text style={[styles.tabText, tab === "trend" ? styles.tabTextActive : null]}>📰 热点</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="衣服推荐" onPress={() => setTab("fashion")} style={[styles.tab, tab === "fashion" ? styles.tabActive : null]}>
-          <Text style={[styles.tabText, tab === "fashion" ? styles.tabTextActive : null]}>👗 穿搭</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="化妆教程" onPress={() => setTab("makeup")} style={[styles.tab, tab === "makeup" ? styles.tabActive : null]}>
-          <Text style={[styles.tabText, tab === "makeup" ? styles.tabTextActive : null]}>💄 化妆</Text>
-        </Pressable>
       </View>
 
       {tab === "trend" ? (
@@ -246,6 +234,17 @@ export function EntertainmentPanel({ themeTokens: tokens }: EntertainmentPanelPr
           </View>
         </View>
       ) : null}
+      <View testID="entertainment-floating-tabs" style={[styles.tabs, styles.floatingTabs]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="热点推荐" onPress={() => setTab("trend")} style={[styles.tab, tab === "trend" ? styles.tabActive : null]}>
+          <Text style={[styles.tabText, tab === "trend" ? styles.tabTextActive : null]}>📰 热点</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="衣服推荐" onPress={() => setTab("fashion")} style={[styles.tab, tab === "fashion" ? styles.tabActive : null]}>
+          <Text style={[styles.tabText, tab === "fashion" ? styles.tabTextActive : null]}>👗 穿搭</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="化妆教程" onPress={() => setTab("makeup")} style={[styles.tab, tab === "makeup" ? styles.tabActive : null]}>
+          <Text style={[styles.tabText, tab === "makeup" ? styles.tabTextActive : null]}>💄 化妆</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -319,6 +318,19 @@ function createStyles(tokens: UiTokens) {
     },
     fashionFilters: {
       gap: 10
+    },
+    floatingTabs: {
+      bottom: 14,
+      elevation: 10,
+      left: 86,
+      maxWidth: 500,
+      position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
+      right: 14,
+      shadowColor: "#000000",
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.12,
+      shadowRadius: 18,
+      zIndex: 80
     },
     genderChip: {
       borderRadius: 999,
@@ -432,7 +444,9 @@ function createStyles(tokens: UiTokens) {
       gap: 8
     },
     stack: {
-      gap: 16
+      gap: 16,
+      paddingBottom: 84,
+      position: "relative"
     },
     tab: {
       alignItems: "center",

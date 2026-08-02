@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { hydrateFromCloud, saveCloudValue } from "@/features/sync/cloudSync";
@@ -158,11 +158,6 @@ export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: Ui
         <Text style={styles.heroSub}>记录每一个甜蜜瞬间</Text>
       </View>
 
-      <View style={styles.tabs}>
-        <TabButton active={tab === "diary"} label="日记" onPress={() => setTab("diary")} />
-        <TabButton active={tab === "anniversary"} label="纪念日" onPress={() => setTab("anniversary")} />
-      </View>
-
       {tab === "diary" ? (
         <>
           <View style={styles.card}>
@@ -290,6 +285,10 @@ export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: Ui
           )}
         </>
       ) : null}
+      <View testID="love-floating-tabs" style={[styles.tabs, styles.floatingTabs]}>
+        <TabButton active={tab === "diary"} label="日记" onPress={() => setTab("diary")} />
+        <TabButton active={tab === "anniversary"} label="纪念日" onPress={() => setTab("anniversary")} />
+      </View>
     </View>
   );
 }
@@ -469,6 +468,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800"
   },
+  floatingTabs: {
+    bottom: 14,
+    elevation: 10,
+    left: 86,
+    maxWidth: 440,
+    position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
+    right: 14,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    zIndex: 80
+  },
   hero: {
     gap: 6
   },
@@ -548,7 +560,9 @@ const styles = StyleSheet.create({
     gap: 10
   },
   stack: {
-    gap: 18
+    gap: 18,
+    paddingBottom: 84,
+    position: "relative"
   },
   switchThumb: {
     backgroundColor: "#ffffff",

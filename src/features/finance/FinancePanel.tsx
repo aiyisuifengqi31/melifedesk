@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View, type NativeSyntheticEvent, type TextInputChangeEventData } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, TextInput, View, type NativeSyntheticEvent, type TextInputChangeEventData } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
@@ -361,23 +361,18 @@ export function FinancePanel({ storage }: FinancePanelProps) {
 
   return (
     <View style={styles.stack}>
-      <View style={styles.tabs}>
-        <TabButton active={tab === "record"} label="记录" onPress={() => setTab("record")} />
-        <TabButton active={tab === "stats"} label="统计" onPress={() => setTab("stats")} />
-        <TabButton active={tab === "gifts"} label="份子" onPress={() => setTab("gifts")} />
-        <TabButton active={tab === "saving"} label="储蓄" onPress={() => setTab("saving")} />
-        <TabButton active={tab === "category"} label="分类" onPress={() => setTab("category")} />
-      </View>
-
       <View style={styles.overviewCard}>
         <View style={styles.overviewHeader}>
           <Text style={styles.overviewTitle}>支出</Text>
           <Text style={styles.overviewSubTitle}>今日与本月概览</Text>
         </View>
-        <View testID="finance-summary-panel" style={styles.metricGrid}>
-          <Metric count={`${todayExpenseCount} 笔`} title="今日支出" value={`¥${summary.todayExpense}`} />
-          <Metric count={`${monthExpenseCount} 笔`} title="本月支出" value={`¥${summary.monthExpense}`} />
-          <Metric count={`${monthIncomeCount} 笔`} title="本月收入" value={`¥${summary.monthIncome}`} />
+        <View testID="finance-summary-panel" style={styles.overviewMetricStack}>
+          <View style={styles.metricGrid}>
+            <Metric count={`${todayExpenseCount} 笔`} title="今日支出" value={`¥${summary.todayExpense}`} />
+            <Metric count={`${monthExpenseCount} 笔`} title="本月支出" value={`¥${summary.monthExpense}`} />
+            <Metric count={`${monthIncomeCount} 笔`} title="本月收入" value={`¥${summary.monthIncome}`} />
+          </View>
+          <Metric count="收入 - 支出" title="本月结余" value={`¥${summary.monthBalance}`} wide />
         </View>
       </View>
 
@@ -638,6 +633,13 @@ export function FinancePanel({ storage }: FinancePanelProps) {
           ))}
         </>
       ) : null}
+      <View testID="finance-floating-tabs" style={[styles.tabs, styles.floatingTabs]}>
+        <TabButton active={tab === "record"} label="记录" onPress={() => setTab("record")} />
+        <TabButton active={tab === "stats"} label="统计" onPress={() => setTab("stats")} />
+        <TabButton active={tab === "gifts"} label="份子" onPress={() => setTab("gifts")} />
+        <TabButton active={tab === "saving"} label="储蓄" onPress={() => setTab("saving")} />
+        <TabButton active={tab === "category"} label="分类" onPress={() => setTab("category")} />
+      </View>
     </View>
   );
 }
@@ -650,10 +652,10 @@ function TabButton({ active, label, onPress }: { active: boolean; label: string;
   );
 }
 
-function Metric({ count, title, value }: { count: string; title: string; value: string }) {
+function Metric({ count, title, value, wide = false }: { count: string; title: string; value: string; wide?: boolean }) {
   const compactValue = value.length > 9;
   return (
-    <View testID={`finance-metric-${title}`} style={styles.metric}>
+    <View testID={`finance-metric-${title}`} style={[styles.metric, wide ? styles.metricWide : null]}>
       <Text style={styles.metricTitle}>{title}</Text>
       <Text numberOfLines={1} style={[styles.metricValue, compactValue ? styles.metricValueCompact : null]}>{value}</Text>
       <Text style={styles.metricCount}>{count}</Text>
@@ -1171,6 +1173,19 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "900"
   },
+  floatingTabs: {
+    bottom: 14,
+    elevation: 10,
+    left: 86,
+    maxWidth: 560,
+    position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
+    right: 14,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    zIndex: 80
+  },
   metric: {
     alignItems: "flex-start",
     backgroundColor: "#f8fbff",
@@ -1181,8 +1196,12 @@ const styles = StyleSheet.create({
     flexBasis: "31%",
     minWidth: 0,
     overflow: "hidden",
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 9
+  },
+  metricWide: {
+    flexBasis: "100%",
+    width: "100%"
   },
   metricCount: {
     color: "#697386",
@@ -1203,13 +1222,13 @@ const styles = StyleSheet.create({
   metricValue: {
     color: "#1fa8e2",
     flexShrink: 1,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "900",
     marginTop: 2,
     maxWidth: "100%"
   },
   metricValueCompact: {
-    fontSize: 13,
+    fontSize: 12,
     letterSpacing: 0
   },
   overviewCard: {
@@ -1224,6 +1243,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
     shadowRadius: 14
+  },
+  overviewMetricStack: {
+    gap: 8
   },
   overviewHeader: {
     alignItems: "flex-end",
@@ -1430,7 +1452,9 @@ const styles = StyleSheet.create({
     fontWeight: "500"
   },
   stack: {
-    gap: 18
+    gap: 18,
+    paddingBottom: 84,
+    position: "relative"
   },
   tab: {
     alignItems: "center",

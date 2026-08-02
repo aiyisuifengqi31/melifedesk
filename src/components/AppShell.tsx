@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ViewStyle } from "react-native";
 
 import { saveUserSettings } from "@/auth/authRepository";
 import { getSupabaseClient } from "@/auth/supabaseClient";
@@ -27,6 +27,11 @@ type AppShellProps = {
   onNavigate?: (href: NavItem["href"]) => void;
 };
 
+type ShortcutRequest = {
+  kind: "notes" | "todos" | "packages" | "finance";
+  nonce: number;
+};
+
 const app = getPublicAppConfig();
 
 export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }: AppShellProps) {
@@ -35,6 +40,8 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const [currentRoute, setCurrentRoute] = useState(route ?? initialRoute);
   const [collapsed, setCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [quickMenuOpen, setQuickMenuOpen] = useState(false);
+  const [shortcutRequest, setShortcutRequest] = useState<ShortcutRequest | null>(null);
   const [themeId, setThemeId] = useState<ThemeId>(() => readStoredThemeId(typeof window === "undefined" ? undefined : window.localStorage) ?? "default");
   const [mode, setMode] = useState<ColorMode>(() => readStoredColorMode(typeof window === "undefined" ? undefined : window.localStorage) ?? "light");
   const [profile, setProfile] = useState<AppProfile>(() => loadProfile());
@@ -87,6 +94,20 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   }, []);
 
   const handleNavigate = (href: NavItem["href"]) => {
+    setQuickMenuOpen(false);
+    setShortcutRequest(null);
+    if (onNavigate) {
+      onNavigate(href);
+      return;
+    }
+    setCurrentRoute(href);
+  };
+
+  const openShortcut = (kind: ShortcutRequest["kind"]) => {
+    const href: NavItem["href"] = kind === "packages" ? "/plan" : kind === "finance" ? "/finance" : "/home";
+    setQuickMenuOpen(false);
+    setSettingsOpen(false);
+    setShortcutRequest((previous) => ({ kind, nonce: (previous?.nonce ?? 0) + 1 }));
     if (onNavigate) {
       onNavigate(href);
       return;
@@ -175,6 +196,25 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
         </View>
 
         <View style={styles.sidebarFooter}>
+          <View style={styles.quickDock}>
+            {quickMenuOpen ? (
+              <View testID="quick-shortcut-menu" style={styles.quickMenu}>
+                <ShortcutButton label="备忘录" style={styles.quickActionNotes} onPress={() => openShortcut("notes")} />
+                <ShortcutButton label="待办" style={styles.quickActionTodos} onPress={() => openShortcut("todos")} />
+                <ShortcutButton label="快递" style={styles.quickActionPackages} onPress={() => openShortcut("packages")} />
+                <ShortcutButton label="支出" style={styles.quickActionFinance} onPress={() => openShortcut("finance")} />
+              </View>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={quickMenuOpen ? "关闭快捷入口" : "打开快捷入口"}
+              onLongPress={() => setQuickMenuOpen(true)}
+              onPress={() => setQuickMenuOpen((value) => !value)}
+              style={styles.quickFab}
+            >
+              <Text style={styles.quickFabText}>+</Text>
+            </Pressable>
+          </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="设置"
@@ -195,12 +235,12 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
           style={styles.content}
         >
           <ScrollView testID="page-content" nativeID="page-content" style={styles.contentScroll} contentContainerStyle={styles.contentInner}>
-            <PageContent activeKey={activeKey} handleNavigate={handleNavigate} styles={styles} themeEmptyState={theme.emptyState} tokens={tokens} />
+            <PageContent activeKey={activeKey} handleNavigate={handleNavigate} shortcutRequest={shortcutRequest} styles={styles} themeEmptyState={theme.emptyState} tokens={tokens} />
           </ScrollView>
         </ImageBackground>
       ) : (
         <ScrollView testID="page-content" nativeID="page-content" style={styles.content} contentContainerStyle={styles.contentInner}>
-          <PageContent activeKey={activeKey} handleNavigate={handleNavigate} styles={styles} themeEmptyState={theme.emptyState} tokens={tokens} />
+          <PageContent activeKey={activeKey} handleNavigate={handleNavigate} shortcutRequest={shortcutRequest} styles={styles} themeEmptyState={theme.emptyState} tokens={tokens} />
         </ScrollView>
       )}
 
@@ -225,20 +265,22 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
 function PageContent({
   activeKey,
   handleNavigate,
+  shortcutRequest,
   styles,
   themeEmptyState,
   tokens
 }: {
   activeKey: string;
   handleNavigate: (href: NavItem["href"]) => void;
+  shortcutRequest: ShortcutRequest | null;
   styles: ReturnType<typeof createStyles>;
   themeEmptyState: string;
   tokens: ReturnType<typeof getTheme>["tokens"][ColorMode];
 }) {
   return (
     <>
-      {activeKey === "home" ? <HomePanel themeTokens={tokens} /> : null}
-      {activeKey === "plan" ? <DailyPlanPanel themeTokens={tokens} /> : null}
+      {activeKey === "home" ? <HomePanel shortcutNonce={shortcutRequest?.nonce} shortcutView={shortcutRequest?.kind === "notes" || shortcutRequest?.kind === "todos" ? shortcutRequest.kind : undefined} themeTokens={tokens} /> : null}
+      {activeKey === "plan" ? <DailyPlanPanel shortcutNonce={shortcutRequest?.nonce} shortcutTarget={shortcutRequest?.kind === "packages" ? "packages" : undefined} themeTokens={tokens} /> : null}
       {activeKey === "workout" ? <WorkoutPanel /> : null}
       {activeKey === "finance" ? <FinancePanel /> : null}
       {activeKey === "love" ? <LovePanel themeTokens={tokens} /> : null}
@@ -248,6 +290,36 @@ function PageContent({
     </>
   );
 }
+
+function ShortcutButton({ label, onPress, style }: { label: string; onPress: () => void; style: ViewStyle }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}快捷入口`} onPress={onPress} style={[shortcutButtonBase, style]}>
+      <Text style={shortcutButtonText}>{label}</Text>
+    </Pressable>
+  );
+}
+
+const shortcutButtonBase = {
+  alignItems: "center" as const,
+  backgroundColor: "#ffffff",
+  borderColor: "#dce8dc",
+  borderRadius: 999,
+  borderWidth: 1,
+  height: 54,
+  justifyContent: "center" as const,
+  position: "absolute" as const,
+  shadowColor: "#000000",
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.14,
+  shadowRadius: 10,
+  width: 54
+};
+
+const shortcutButtonText = {
+  color: "#1f2937",
+  fontSize: 12,
+  fontWeight: "900" as const
+};
 
 function GenericModuleSkeleton({ themeEmptyState, styles }: { themeEmptyState: string; styles: ReturnType<typeof createStyles> }) {
   return (
@@ -390,7 +462,58 @@ function createStyles(tokens: ReturnType<typeof getTheme>["tokens"][ColorMode], 
     },
     sidebarFooter: {
       alignItems: "center",
+      gap: 8,
       position: "relative"
+    },
+    quickActionFinance: {
+      bottom: 8,
+      left: compactSidebar ? 68 : sidebarWidth - 12
+    },
+    quickActionNotes: {
+      bottom: 98,
+      left: compactSidebar ? 34 : sidebarWidth - 78
+    },
+    quickActionPackages: {
+      bottom: 48,
+      left: compactSidebar ? 82 : sidebarWidth + 2
+    },
+    quickActionTodos: {
+      bottom: 84,
+      left: compactSidebar ? 80 : sidebarWidth - 8
+    },
+    quickDock: {
+      alignItems: "center",
+      height: 46,
+      justifyContent: "center",
+      position: "relative",
+      width: "100%",
+      zIndex: 70
+    },
+    quickFab: {
+      alignItems: "center",
+      backgroundColor: tokens.accent,
+      borderRadius: 999,
+      height: 44,
+      justifyContent: "center",
+      shadowColor: tokens.accent,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.22,
+      shadowRadius: 10,
+      width: 44
+    },
+    quickFabText: {
+      color: "#ffffff",
+      fontSize: 28,
+      fontWeight: "700",
+      lineHeight: 32
+    },
+    quickMenu: {
+      bottom: 8,
+      height: 160,
+      left: 0,
+      position: "absolute",
+      width: compactSidebar ? 150 : sidebarWidth + 72,
+      zIndex: 90
     },
     settingsFab: {
       alignItems: "center",

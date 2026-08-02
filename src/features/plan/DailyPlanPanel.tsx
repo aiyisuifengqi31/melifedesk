@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import type { UiTokens } from "@/shared/ui/primitives";
@@ -7,6 +7,8 @@ import { resolveCurrentCityWeather, weatherEmoji, type WeatherState } from "@/fe
 import { PackagePanel } from "./PackagePanel";
 
 type DailyPlanPanelProps = {
+  shortcutNonce?: number;
+  shortcutTarget?: "packages";
   storage?: unknown;
   themeTokens: UiTokens;
 };
@@ -19,7 +21,8 @@ type MonthDay = {
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
-export function DailyPlanPanel({ themeTokens }: DailyPlanPanelProps) {
+export function DailyPlanPanel({ shortcutNonce, shortcutTarget, themeTokens }: DailyPlanPanelProps) {
+  const scrollRef = useRef<ScrollView>(null);
   const [weather, setWeather] = useState<WeatherState>({ message: "点击后获取当前城市实时天气。", status: "idle" });
 
   const loadWeather = async () => {
@@ -29,8 +32,16 @@ export function DailyPlanPanel({ themeTokens }: DailyPlanPanelProps) {
 
   const today = todayIso();
 
+  useEffect(() => {
+    if (shortcutTarget !== "packages") return;
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [shortcutNonce, shortcutTarget]);
+
   return (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.stack}>
+    <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.stack}>
       <WeatherCard onRefresh={loadWeather} weather={weather} />
 
       <MonthCalendar onSelectDate={(date) => { /* 选中日期，未来可联动筛选当日待办 */ }} selectedDate={today} />
