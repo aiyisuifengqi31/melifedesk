@@ -5,7 +5,8 @@ const app = {
   slug: "fanfan-guanguan",
   scheme: "fanfan-guanguan",
   androidPackage: "com.fanfan.guanguan",
-  iosBundleIdentifier: "com.fanfan.guanguan"
+  iosBundleIdentifier: "com.fanfan.guanguan",
+  easProjectId: "23bcfc0e-34cc-413c-9ba2-da897f4510cb"
 };
 
 export default (): ExpoConfig => {
@@ -49,6 +50,11 @@ export default (): ExpoConfig => {
     experiments: {
       baseUrl: process.env.PAGES_BASE_URL || "",
       typedRoutes: true
+    },
+    extra: {
+      eas: {
+        projectId: app.easProjectId
+      }
     }
   };
 };

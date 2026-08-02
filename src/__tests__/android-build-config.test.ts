@@ -34,5 +34,6 @@ describe("Android app build configuration", () => {
     expect(config.slug).toBe("fanfan-guanguan");
     expect(config.android?.package).toBe("com.fanfan.guanguan");
     expect(config.android?.versionCode).toBe(1);
+    expect(config.extra?.eas?.projectId).toBe("23bcfc0e-34cc-413c-9ba2-da897f4510cb");
   });
 });
