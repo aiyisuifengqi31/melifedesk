@@ -1,3 +1,5 @@
+import { hydrateFromCloud, saveCloudValue } from "@/features/sync/cloudSync";
+
 export type WorkoutStatus = "trained" | "rest";
 export type WorkoutIntensity = "easy" | "moderate" | "hard";
 
@@ -77,7 +79,14 @@ export function loadLocalWorkouts(storage: WorkoutStorage = getDefaultWorkoutSto
 }
 
 export function saveLocalWorkouts(logs: WorkoutLog[], storage: WorkoutStorage = getDefaultWorkoutStorage()) {
-  storage.setItem(WORKOUT_STORAGE_KEY, JSON.stringify(sortWorkoutLogs(logs)));
+  const sorted = sortWorkoutLogs(logs);
+  storage.setItem(WORKOUT_STORAGE_KEY, JSON.stringify(sorted));
+  void saveCloudValue(WORKOUT_STORAGE_KEY, sorted);
+}
+
+export async function hydrateWorkoutsFromCloud(storage: WorkoutStorage = getDefaultWorkoutStorage()): Promise<WorkoutLog[]> {
+  const local = loadLocalWorkouts(storage);
+  return hydrateFromCloud<WorkoutLog[]>(WORKOUT_STORAGE_KEY, local, (value) => saveLocalWorkouts(value, storage));
 }
 
 export function clearLocalWorkoutsForTests(storage: WorkoutStorage = memoryStorage) {

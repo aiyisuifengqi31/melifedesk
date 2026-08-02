@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View, type NativeSyntheticEvent, type TextInputChangeEventData } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
@@ -7,6 +7,10 @@ import { buildFinanceSummary, type TransactionType } from "@/features/finance/fi
 import {
   createFinanceId,
   getDefaultFinanceStorage,
+  hydrateCustomCategoriesFromCloud,
+  hydrateFinanceTransactionsFromCloud,
+  hydrateGiftRecordsFromCloud,
+  hydrateSavingEntriesFromCloud,
   loadCustomCategories,
   loadFinanceTransactions,
   loadGiftRecords,
@@ -86,11 +90,31 @@ export function FinancePanel({ storage }: FinancePanelProps) {
   const [giftNeedReturn, setGiftNeedReturn] = useState(false);
   const [giftDatePickerOpen, setGiftDatePickerOpen] = useState(false);
   const [savingDatePickerOpen, setSavingDatePickerOpen] = useState(false);
+  const localDirtyRef = useRef(false);
 
   const giftContactInputWebProps = { id: "finance-gift-contact-input" } as object;
   const giftAmountInputWebProps = { id: "finance-gift-amount-input" } as object;
   const giftPlaceInputWebProps = { id: "finance-gift-place-input" } as object;
   const giftNoteInputWebProps = { id: "finance-gift-note-input" } as object;
+
+  useEffect(() => {
+    let cancelled = false;
+    void hydrateFinanceTransactionsFromCloud(financeStorage).then((next) => {
+      if (!cancelled && !localDirtyRef.current) setTransactions(sortTransactions(next));
+    });
+    void hydrateSavingEntriesFromCloud(financeStorage).then((next) => {
+      if (!cancelled && !localDirtyRef.current) setSavingEntries(next);
+    });
+    void hydrateCustomCategoriesFromCloud(financeStorage).then((next) => {
+      if (!cancelled && !localDirtyRef.current) setCustomCategories(next);
+    });
+    void hydrateGiftRecordsFromCloud(financeStorage).then((next) => {
+      if (!cancelled && !localDirtyRef.current) setGiftRecords(sortGiftRecords(next));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [financeStorage]);
 
   const categories = useMemo(() => {
     const base = transactionType === "expense" ? expenseCategories : incomeCategories;
@@ -131,6 +155,7 @@ export function FinancePanel({ storage }: FinancePanelProps) {
   const detailTransactions = transactions.filter((transaction) => transaction.transactionType === detailType).slice(0, 8);
 
   const persistTransactions = (nextTransactions: FinanceTransaction[]) => {
+    localDirtyRef.current = true;
     const sorted = sortTransactions(nextTransactions);
     setTransactions(sorted);
     saveFinanceTransactions(sorted, financeStorage);
@@ -155,6 +180,7 @@ export function FinancePanel({ storage }: FinancePanelProps) {
     };
 
     setTransactions((current) => {
+      localDirtyRef.current = true;
       const sorted = sortTransactions([transaction, ...current]);
       saveFinanceTransactions(sorted, financeStorage);
       return sorted;
@@ -166,6 +192,7 @@ export function FinancePanel({ storage }: FinancePanelProps) {
 
   const deleteTransaction = (transactionId: string) => {
     setTransactions((current) => {
+      localDirtyRef.current = true;
       const sorted = sortTransactions(current.filter((transaction) => transaction.id !== transactionId));
       saveFinanceTransactions(sorted, financeStorage);
       return sorted;
@@ -190,6 +217,7 @@ export function FinancePanel({ storage }: FinancePanelProps) {
     };
     const nextEntries = [entry, ...savingEntries];
     setSavingEntries(nextEntries);
+    localDirtyRef.current = true;
     saveSavingEntries(nextEntries, financeStorage);
     setSavingAmount("");
     setSavingNote("");
@@ -217,6 +245,7 @@ export function FinancePanel({ storage }: FinancePanelProps) {
       }
     ];
     setCustomCategories(nextCategories);
+    localDirtyRef.current = true;
     saveCustomCategories(nextCategories, financeStorage);
     setNewCategoryName("");
     setSelectedCategory(name);
@@ -278,6 +307,7 @@ export function FinancePanel({ storage }: FinancePanelProps) {
 
     const nextRecords = sortGiftRecords([record, ...giftRecords]);
     setGiftRecords(nextRecords);
+    localDirtyRef.current = true;
     saveGiftRecords(nextRecords, financeStorage);
 
     if (giftSync && giftDirection === "sent") {
@@ -292,6 +322,7 @@ export function FinancePanel({ storage }: FinancePanelProps) {
       };
       const nextTx = sortTransactions([tx, ...transactions]);
       setTransactions(nextTx);
+      localDirtyRef.current = true;
       saveFinanceTransactions(nextTx, financeStorage);
     }
 
@@ -306,6 +337,7 @@ export function FinancePanel({ storage }: FinancePanelProps) {
   const deleteGift = (giftId: string) => {
     const nextRecords = giftRecords.filter((record) => record.id !== giftId);
     setGiftRecords(nextRecords);
+    localDirtyRef.current = true;
     saveGiftRecords(nextRecords, financeStorage);
     setFeedback("份子记录已删除。");
   };
@@ -604,10 +636,11 @@ function TabButton({ active, label, onPress }: { active: boolean; label: string;
 }
 
 function Metric({ count, title, value }: { count: string; title: string; value: string }) {
+  const compactValue = value.length > 9;
   return (
     <View style={styles.metric}>
       <Text style={styles.metricTitle}>{title}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
+      <Text numberOfLines={1} style={[styles.metricValue, compactValue ? styles.metricValueCompact : null]}>{value}</Text>
       <Text style={styles.metricCount}>{count}</Text>
     </View>
   );
@@ -1127,6 +1160,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexBasis: "23%",
     minWidth: 0,
+    overflow: "hidden",
     paddingHorizontal: 8,
     paddingVertical: 9
   },
@@ -1148,9 +1182,15 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     color: "#1fa8e2",
+    flexShrink: 1,
     fontSize: 15,
     fontWeight: "900",
-    marginTop: 2
+    marginTop: 2,
+    maxWidth: "100%"
+  },
+  metricValueCompact: {
+    fontSize: 13,
+    letterSpacing: 0
   },
   overviewCard: {
     backgroundColor: "#ffffff",

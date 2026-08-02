@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import type { UiTokens } from "@/shared/ui/primitives";
 import { hydrateNotesFromCloud, loadNotes, saveNotes, type NoteItem } from "@/features/home/notesStorage";
-import { getDefaultTodoStorage, hydrateTodosFromCloud, loadLocalTodos, type TodoTask, type TodoStorage } from "@/features/plan/todoStorage";
+import { getDefaultTodoStorage, hydrateTodosFromCloud, loadLocalTodos, saveLocalTodos, sortTodos, type TodoTask, type TodoStorage } from "@/features/plan/todoStorage";
 import { TodoPanel } from "@/features/plan/TodoPanel";
 import { MealSpinner } from "./MealSpinner";
 import { NotesPanel } from "./NotesPanel";
@@ -17,6 +17,25 @@ type HomePanelProps = {
 };
 
 type ViewState = "home" | "notes" | "todos";
+type PetKind = "cat" | "dog";
+
+const petCopy: Record<PetKind, { emoji: string; name: string }> = {
+  cat: { emoji: "🐱", name: "小猫" },
+  dog: { emoji: "🐶", name: "小狗" }
+};
+
+const petLines = [
+  "我在这里陪你整理今天。",
+  "脸红了，想再被夸一次。",
+  "今天也要慢慢变好。"
+];
+
+const todoPriorityLabels: Record<TodoTask["priority"], string> = {
+  high: "重要",
+  low: "轻松",
+  normal: "常规",
+  urgent: "紧急"
+};
 
 function formatToday(): string {
   const now = new Date();
@@ -36,6 +55,8 @@ export function HomePanel({ storage, themeTokens }: HomePanelProps) {
   const [todos, setTodos] = useState<TodoTask[]>(() => loadLocalTodos(todoStorage));
   const [viewState, setViewState] = useState<ViewState>("home");
   const [notes, setNotes] = useState<NoteItem[]>(() => loadNotes());
+  const [petKind, setPetKind] = useState<PetKind>("cat");
+  const [petLineIndex, setPetLineIndex] = useState(0);
 
   const styles = useMemo(() => createStyles(themeTokens), [themeTokens]);
 
@@ -78,6 +99,12 @@ export function HomePanel({ storage, themeTokens }: HomePanelProps) {
     saveNotes(next);
   };
 
+  const toggleHomeTodo = (todoId: string) => {
+    const next = sortTodos(todos.map((todo) => (todo.id === todoId ? { ...todo, completed: !todo.completed } : todo)));
+    setTodos(next);
+    saveLocalTodos(next, todoStorage);
+  };
+
   if (viewState === "notes") {
     return (
       <View style={styles.page}>
@@ -107,48 +134,72 @@ export function HomePanel({ storage, themeTokens }: HomePanelProps) {
         </View>
       </View>
 
-      <View style={styles.summaryCard}>
-        <View style={styles.summaryHeader}>
-          <Text style={styles.widgetIcon}>📊</Text>
-          <Text style={styles.widgetTitle}>生活控制中心</Text>
-        </View>
-        <View style={styles.summaryGrid}>
-          <View style={styles.summaryStat}>
-            <Text style={styles.summaryValue}>{completedCount}/{todos.length}</Text>
-            <Text style={styles.summaryLabel}>待办完成</Text>
+      <View testID="home-control-strip" style={styles.controlStrip}>
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryHeader}>
+            <Text style={styles.widgetIcon}>📊</Text>
+            <Text style={styles.widgetTitle}>生活控制中心</Text>
           </View>
-          <View style={styles.summaryDivider} />
-          <View style={styles.summaryStat}>
-            <Text style={styles.summaryValue}>{notesCount}</Text>
-            <Text style={styles.summaryLabel}>备忘录</Text>
+          <View style={styles.summaryGrid}>
+            <View style={styles.summaryStat}>
+              <Text style={styles.summaryValue}>{completedCount}/{todos.length}</Text>
+              <Text style={styles.summaryLabel}>待办完成</Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryStat}>
+              <Text style={styles.summaryValue}>{notesCount}</Text>
+              <Text style={styles.summaryLabel}>备忘录</Text>
+            </View>
           </View>
+          <Text style={styles.summaryLine} numberOfLines={2}>{summaryLine}</Text>
         </View>
-        <Text style={styles.summaryLine}>{summaryLine}</Text>
+
+        <View style={styles.petCard}>
+          <View style={styles.petTop}>
+            <Pressable accessibilityRole="button" accessibilityLabel="切换为小猫" onPress={() => setPetKind("cat")} style={[styles.petChoice, petKind === "cat" ? styles.petChoiceActive : null]}>
+              <Text style={styles.petChoiceText}>猫</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="切换为小狗" onPress={() => setPetKind("dog")} style={[styles.petChoice, petKind === "dog" ? styles.petChoiceActive : null]}>
+              <Text style={styles.petChoiceText}>狗</Text>
+            </Pressable>
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="摸摸小宠物" onPress={() => setPetLineIndex((index) => (index + 1) % petLines.length)} style={styles.petBody}>
+            <Text style={styles.petEmoji}>{petCopy[petKind].emoji}</Text>
+            <Text style={styles.petName}>{petCopy[petKind].name}</Text>
+          </Pressable>
+          <Text style={styles.petSpeech} numberOfLines={2}>{petLines[petLineIndex]}</Text>
+        </View>
       </View>
 
       <View style={styles.topWidgets}>
-        <Pressable accessibilityRole="button" accessibilityLabel="打开每日待办" onPress={() => setViewState("todos")} style={[styles.widget, styles.widgetLeft]}>
+        <View style={[styles.widget, styles.widgetLeft]}>
           <View style={styles.widgetHeader}>
             <Text style={styles.widgetIcon}>📌</Text>
             <Text style={styles.widgetTitle} numberOfLines={1}>今日待办</Text>
-            <View style={styles.widgetMore}>
+            <Pressable accessibilityRole="button" accessibilityLabel="查看全部每日待办" onPress={() => setViewState("todos")} style={styles.widgetMore}>
               <Text style={styles.widgetMoreText}>全部 →</Text>
-            </View>
+            </Pressable>
           </View>
           {todos.length === 0 ? (
             <View style={styles.todoSummaryBox}>
-              <Text style={styles.emptyHint}>今天还没有待办，点进来添加第一件小事。</Text>
+              <Text style={styles.emptyHint}>今天还没有待办，点“全部”添加第一件小事。</Text>
             </View>
           ) : (
             <View style={styles.todoPreviewList}>
               {todos.slice(0, 4).map((todo) => (
                 <View key={todo.id} style={styles.todoRow}>
-                  <View style={styles.todoCheckWrap}>
+                  <Pressable accessibilityRole="checkbox" accessibilityLabel={`${todo.completed ? "恢复" : "完成"}首页待办：${todo.title}`} accessibilityState={{ checked: todo.completed }} onPress={() => toggleHomeTodo(todo.id)} style={styles.todoCheckWrap}>
                     <View style={[styles.todoCheck, todo.completed ? styles.todoCheckActive : null]}>
                       {todo.completed ? <Text style={styles.todoCheckMark}>✓</Text> : null}
                     </View>
+                  </Pressable>
+                  <View style={[styles.todoDot, todo.completed ? styles.todoDotDone : null]} />
+                  <Pressable accessibilityRole="button" accessibilityLabel={`切换首页待办：${todo.title}`} onPress={() => toggleHomeTodo(todo.id)} style={styles.todoTextButton}>
+                    <Text style={[styles.todoTitle, todo.completed ? styles.todoTitleDone : null]} numberOfLines={2}>{todo.title}</Text>
+                  </Pressable>
+                  <View style={[styles.todoPriorityChip, todo.completed ? styles.todoPriorityChipDone : null]}>
+                    <Text style={[styles.todoPriorityText, todo.completed ? styles.todoPriorityTextDone : null]}>{todoPriorityLabels[todo.priority]}</Text>
                   </View>
-                  <Text style={[styles.todoTitle, todo.completed ? styles.todoTitleDone : null]} numberOfLines={1}>{todo.title}</Text>
                 </View>
               ))}
               {todos.length > 4 ? (
@@ -158,7 +209,7 @@ export function HomePanel({ storage, themeTokens }: HomePanelProps) {
               ) : null}
             </View>
           )}
-        </Pressable>
+        </View>
 
         <View style={[styles.widget, styles.widgetRight]}>
           <View style={styles.widgetHeader}>
@@ -244,6 +295,11 @@ function createStyles(tokens: UiTokens) {
       color: "#b08d2b",
       fontSize: 14,
       fontWeight: "900"
+    },
+    controlStrip: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 12
     },
     topWidgets: {
       flexDirection: "column",
@@ -333,14 +389,16 @@ function createStyles(tokens: UiTokens) {
       borderRadius: 14,
       flex: 1,
       gap: 7,
-      justifyContent: "center",
+      justifyContent: "flex-start",
       overflow: "hidden",
       padding: 10
     },
     todoRow: {
       alignItems: "center",
-      backgroundColor: "#f6faf6",
+      backgroundColor: "#ffffff",
+      borderColor: tokens.border,
       borderRadius: 10,
+      borderWidth: 1,
       flexDirection: "row",
       gap: 8,
       paddingHorizontal: 10,
@@ -368,11 +426,20 @@ function createStyles(tokens: UiTokens) {
       fontSize: 11,
       fontWeight: "900"
     },
+    todoDot: {
+      backgroundColor: "#76b95d",
+      borderRadius: 999,
+      height: 7,
+      width: 7
+    },
+    todoDotDone: {
+      backgroundColor: tokens.textMuted
+    },
     todoTitle: {
       color: tokens.text,
-      flex: 1,
       fontSize: 13,
-      fontWeight: "700"
+      fontWeight: "700",
+      lineHeight: 17
     },
     todoTitleDone: {
       color: tokens.textMuted,
@@ -401,6 +468,27 @@ function createStyles(tokens: UiTokens) {
       color: tokens.accent,
       fontSize: 11,
       fontWeight: "900"
+    },
+    todoPriorityChip: {
+      backgroundColor: "#e8f7df",
+      borderRadius: 999,
+      paddingHorizontal: 9,
+      paddingVertical: 4
+    },
+    todoPriorityChipDone: {
+      backgroundColor: "#eef2f4"
+    },
+    todoPriorityText: {
+      color: "#4f9d39",
+      fontSize: 11,
+      fontWeight: "900"
+    },
+    todoPriorityTextDone: {
+      color: tokens.textMuted
+    },
+    todoTextButton: {
+      flex: 1,
+      minWidth: 0
     },
     emptyHint: {
       color: tokens.textMuted,
@@ -497,7 +585,10 @@ function createStyles(tokens: UiTokens) {
     summaryCard: {
       backgroundColor: "#ffffff",
       borderRadius: 18,
+      flex: 1,
+      flexBasis: "48%",
       gap: 12,
+      minWidth: 220,
       padding: 14,
       shadowColor: "#7cb87c",
       shadowOffset: { width: 0, height: 4 },
@@ -544,6 +635,69 @@ function createStyles(tokens: UiTokens) {
       lineHeight: 18,
       paddingHorizontal: 12,
       paddingVertical: 8
+    },
+    petBody: {
+      alignItems: "center",
+      flex: 1,
+      justifyContent: "center"
+    },
+    petCard: {
+      alignItems: "stretch",
+      backgroundColor: "#ffffff",
+      borderRadius: 18,
+      flex: 1,
+      flexBasis: "48%",
+      gap: 8,
+      minHeight: 132,
+      minWidth: 180,
+      padding: 12,
+      shadowColor: "#7cb87c",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.06,
+      shadowRadius: 16,
+      elevation: 2
+    },
+    petChoice: {
+      alignItems: "center",
+      backgroundColor: "#f6faf6",
+      borderRadius: 999,
+      minHeight: 28,
+      paddingHorizontal: 12,
+      justifyContent: "center"
+    },
+    petChoiceActive: {
+      backgroundColor: tokens.accentSoft
+    },
+    petChoiceText: {
+      color: tokens.accent,
+      fontSize: 12,
+      fontWeight: "900"
+    },
+    petEmoji: {
+      fontSize: 34,
+      lineHeight: 38
+    },
+    petName: {
+      color: tokens.text,
+      fontSize: 12,
+      fontWeight: "900",
+      marginTop: 2
+    },
+    petSpeech: {
+      backgroundColor: "#f6faf6",
+      borderRadius: 12,
+      color: tokens.textMuted,
+      fontSize: 12,
+      fontWeight: "800",
+      lineHeight: 16,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      textAlign: "center"
+    },
+    petTop: {
+      flexDirection: "row",
+      gap: 8,
+      justifyContent: "flex-end"
     },
     dailyPickCard: {
       backgroundColor: "#ffffff",

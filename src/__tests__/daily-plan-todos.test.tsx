@@ -79,7 +79,7 @@ describe("Todo route interactions", () => {
     installWindowStorage();
   });
 
-  it("keeps daily todos out of the primary navigation and opens them from the home card", async () => {
+  it("keeps daily todos out of navigation, toggles in the home card, and only opens from all", async () => {
     const seeded: TodoTask = {
       completed: false,
       createTime: "2026-07-31T08:00:00.000Z",
@@ -94,7 +94,11 @@ describe("Todo route interactions", () => {
     render(<HomePanel storage={window.localStorage} themeTokens={testTokens} />);
 
     expect(screen.getByText("今日待办")).toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "打开每日待办" }));
+    expect(screen.getByText("复盘页面交互")).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("checkbox", { name: "完成首页待办：复盘页面交互" }));
+    expect(loadLocalTodos(window.localStorage)[0]?.completed).toBe(true);
+    expect(screen.queryByText("每日待办")).toBeNull();
+    fireEvent.press(screen.getByRole("button", { name: "查看全部每日待办" }));
 
     expect(screen.getByText("每日待办")).toBeOnTheScreen();
     expect(await screen.findByText("复盘页面交互")).toBeOnTheScreen();
@@ -106,6 +110,16 @@ describe("Todo route interactions", () => {
     render(<AppShell initialRoute="/home" />);
 
     expect(screen.queryByRole("button", { name: "每日\n待办" })).toBeNull();
+  });
+
+  it("shows a compact life control center with an interactive pet beside it", () => {
+    render(<HomePanel storage={window.localStorage} themeTokens={testTokens} />);
+
+    expect(screen.getByTestId("home-control-strip")).toHaveStyle({ flexDirection: "row" });
+    expect(screen.getByRole("button", { name: "切换为小猫" })).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "切换为小狗" })).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("button", { name: "摸摸小宠物" }));
+    expect(screen.getByText("脸红了，想再被夸一次。")).toBeOnTheScreen();
   });
 
   it("adds, edits, completes, restores, persists, and deletes tasks on the home-opened todo page", async () => {

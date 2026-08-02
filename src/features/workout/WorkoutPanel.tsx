@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View, type NativeSyntheticEvent, type TextInputChangeEventData } from "react-native";
 
 import { getSupabaseClient } from "@/auth/supabaseClient";
@@ -6,6 +6,7 @@ import { addWorkoutPart, createWorkoutSession, softDeleteWorkoutSession } from "
 import {
   createWorkoutId,
   getDefaultWorkoutStorage,
+  hydrateWorkoutsFromCloud,
   loadLocalWorkouts,
   saveLocalWorkouts,
   sortWorkoutLogs,
@@ -68,12 +69,26 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const [intensity, setIntensity] = useState<WorkoutIntensity>("moderate");
   const [feedback, setFeedback] = useState("选择部位、填写时长和热量后保存训练记录。");
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("week");
+  const localDirtyRef = useRef(false);
 
   const stats = useMemo(() => buildWorkoutStats(logs), [logs]);
   const chartBars = useMemo(() => buildPeriodBars(logs, chartPeriod), [chartPeriod, logs]);
   const chartTotal = useMemo(() => chartBars.reduce((sum, bar) => sum + bar.minutes, 0), [chartBars]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void hydrateWorkoutsFromCloud(workoutStorage).then((next) => {
+      if (!cancelled && !localDirtyRef.current) {
+        setLogs(sortWorkoutLogs(next));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [workoutStorage]);
+
   const persistLogs = (nextLogs: WorkoutLog[]) => {
+    localDirtyRef.current = true;
     const sorted = sortWorkoutLogs(nextLogs);
     setLogs(sorted);
     saveLocalWorkouts(sorted, workoutStorage);

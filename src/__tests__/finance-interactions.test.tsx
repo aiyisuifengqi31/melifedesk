@@ -47,6 +47,27 @@ describe("FinancePanel interactions", () => {
     expect(screen.getByTestId("finance-summary-panel")).toHaveStyle({ flexDirection: "row" });
   });
 
+  it("keeps large summary amounts inside their metric cards", () => {
+    const storage = makeStorage();
+    const transaction: FinanceTransaction = {
+      amount: "1500000.00",
+      categoryName: "工资",
+      createTime: "2026-08-02T09:00:00.000Z",
+      id: "finance-big",
+      localDate: "2026-08-02",
+      note: "",
+      transactionType: "income"
+    };
+    saveFinanceTransactions([transaction], storage);
+
+    render(<FinancePanel storage={storage} />);
+
+    expect(screen.getAllByText("¥1500000.00")[0]).toHaveStyle({
+      flexShrink: 1,
+      maxWidth: "100%"
+    });
+  });
+
   it("creates expense and income details, updates summary, and recalculates after deletion", async () => {
     const storage = makeStorage();
     render(<FinancePanel storage={storage} />);

@@ -1,4 +1,5 @@
 import type { TransactionType } from "@/features/finance/financeService";
+import { hydrateFromCloud, saveCloudValue } from "@/features/sync/cloudSync";
 
 export type FinanceTransaction = {
   amount: string;
@@ -80,7 +81,14 @@ export function loadFinanceTransactions(storage: FinanceStorage = getDefaultFina
 }
 
 export function saveFinanceTransactions(transactions: FinanceTransaction[], storage: FinanceStorage = getDefaultFinanceStorage()) {
-  storage.setItem(FINANCE_TRANSACTIONS_KEY, JSON.stringify(sortTransactions(transactions)));
+  const sorted = sortTransactions(transactions);
+  storage.setItem(FINANCE_TRANSACTIONS_KEY, JSON.stringify(sorted));
+  void saveCloudValue(FINANCE_TRANSACTIONS_KEY, sorted);
+}
+
+export async function hydrateFinanceTransactionsFromCloud(storage: FinanceStorage = getDefaultFinanceStorage()): Promise<FinanceTransaction[]> {
+  const local = loadFinanceTransactions(storage);
+  return hydrateFromCloud<FinanceTransaction[]>(FINANCE_TRANSACTIONS_KEY, local, (value) => saveFinanceTransactions(value, storage));
 }
 
 export function loadSavingEntries(storage: FinanceStorage = getDefaultFinanceStorage()) {
@@ -90,7 +98,14 @@ export function loadSavingEntries(storage: FinanceStorage = getDefaultFinanceSto
 }
 
 export function saveSavingEntries(entries: SavingEntry[], storage: FinanceStorage = getDefaultFinanceStorage()) {
-  storage.setItem(FINANCE_SAVINGS_KEY, JSON.stringify(sortSavings(entries)));
+  const sorted = sortSavings(entries);
+  storage.setItem(FINANCE_SAVINGS_KEY, JSON.stringify(sorted));
+  void saveCloudValue(FINANCE_SAVINGS_KEY, sorted);
+}
+
+export async function hydrateSavingEntriesFromCloud(storage: FinanceStorage = getDefaultFinanceStorage()): Promise<SavingEntry[]> {
+  const local = loadSavingEntries(storage);
+  return hydrateFromCloud<SavingEntry[]>(FINANCE_SAVINGS_KEY, local, (value) => saveSavingEntries(value, storage));
 }
 
 export function loadCustomCategories(storage: FinanceStorage = getDefaultFinanceStorage()) {
@@ -101,6 +116,12 @@ export function loadCustomCategories(storage: FinanceStorage = getDefaultFinance
 
 export function saveCustomCategories(categories: CustomCategory[], storage: FinanceStorage = getDefaultFinanceStorage()) {
   storage.setItem(FINANCE_CATEGORIES_KEY, JSON.stringify(categories));
+  void saveCloudValue(FINANCE_CATEGORIES_KEY, categories);
+}
+
+export async function hydrateCustomCategoriesFromCloud(storage: FinanceStorage = getDefaultFinanceStorage()): Promise<CustomCategory[]> {
+  const local = loadCustomCategories(storage);
+  return hydrateFromCloud<CustomCategory[]>(FINANCE_CATEGORIES_KEY, local, (value) => saveCustomCategories(value, storage));
 }
 
 export function loadGiftRecords(storage: FinanceStorage = getDefaultFinanceStorage()) {
@@ -110,7 +131,14 @@ export function loadGiftRecords(storage: FinanceStorage = getDefaultFinanceStora
 }
 
 export function saveGiftRecords(records: GiftRecord[], storage: FinanceStorage = getDefaultFinanceStorage()) {
-  storage.setItem(FINANCE_GIFTS_KEY, JSON.stringify(sortGiftRecords(records)));
+  const sorted = sortGiftRecords(records);
+  storage.setItem(FINANCE_GIFTS_KEY, JSON.stringify(sorted));
+  void saveCloudValue(FINANCE_GIFTS_KEY, sorted);
+}
+
+export async function hydrateGiftRecordsFromCloud(storage: FinanceStorage = getDefaultFinanceStorage()): Promise<GiftRecord[]> {
+  const local = loadGiftRecords(storage);
+  return hydrateFromCloud<GiftRecord[]>(FINANCE_GIFTS_KEY, local, (value) => saveGiftRecords(value, storage));
 }
 
 export function sortGiftRecords(records: GiftRecord[]) {
