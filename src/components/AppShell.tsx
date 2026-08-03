@@ -148,6 +148,9 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
     const href: NavItem["href"] = kind === "packages" ? "/plan" : kind === "finance" ? "/finance" : "/home";
     setQuickMenuOpen(false);
     setSettingsOpen(false);
+    if (kind === "finance") {
+      setFinanceTab("record");
+    }
     setShortcutRequest((previous) => ({ kind, nonce: (previous?.nonce ?? 0) + 1 }));
     if (onNavigate) {
       onNavigate(href);
@@ -248,10 +251,10 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
           <View style={styles.quickDock}>
             {quickMenuOpen ? (
               <View testID="quick-shortcut-menu" style={styles.quickMenu}>
-                <ShortcutButton label="备忘录" style={styles.quickActionNotes} onPress={() => openShortcut("notes")} />
-                <ShortcutButton label="待办" style={styles.quickActionTodos} onPress={() => openShortcut("todos")} />
-                <ShortcutButton label="快递" style={styles.quickActionPackages} onPress={() => openShortcut("packages")} />
-                <ShortcutButton label="支出" style={styles.quickActionFinance} onPress={() => openShortcut("finance")} />
+                <ShortcutButton label="备忘录" style={styles.quickActionNotes} testID="quick-shortcut-notes" onPress={() => openShortcut("notes")} />
+                <ShortcutButton label="待办" style={styles.quickActionTodos} testID="quick-shortcut-todos" onPress={() => openShortcut("todos")} />
+                <ShortcutButton label="快递" style={styles.quickActionPackages} testID="quick-shortcut-packages" onPress={() => openShortcut("packages")} />
+                <ShortcutButton label="支出" style={styles.quickActionFinance} testID="quick-shortcut-finance" onPress={() => openShortcut("finance")} />
               </View>
             ) : null}
             <Pressable
@@ -260,6 +263,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
               onLongPress={() => setQuickMenuOpen(true)}
               onPress={() => setQuickMenuOpen((value) => !value)}
               style={styles.quickFab}
+              testID="quick-fab"
             >
               <Text style={styles.quickFabText}>+</Text>
             </Pressable>
@@ -394,7 +398,16 @@ function PageContent({
       ) : null}
       {activeKey === "plan" ? <DailyPlanPanel shortcutNonce={shortcutRequest?.nonce} shortcutTarget={shortcutRequest?.kind === "packages" ? "packages" : undefined} themeTokens={tokens} /> : null}
       {activeKey === "workout" ? <WorkoutPanel /> : null}
-      {activeKey === "finance" ? <FinancePanel activeTab={financeTab} onTabChange={onFinanceTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
+      {activeKey === "finance" ? (
+        <FinancePanel
+          activeTab={financeTab}
+          onTabChange={onFinanceTabChange}
+          shortcutCreate={shortcutRequest?.kind === "finance"}
+          shortcutNonce={shortcutRequest?.kind === "finance" ? shortcutRequest.nonce : undefined}
+          showInlineTabs={false}
+          themeTokens={tokens}
+        />
+      ) : null}
       {activeKey === "love" ? <LovePanel activeTab={loveTab} onTabChange={onLoveTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
       {activeKey === "exam" ? <ExamPanel activeTab={examTab} onTabChange={onExamTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
       {activeKey === "fun" ? <EntertainmentPanel activeTab={entertainmentTab} onTabChange={onEntertainmentTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
@@ -403,9 +416,9 @@ function PageContent({
   );
 }
 
-function ShortcutButton({ label, onPress, style }: { label: string; onPress: () => void; style: ViewStyle }) {
+function ShortcutButton({ label, onPress, style, testID }: { label: string; onPress: () => void; style: ViewStyle; testID?: string }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label}快捷入口`} onPress={onPress} style={[shortcutButtonBase, style]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}快捷入口`} onPress={onPress} style={[shortcutButtonBase, style]} testID={testID}>
       <Text style={shortcutButtonText}>{label}</Text>
     </Pressable>
   );

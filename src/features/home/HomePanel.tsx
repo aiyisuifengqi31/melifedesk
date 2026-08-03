@@ -110,7 +110,7 @@ export function HomePanel({ onOpenFinance, onOpenPackages, shortcutNonce, shortc
   if (viewState === "notes") {
     return (
       <View style={styles.page}>
-        <NotesPanel onClose={() => setViewState("home")} storage={undefined} themeTokens={themeTokens} />
+        <NotesPanel shortcutCreate={shortcutView === "notes"} onClose={() => setViewState("home")} storage={undefined} themeTokens={themeTokens} />
       </View>
     );
   }
@@ -118,7 +118,7 @@ export function HomePanel({ onOpenFinance, onOpenPackages, shortcutNonce, shortc
   if (viewState === "todos") {
     return (
       <View style={styles.page}>
-        <TodoPanel onClose={() => setViewState("home")} storage={todoStorage} themeTokens={themeTokens} />
+        <TodoPanel shortcutCreate={shortcutView === "todos"} onClose={() => setViewState("home")} storage={todoStorage} themeTokens={themeTokens} />
       </View>
     );
   }

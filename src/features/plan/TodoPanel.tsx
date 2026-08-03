@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import type { UiTokens } from "@/shared/ui/primitives";
@@ -14,6 +14,7 @@ import {
 } from "@/features/plan/todoStorage";
 
 type TodoPanelProps = {
+  shortcutCreate?: boolean;
   onClose?: () => void;
   storage?: TodoStorage;
   themeTokens: UiTokens;
@@ -34,10 +35,14 @@ function formatToday(): string {
   return `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 ${weekDays[now.getDay()]}`;
 }
 
-export function TodoPanel({ onClose, storage, themeTokens }: TodoPanelProps) {
+export function TodoPanel({ onClose, shortcutCreate = false, storage, themeTokens }: TodoPanelProps) {
   const todoStorage = useMemo(() => storage ?? getDefaultTodoStorage(), [storage]);
+  const newTitleInputRef = useRef<TextInput>(null);
   const [tasks, setTasks] = useState<TodoTask[]>(() => sortTodos(loadLocalTodos(todoStorage)));
   const [newTitle, setNewTitle] = useState("");
+  const [newDate, setNewDate] = useState(todayIso());
+  const [newTime, setNewTime] = useState("");
+  const [newPriority, setNewPriority] = useState<TodoTask["priority"]>("normal");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const styles = useMemo(() => createStyles(themeTokens), [themeTokens]);
@@ -56,6 +61,12 @@ export function TodoPanel({ onClose, storage, themeTokens }: TodoPanelProps) {
     };
   }, [todoStorage]);
 
+  useEffect(() => {
+    if (!shortcutCreate) return;
+    const timer = setTimeout(() => newTitleInputRef.current?.focus(), 120);
+    return () => clearTimeout(timer);
+  }, [shortcutCreate]);
+
   const persistTasks = (nextTasks: TodoTask[]) => {
     const sorted = sortTodos(nextTasks);
     setTasks(sorted);
@@ -69,14 +80,16 @@ export function TodoPanel({ onClose, storage, themeTokens }: TodoPanelProps) {
       {
         completed: false,
         createTime: new Date().toISOString(),
-        deadline: todayIso(),
+        deadline: newDate || todayIso(),
         id: createTodoId(),
-        priority: "normal",
+        priority: newPriority,
+        remindAt: newTime.trim() ? `${newDate || todayIso()}T${newTime.trim()}` : null,
         title
       },
       ...tasks
     ]);
     setNewTitle("");
+    setNewTime("");
   };
 
   const toggleTask = (taskId: string) => {
@@ -121,16 +134,33 @@ export function TodoPanel({ onClose, storage, themeTokens }: TodoPanelProps) {
 
       <View style={styles.addCard}>
         <TextInput
+          autoFocus={shortcutCreate}
           onChangeText={setNewTitle}
           onSubmitEditing={addTask}
           placeholder="添加今天要做的事"
+          ref={newTitleInputRef}
           style={styles.input}
+          testID="todo-title-input"
           value={newTitle}
         />
         <Pressable accessibilityRole="button" accessibilityLabel="添加待办" onPress={addTask} style={styles.addButton}>
           <Text style={styles.addButtonText}>添加</Text>
         </Pressable>
       </View>
+
+      {shortcutCreate ? (
+        <View style={styles.quickMetaCard}>
+          <TextInput onChangeText={setNewDate} placeholder="日期，默认今天" style={styles.metaInput} value={newDate} />
+          <TextInput onChangeText={setNewTime} placeholder="时间（可选）" style={styles.metaInput} value={newTime} />
+          <View style={styles.priorityRow}>
+            {(["normal", "high", "urgent", "low"] as TodoTask["priority"][]).map((priority) => (
+              <Pressable key={priority} accessibilityRole="button" accessibilityLabel={`待办优先级${priorityLabels[priority]}`} onPress={() => setNewPriority(priority)} style={[styles.priorityChip, newPriority === priority ? styles.priorityChipActive : null]}>
+                <Text style={[styles.priorityChipText, newPriority === priority ? styles.priorityChipTextActive : null]}>{priorityLabels[priority]}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       <TaskSection
         emptyText="今天还没有未完成待办。"
@@ -408,9 +438,56 @@ function createStyles(tokens: UiTokens) {
       paddingHorizontal: 12,
       paddingVertical: 10
     },
+    metaInput: {
+      backgroundColor: "#f6faf6",
+      borderColor: tokens.border,
+      borderRadius: 12,
+      borderWidth: 1,
+      color: tokens.text,
+      flex: 1,
+      fontSize: 13,
+      minWidth: 120,
+      paddingHorizontal: 12,
+      paddingVertical: 9
+    },
     page: {
       gap: 16,
       paddingBottom: 40
+    },
+    priorityChip: {
+      backgroundColor: "#f6faf6",
+      borderColor: tokens.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      paddingHorizontal: 10,
+      paddingVertical: 7
+    },
+    priorityChipActive: {
+      backgroundColor: tokens.accent,
+      borderColor: tokens.accent
+    },
+    priorityChipText: {
+      color: tokens.textMuted,
+      fontSize: 12,
+      fontWeight: "900"
+    },
+    priorityChipTextActive: {
+      color: "#ffffff"
+    },
+    priorityRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8
+    },
+    quickMetaCard: {
+      backgroundColor: "#ffffff",
+      borderColor: tokens.border,
+      borderRadius: 18,
+      borderWidth: 1,
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+      padding: 12
     },
     saveEditButton: {
       alignItems: "center",

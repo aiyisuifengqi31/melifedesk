@@ -6,6 +6,7 @@ import type { UiTokens } from "@/shared/ui/primitives";
 import { createPackageId, getDefaultPackageStorage, hydratePackagesFromCloud, loadPackages, savePackages, type PackageItem, type PackageStorage } from "./packageStorage";
 
 type PackagePanelProps = {
+  shortcutCreate?: boolean;
   storage?: PackageStorage;
   themeTokens: UiTokens;
 };
@@ -26,8 +27,9 @@ export function isPackageDraftAddable(form: Omit<PackageItem, "id" | "createTime
   return Boolean(form.company.trim() || form.image || form.pickupCode.trim() || form.pickupLocation.trim());
 }
 
-export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
+export function PackagePanel({ shortcutCreate = false, storage, themeTokens }: PackagePanelProps) {
   const pkgStorage = useMemo(() => storage ?? getDefaultPackageStorage(), [storage]);
+  const companyInputRef = useRef<TextInput>(null);
   const [items, setItems] = useState<PackageItem[]>(() => loadPackages(pkgStorage));
   const [form, setForm] = useState(emptyItem());
   const [manualOpen, setManualOpen] = useState(false);
@@ -51,6 +53,13 @@ export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
       cancelled = true;
     };
   }, [pkgStorage]);
+
+  useEffect(() => {
+    if (!shortcutCreate) return;
+    setManualOpen(true);
+    const timer = setTimeout(() => companyInputRef.current?.focus(), 140);
+    return () => clearTimeout(timer);
+  }, [shortcutCreate]);
 
   const persist = (next: PackageItem[]) => {
     setItems(next);
@@ -141,7 +150,7 @@ export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
       {manualOpen ? (
         <View style={styles.form}>
           <View style={styles.formRow}>
-            <TextInput onChangeText={(text) => setForm((previous) => ({ ...previous, company: text }))} placeholder="快递公司（可空）" placeholderTextColor="#9ca3af" style={[styles.input, styles.inputHalf]} value={form.company} />
+            <TextInput autoFocus={shortcutCreate} ref={companyInputRef} onChangeText={(text) => setForm((previous) => ({ ...previous, company: text }))} placeholder="快递公司（可空）" placeholderTextColor="#9ca3af" style={[styles.input, styles.inputHalf]} testID="package-company-input" value={form.company} />
             <Pressable accessibilityRole="button" accessibilityLabel="选择到达日期" onPress={() => setDatePickerOpen(true)} style={[styles.input, styles.inputHalf, styles.dateTrigger]}>
               <Text style={styles.dateTriggerText} numberOfLines={1}>{form.arrivalDate || todayIso()}</Text>
             </Pressable>
@@ -165,7 +174,7 @@ export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
         ))}
         {picked.length > 0 ? (
           <Pressable accessibilityRole="button" accessibilityLabel="展开已取快递" onPress={() => setPickedOpen((value) => !value)} style={styles.pickedToggle}>
-            <Text style={styles.pickedToggleText}>已取 {picked.length} 个 {pickedOpen ? "收起" : "展开"}</Text>
+            <Text style={styles.pickedToggleText}>已取 {picked.length} 个{pickedOpen ? "收起" : "展开"}</Text>
           </Pressable>
         ) : null}
         {pickedOpen ? picked.map((item) => <PackageCard item={item} key={item.id} onDelete={deleteItem} onPreview={setExpandedImage} onToggle={togglePickedUp} styles={styles} />) : null}

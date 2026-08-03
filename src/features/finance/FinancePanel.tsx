@@ -37,6 +37,8 @@ import {
 type FinancePanelProps = {
   activeTab?: FinanceTab;
   onTabChange?: (tab: FinanceTab) => void;
+  shortcutCreate?: boolean;
+  shortcutNonce?: number;
   showInlineTabs?: boolean;
   storage?: FinanceStorage;
   themeTokens?: UiTokens;
@@ -106,7 +108,7 @@ const noteInputWebProps = { id: "finance-note-input" } as object;
 const savingAmountInputWebProps = { id: "finance-saving-amount-input" } as object;
 const categoryInputWebProps = { id: "finance-category-input" } as object;
 
-export function FinancePanel({ activeTab, onTabChange, showInlineTabs = true, storage, themeTokens = financeTokens }: FinancePanelProps) {
+export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, shortcutNonce, showInlineTabs = true, storage, themeTokens = financeTokens }: FinancePanelProps) {
   const financeStorage = useMemo(() => storage ?? getDefaultFinanceStorage(), [storage]);
   const [localTab, setLocalTab] = useState<FinanceTab>("record");
   const tab = activeTab ?? localTab;
@@ -219,6 +221,22 @@ export function FinancePanel({ activeTab, onTabChange, showInlineTabs = true, st
   );
   const detailTotal = centsToMoney(detailTransactions.reduce((sum, transaction) => sum + moneyToCents(transaction.amount), 0));
   const canSaveTransaction = Boolean(normalizeMoney(readWebInputValue("finance-amount-input") || amount));
+
+  useEffect(() => {
+    if (!shortcutCreate) return;
+    setTab("record");
+    setTransactionType("expense");
+    setSelectedCategory(expenseCategories[0]);
+
+    const timer = setTimeout(() => {
+      if (typeof document === "undefined") return;
+      const amountInput = document.getElementById("finance-amount-input") as HTMLInputElement | null;
+      amountInput?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      amountInput?.focus();
+    }, 140);
+
+    return () => clearTimeout(timer);
+  }, [shortcutCreate, shortcutNonce]);
 
   const persistTransactions = (nextTransactions: FinanceTransaction[]) => {
     localDirtyRef.current = true;
@@ -457,6 +475,7 @@ export function FinancePanel({ activeTab, onTabChange, showInlineTabs = true, st
               <MobileFormRow testID="finance-money-date-row">
                 <TextFormField
                   {...amountInputWebProps}
+                  autoFocus={shortcutCreate}
                   containerStyle={styles.amountField}
                   keyboardType="decimal-pad"
                   label="金额 (¥)"

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import type { UiTokens } from "@/shared/ui/primitives";
@@ -14,13 +14,15 @@ import {
 } from "./notesStorage";
 
 type NotesPanelProps = {
+  shortcutCreate?: boolean;
   onClose: () => void;
   storage?: NotesStorage;
   themeTokens: UiTokens;
 };
 
-export function NotesPanel({ onClose, storage, themeTokens }: NotesPanelProps) {
+export function NotesPanel({ onClose, shortcutCreate = false, storage, themeTokens }: NotesPanelProps) {
   const notesStorage = useMemo(() => storage ?? getDefaultNotesStorage(), [storage]);
+  const contentInputRef = useRef<TextInput>(null);
   const [notes, setNotes] = useState<NoteItem[]>(() => loadNotes(notesStorage));
   const [category, setCategory] = useState<NoteCategory>("全部");
   const [title, setTitle] = useState("");
@@ -29,6 +31,12 @@ export function NotesPanel({ onClose, storage, themeTokens }: NotesPanelProps) {
   const [feedback, setFeedback] = useState("记录一闪而过的念头、待办事项或购物清单。");
 
   const filteredNotes = category === "全部" ? notes : notes.filter((n) => n.category === category);
+
+  useEffect(() => {
+    if (!shortcutCreate) return;
+    const timer = setTimeout(() => contentInputRef.current?.focus(), 120);
+    return () => clearTimeout(timer);
+  }, [shortcutCreate]);
 
   const persist = (nextNotes: NoteItem[]) => {
     setNotes(nextNotes);
@@ -77,10 +85,13 @@ export function NotesPanel({ onClose, storage, themeTokens }: NotesPanelProps) {
         <Text style={styles.cardTitle}>记一笔</Text>
         <TextInput onChangeText={setTitle} placeholder="标题（可选）" style={styles.input} value={title} />
         <TextInput
+          autoFocus={shortcutCreate}
           multiline
           onChangeText={setContent}
           placeholder="闪过的念头..."
+          ref={contentInputRef}
           style={[styles.input, styles.textArea]}
+          testID="notes-content-input"
           value={content}
         />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>

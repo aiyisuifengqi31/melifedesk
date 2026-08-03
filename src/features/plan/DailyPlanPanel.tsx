@@ -42,7 +42,7 @@ export function DailyPlanPanel({ shortcutNonce, shortcutTarget, themeTokens }: D
     <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.stack}>
       <WeatherCard onRefresh={loadWeather} weather={weather} />
       <MonthCalendar selectedDate={todayIso()} />
-      <PackagePanel themeTokens={themeTokens} />
+      <PackagePanel shortcutCreate={shortcutTarget === "packages"} themeTokens={themeTokens} />
     </ScrollView>
   );
 }

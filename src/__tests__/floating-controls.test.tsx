@@ -66,4 +66,44 @@ describe("floating page controls", () => {
     fireEvent.press(screen.getByRole("button", { name: "关闭快捷入口背景" }));
     expect(screen.queryByTestId("quick-shortcut-menu")).toBeNull();
   });
+  it("opens the notes shortcut directly in note creation state", () => {
+    render(<AppShell initialRoute="/home" viewport="mobile" />);
+
+    fireEvent.press(screen.getByTestId("quick-fab"));
+    fireEvent.press(screen.getByTestId("quick-shortcut-notes"));
+
+    expect(screen.queryByTestId("quick-shortcut-menu")).toBeNull();
+    expect(screen.getByTestId("notes-content-input").props.autoFocus).toBe(true);
+  });
+
+  it("opens the todo shortcut directly in todo creation state", () => {
+    render(<AppShell initialRoute="/home" viewport="mobile" />);
+
+    fireEvent.press(screen.getByTestId("quick-fab"));
+    fireEvent.press(screen.getByTestId("quick-shortcut-todos"));
+
+    expect(screen.queryByTestId("quick-shortcut-menu")).toBeNull();
+    expect(screen.getByTestId("todo-title-input").props.autoFocus).toBe(true);
+  });
+
+  it("opens the package shortcut with the manual create form focused", () => {
+    render(<AppShell initialRoute="/home" viewport="mobile" />);
+
+    fireEvent.press(screen.getByTestId("quick-fab"));
+    fireEvent.press(screen.getByTestId("quick-shortcut-packages"));
+
+    expect(screen.queryByTestId("quick-shortcut-menu")).toBeNull();
+    expect(screen.getByTestId("package-company-input").props.autoFocus).toBe(true);
+  });
+
+  it("opens the finance shortcut on expense quick entry", () => {
+    render(<AppShell initialRoute="/home" viewport="mobile" />);
+
+    fireEvent.press(screen.getByTestId("quick-fab"));
+    fireEvent.press(screen.getByTestId("quick-shortcut-finance"));
+
+    expect(screen.queryByTestId("quick-shortcut-menu")).toBeNull();
+    expect(screen.getByTestId("finance-amount-input").props.autoFocus).toBe(true);
+    expect(screen.getByTestId("secondary-tab-record")).toHaveStyle({ flex: 1 });
+  });
 });
