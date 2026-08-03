@@ -5,6 +5,7 @@ export type WorkoutIntensity = "easy" | "moderate" | "hard";
 
 export type WorkoutLog = {
   createTime: string;
+  distanceKm?: number;
   durationMinutes: number;
   feeling?: string;
   id: string;
@@ -14,9 +15,12 @@ export type WorkoutLog = {
   notes?: string;
   parts: string[];
   remoteId?: string | null;
+  restType?: "full" | "stretch" | "light";
   sessionDate: string;
   status: WorkoutStatus;
+  sets?: number;
   title: string;
+  weightKg?: number;
 };
 
 export type WorkoutStorage = {

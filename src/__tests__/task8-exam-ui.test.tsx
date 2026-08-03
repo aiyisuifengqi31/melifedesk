@@ -3,19 +3,28 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import { AppShell } from "@/components/AppShell";
 
 describe("Task 8 exam page", () => {
-  it("renders the exam workspace and switches between practice, reading, and study tabs", () => {
-    render(<AppShell initialRoute="/exam" />);
+  it("uses bottom tabs for the redesigned exam workspace and removes Fenbi deep links", () => {
+    render(<AppShell initialRoute="/exam" viewport="mobile" />);
 
-    expect(screen.getByText("每日一句")).toBeOnTheScreen();
-    expect(screen.getByRole("button", { name: "去粉笔做题" })).toBeOnTheScreen();
-    expect(screen.getByText("河北高频成语")).toBeOnTheScreen();
+    expect(screen.queryByTestId("exam-inline-tabs")).toBeNull();
+    expect(screen.getByTestId("secondary-floating-tabs")).toBeOnTheScreen();
+    expect(screen.getByTestId("secondary-tab-essay")).toBeOnTheScreen();
+    expect(screen.getByTestId("secondary-tab-knowledge")).toBeOnTheScreen();
+    expect(screen.getByTestId("secondary-tab-idiom")).toBeOnTheScreen();
+    expect(screen.getByTestId("secondary-tab-record")).toBeOnTheScreen();
 
-    fireEvent.press(screen.getByRole("button", { name: "申论阅读" }));
-    expect(screen.getByText("权威阅读源")).toBeOnTheScreen();
-    expect(screen.getByText("申论金句库")).toBeOnTheScreen();
+    expect(screen.queryByText("去粉笔做题")).toBeNull();
+    expect(screen.queryByText("做题")).toBeNull();
 
-    fireEvent.press(screen.getByRole("button", { name: "学习时长" }));
-    expect(screen.getByText("开始计时")).toBeOnTheScreen();
-    expect(screen.getByText("近 7 天学习时长")).toBeOnTheScreen();
+    expect(screen.getByText("每日精选文章")).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByTestId("secondary-tab-knowledge"));
+    expect(screen.getByText("今日常识积累")).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByTestId("secondary-tab-idiom"));
+    expect(screen.getByText("今日成语积累")).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByTestId("secondary-tab-record"));
+    expect(screen.getByText("今日阅读时长")).toBeOnTheScreen();
   });
 });

@@ -24,16 +24,25 @@ describe("floating page controls", () => {
     });
   });
 
-  it("shares the same fixed secondary tab bar across love diary and entertainment", () => {
+  it("shares the same fixed secondary tab bar across love diary, exam, and entertainment", () => {
     const { rerender } = render(<AppShell route="/love" viewport="mobile" />);
 
     expect(screen.queryByTestId("love-floating-tabs")).toBeNull();
     expect(screen.getByTestId("secondary-floating-tabs")).toBeOnTheScreen();
 
+    rerender(<AppShell route="/exam" viewport="mobile" />);
+
+    expect(screen.queryByTestId("exam-inline-tabs")).toBeNull();
+    expect(screen.getByTestId("secondary-floating-tabs")).toBeOnTheScreen();
+    expect(screen.getByTestId("secondary-tab-essay")).toHaveStyle({ flex: 1 });
+    expect(screen.getByTestId("secondary-tab-record")).toHaveStyle({ flex: 1 });
+
     rerender(<AppShell route="/fun" viewport="mobile" />);
 
     expect(screen.queryByTestId("entertainment-floating-tabs")).toBeNull();
     expect(screen.getByTestId("secondary-floating-tabs")).toBeOnTheScreen();
+    expect(screen.getByTestId("secondary-tab-hot")).toHaveStyle({ flex: 1 });
+    expect(screen.getByTestId("secondary-tab-useful")).toHaveStyle({ flex: 1 });
   });
 
   it("opens the sidebar quick shortcut arc above settings", () => {

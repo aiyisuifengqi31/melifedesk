@@ -7,7 +7,7 @@ import { readStoredColorMode, readStoredThemeId, writeStoredColorMode, writeStor
 import { SettingsPanel } from "@/features/settings/SettingsPanel";
 import { getPublicAppConfig } from "@/config/app";
 import { hydrateProfileFromCloud, loadProfile, openImagePicker, saveProfile, type AppProfile } from "@/features/profile/profileStorage";
-import { ExamPanel } from "@/features/exam/ExamPanel";
+import { ExamPanel, examTabs, type ExamTab } from "@/features/exam/ExamPanel";
 import { EntertainmentPanel, entertainmentTabs, type EntTab } from "@/features/entertainment/EntertainmentPanel";
 import { FinancePanel, financeTabs, type FinanceTab } from "@/features/finance/FinancePanel";
 import { HomePanel } from "@/features/home/HomePanel";
@@ -40,7 +40,8 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const inferredViewport = viewport ?? (dimensions.width < 720 ? "mobile" : "desktop");
   const [currentRoute, setCurrentRoute] = useState(route ?? initialRoute);
   const [collapsed, setCollapsed] = useState(false);
-  const [entertainmentTab, setEntertainmentTab] = useState<EntTab>("trend");
+  const [entertainmentTab, setEntertainmentTab] = useState<EntTab>("hot");
+  const [examTab, setExamTab] = useState<ExamTab>("essay");
   const [financeTab, setFinanceTab] = useState<FinanceTab>("record");
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [loveTab, setLoveTab] = useState<LoveTab>("diary");
@@ -89,7 +90,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const sidebarWidth = isMobile ? 68 : collapsed ? 72 : 224;
 
   const viewportHeight = isMobile && Platform.OS === "web" ? ("100dvh" as const) : Math.max(dimensions.height, 640);
-  const hasSecondaryTabs = activeKey === "finance" || activeKey === "love" || activeKey === "fun";
+  const hasSecondaryTabs = activeKey === "finance" || activeKey === "love" || activeKey === "exam" || activeKey === "fun";
   const imageSource = useMemo(() => getImageSource(background), [background]);
   const styles = useMemo(() => createStyles(tokens, sidebarWidth, isMobile, viewportHeight, hasSecondaryTabs), [tokens, sidebarWidth, isMobile, viewportHeight, hasSecondaryTabs]);
 
@@ -286,10 +287,12 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
             <PageContent
               activeKey={activeKey}
               entertainmentTab={entertainmentTab}
+              examTab={examTab}
               financeTab={financeTab}
               handleNavigate={handleNavigate}
               loveTab={loveTab}
               onEntertainmentTabChange={setEntertainmentTab}
+              onExamTabChange={setExamTab}
               onFinanceTabChange={setFinanceTab}
               onLoveTabChange={setLoveTab}
               onOpenPackages={() => openShortcut("packages")}
@@ -305,10 +308,12 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
           <PageContent
             activeKey={activeKey}
             entertainmentTab={entertainmentTab}
+            examTab={examTab}
             financeTab={financeTab}
             handleNavigate={handleNavigate}
             loveTab={loveTab}
             onEntertainmentTabChange={setEntertainmentTab}
+            onExamTabChange={setExamTab}
             onFinanceTabChange={setFinanceTab}
             onLoveTabChange={setLoveTab}
             onOpenPackages={() => openShortcut("packages")}
@@ -322,6 +327,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
 
       {activeKey === "finance" ? <FixedBottomTabs activeValue={financeTab} hidden={keyboardOpen} items={financeTabs} onChange={setFinanceTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
       {activeKey === "love" ? <FixedBottomTabs activeValue={loveTab} hidden={keyboardOpen} items={loveTabs} onChange={setLoveTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
+      {activeKey === "exam" ? <FixedBottomTabs activeValue={examTab} hidden={keyboardOpen} items={examTabs} onChange={setExamTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
       {activeKey === "fun" ? <FixedBottomTabs activeValue={entertainmentTab} hidden={keyboardOpen} items={entertainmentTabs} onChange={setEntertainmentTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
 
       {settingsOpen ? (
@@ -345,10 +351,12 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
 function PageContent({
   activeKey,
   entertainmentTab,
+  examTab,
   financeTab,
   handleNavigate,
   loveTab,
   onEntertainmentTabChange,
+  onExamTabChange,
   onFinanceTabChange,
   onLoveTabChange,
   onOpenPackages,
@@ -359,10 +367,12 @@ function PageContent({
 }: {
   activeKey: string;
   entertainmentTab: EntTab;
+  examTab: ExamTab;
   financeTab: FinanceTab;
   handleNavigate: (href: NavItem["href"]) => void;
   loveTab: LoveTab;
   onEntertainmentTabChange: (tab: EntTab) => void;
+  onExamTabChange: (tab: ExamTab) => void;
   onFinanceTabChange: (tab: FinanceTab) => void;
   onLoveTabChange: (tab: LoveTab) => void;
   onOpenPackages: () => void;
@@ -386,7 +396,7 @@ function PageContent({
       {activeKey === "workout" ? <WorkoutPanel /> : null}
       {activeKey === "finance" ? <FinancePanel activeTab={financeTab} onTabChange={onFinanceTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
       {activeKey === "love" ? <LovePanel activeTab={loveTab} onTabChange={onLoveTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
-      {activeKey === "exam" ? <ExamPanel themeTokens={tokens} /> : null}
+      {activeKey === "exam" ? <ExamPanel activeTab={examTab} onTabChange={onExamTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
       {activeKey === "fun" ? <EntertainmentPanel activeTab={entertainmentTab} onTabChange={onEntertainmentTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
       {activeKey !== "home" && activeKey !== "plan" && activeKey !== "workout" && activeKey !== "finance" && activeKey !== "love" && activeKey !== "exam" && activeKey !== "fun" ? <GenericModuleSkeleton themeEmptyState={themeEmptyState} styles={styles} /> : null}
     </>

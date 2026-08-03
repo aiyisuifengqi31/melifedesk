@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View, type NativeSyntheticEvent, type TextInputChangeEventData } from "react-native";
 
 import { getSupabaseClient } from "@/auth/supabaseClient";
@@ -36,6 +36,12 @@ const intensityOptions: Array<{ label: string; value: WorkoutIntensity }> = [
 
 type ChartPeriod = "month" | "week" | "year";
 
+const REST_TYPES: Array<{ label: string; value: NonNullable<WorkoutLog["restType"]> }> = [
+  { label: "完全休息", value: "full" },
+  { label: "拉伸恢复", value: "stretch" },
+  { label: "轻度活动", value: "light" }
+];
+
 const chartPeriodOptions: Array<{ label: string; value: ChartPeriod }> = [
   { label: "近7天", value: "week" },
   { label: "近一月", value: "month" },
@@ -66,6 +72,10 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const [title, setTitle] = useState("");
   const [duration, setDuration] = useState("10");
   const [kcal, setKcal] = useState("200");
+  const [distanceKm, setDistanceKm] = useState("");
+  const [sets, setSets] = useState("");
+  const [weightKg, setWeightKg] = useState("");
+  const [restType, setRestType] = useState<NonNullable<WorkoutLog["restType"]>>("full");
   const [intensity, setIntensity] = useState<WorkoutIntensity>("moderate");
   const [feedback, setFeedback] = useState("选择部位、填写时长和热量后保存训练记录。");
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("week");
@@ -106,6 +116,9 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
     const parts = status === "rest" ? ["休息"] : selectedParts.filter((part) => part !== "休息");
     const durationMinutes = toNonNegativeInt(readWebInputValue("workout-duration-input") || duration);
     const kcalValue = toNonNegativeInt(readWebInputValue("workout-kcal-input") || kcal);
+    const distanceValue = toNonNegativeNumber(distanceKm);
+    const setsValue = toNonNegativeInt(sets);
+    const weightValue = toNonNegativeNumber(weightKg);
 
     if (status === "trained" && parts.length === 0) {
       setFeedback("请至少选择一个训练部位。");
@@ -119,13 +132,16 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
 
     const log: WorkoutLog = {
       createTime: new Date().toISOString(),
+      distanceKm: status === "trained" && distanceValue > 0 ? distanceValue : undefined,
       durationMinutes: status === "rest" ? 0 : durationMinutes,
       id: createWorkoutId(),
       intensity,
       kcal: status === "rest" ? 0 : kcalValue,
       kcalSource: "manual",
       parts,
+      restType: status === "rest" ? restType : undefined,
       sessionDate: todayIso(),
+      sets: status === "trained" && setsValue > 0 ? setsValue : undefined,
       status,
       title: status === "rest" ? "休息" : cleanTitle || parts.join("、")
     };
@@ -221,6 +237,36 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
         </View>
 
         <Text style={styles.muted}>热量第一版为手动输入，不作为准确测量值。</Text>
+        <View style={styles.fieldHintRow}>
+          <Text style={styles.fieldHint}>训练项目</Text>
+          <Text style={styles.fieldHint}>训练时长（分钟）</Text>
+          <Text style={styles.fieldHint}>消耗热量（千卡）</Text>
+        </View>
+
+        {status === "trained" ? (
+          <View style={styles.tripleRow}>
+            <LabeledInput label="有氧距离" styles={styles} unit="公里，可空">
+              <TextInput keyboardType="decimal-pad" onChangeText={setDistanceKm} placeholder="0" style={styles.input} value={distanceKm} />
+            </LabeledInput>
+            <LabeledInput label="力量组数" styles={styles} unit="组，可空">
+              <TextInput keyboardType="numeric" onChangeText={setSets} placeholder="0" style={styles.input} value={sets} />
+            </LabeledInput>
+            <LabeledInput label="训练重量" styles={styles} unit="kg，可空">
+              <TextInput keyboardType="decimal-pad" onChangeText={setWeightKg} placeholder="0" style={styles.input} value={weightKg} />
+            </LabeledInput>
+          </View>
+        ) : (
+          <View style={styles.segmentRow}>
+            {REST_TYPES.map((option) => {
+              const selected = restType === option.value;
+              return (
+                <Pressable key={option.value} accessibilityRole="button" accessibilityLabel={option.label} onPress={() => setRestType(option.value)} style={[styles.chip, selected ? styles.chipActive : null]}>
+                  <Text style={[styles.chipText, selected ? styles.chipTextActive : null]}>{option.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
 
         <Pressable accessibilityRole="button" accessibilityLabel="保存记录" nativeID="workout-save-button" onPress={saveWorkout} style={styles.saveButton}>
           <Text style={styles.saveText}>保存记录</Text>
@@ -309,6 +355,18 @@ function Metric({ compact = false, title, unit, value }: { compact?: boolean; ti
         {value}
         <Text style={[styles.metricUnit, compact ? styles.metricUnitCompact : null]}> {unit}</Text>
       </Text>
+    </View>
+  );
+}
+
+function LabeledInput({ children, label, styles: viewStyles, unit }: { children: React.ReactNode; label: string; styles: typeof styles; unit: string }) {
+  return (
+    <View style={viewStyles.labeledInput}>
+      <View style={viewStyles.inputLabelRow}>
+        <Text style={viewStyles.inputLabel}>{label}</Text>
+        <Text style={viewStyles.inputUnit}>{unit}</Text>
+      </View>
+      {children}
     </View>
   );
 }
@@ -428,6 +486,15 @@ function startOfWeek(date: Date) {
 function toNonNegativeInt(value: string) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function toNonNegativeNumber(value: string) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function restTypeLabel(value: NonNullable<WorkoutLog["restType"]>) {
+  return REST_TYPES.find((option) => option.value === value)?.label ?? "完全休息";
 }
 
 function readWebInputValue(id: string) {
@@ -606,6 +673,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800"
   },
+  fieldHint: {
+    color: "#697386",
+    flex: 1,
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "center"
+  },
+  fieldHintRow: {
+    flexDirection: "row",
+    gap: 8
+  },
   tripleRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -627,6 +705,26 @@ const styles = StyleSheet.create({
     minWidth: 0,
     paddingHorizontal: 12,
     paddingVertical: 10
+  },
+  inputLabel: {
+    color: "#111827",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  inputLabelRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  inputUnit: {
+    color: "#697386",
+    fontSize: 11,
+    fontWeight: "700"
+  },
+  labeledInput: {
+    flex: 1,
+    gap: 5,
+    minWidth: 90
   },
   tripleInput: {
     flex: 1,

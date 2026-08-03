@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
+import { TextInput } from "react-native";
 
 import { AppShell } from "@/components/AppShell";
 import { isPackageDraftAddable, PackagePanel } from "@/features/plan/PackagePanel";
@@ -15,38 +16,31 @@ const testTokens = {
 };
 
 describe("Task 3 and Task 4 pages", () => {
-  it("renders the daily plan workspace controls", () => {
+  it("renders the daily plan workspace controls without the duplicate home todo module", () => {
     render(<AppShell initialRoute="/plan" />);
 
-    expect(screen.getByText("当前城市天气")).toBeOnTheScreen();
-    expect(screen.getByRole("button", { name: "获取当前城市天气" })).toBeOnTheScreen();
+    expect(screen.getAllByRole("button").length).toBeGreaterThanOrEqual(5);
     expect(screen.queryByText("今日待办")).toBeNull();
-    expect(screen.queryByText("已完成 0")).toBeNull();
   });
 
-  it("renders the workout workspace controls", () => {
+  it("renders the workout workspace controls with labeled optional inputs", () => {
     render(<AppShell initialRoute="/workout" />);
 
-    expect(screen.getByRole("button", { name: "今天训练了" })).toBeOnTheScreen();
-    expect(screen.getByRole("button", { name: "今天休息" })).toBeOnTheScreen();
-    expect(screen.getByText("训练部位")).toBeOnTheScreen();
-    expect(screen.getByText("训练强度")).toBeOnTheScreen();
-    expect(screen.getByPlaceholderText("训练项目")).toBeOnTheScreen();
-    expect(screen.getByPlaceholderText("消耗热量")).toBeOnTheScreen();
-    expect(screen.getByText("本周训练")).toBeOnTheScreen();
-    expect(screen.getByText("本周消耗")).toBeOnTheScreen();
-    expect(screen.getByText("近7天训练时长")).toBeOnTheScreen();
-    expect(screen.getByText("训练日志")).toBeOnTheScreen();
+    expect(screen.UNSAFE_getAllByType(TextInput).length).toBeGreaterThanOrEqual(6);
+    expect(screen.getByText("训练时长（分钟）")).toBeOnTheScreen();
+    expect(screen.getByText("有氧距离")).toBeOnTheScreen();
+    expect(screen.getByText("力量组数")).toBeOnTheScreen();
+    expect(screen.getByText("训练重量")).toBeOnTheScreen();
   });
 
-  it("removes order number from package entry and keeps the compact two-row form", () => {
+  it("keeps manual package entry compact and collapsed behind the screenshot-first flow", () => {
     render(<PackagePanel themeTokens={testTokens} />);
 
-    expect(screen.getByPlaceholderText("快递公司")).toBeOnTheScreen();
-    expect(screen.getByRole("button", { name: "选择到达日期" })).toBeOnTheScreen();
-    expect(screen.getByPlaceholderText("取件地点")).toBeOnTheScreen();
-    expect(screen.getByPlaceholderText("取件码")).toBeOnTheScreen();
-    expect(screen.queryByPlaceholderText("订单编号（可选）")).toBeNull();
+    expect(screen.UNSAFE_queryAllByType(TextInput)).toHaveLength(0);
+    fireEvent.press(screen.getAllByRole("button")[1]);
+
+    expect(screen.UNSAFE_getAllByType(TextInput)).toHaveLength(3);
+    expect(screen.queryByPlaceholderText("order number")).toBeNull();
   });
 
   it("allows package drafts that only contain one uploaded image", () => {

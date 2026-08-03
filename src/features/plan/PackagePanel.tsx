@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
-import type { UiTokens } from "@/shared/ui/primitives";
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
-import { createPackageId, hydratePackagesFromCloud, loadPackages, savePackages, type PackageItem, type PackageStorage } from "./packageStorage";
+import type { UiTokens } from "@/shared/ui/primitives";
+import { createPackageId, getDefaultPackageStorage, hydratePackagesFromCloud, loadPackages, savePackages, type PackageItem, type PackageStorage } from "./packageStorage";
 
 type PackagePanelProps = {
   storage?: PackageStorage;
   themeTokens: UiTokens;
 };
 
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
 const emptyItem = (): Omit<PackageItem, "id" | "createTime"> => ({
-  arrivalDate: new Date().toISOString().slice(0, 10),
+  arrivalDate: todayIso(),
   company: "",
   image: null,
   orderNumber: "",
@@ -28,8 +30,11 @@ export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
   const pkgStorage = useMemo(() => storage ?? getDefaultPackageStorage(), [storage]);
   const [items, setItems] = useState<PackageItem[]>(() => loadPackages(pkgStorage));
   const [form, setForm] = useState(emptyItem());
+  const [manualOpen, setManualOpen] = useState(false);
+  const [pickedOpen, setPickedOpen] = useState(false);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [feedback, setFeedback] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const styles = useMemo(() => createStyles(themeTokens), [themeTokens]);
 
@@ -61,11 +66,15 @@ export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
   };
 
   const addItem = () => {
-    const company = form.company.trim();
-    if (!isPackageDraftAddable(form)) return;
+    if (!isPackageDraftAddable(form)) {
+      setFeedback("上传截图，或至少填写一项信息后再保存。");
+      return;
+    }
+
     const item: PackageItem = {
       ...form,
-      company: company || "待取快递",
+      arrivalDate: form.arrivalDate || todayIso(),
+      company: form.company.trim(),
       createTime: new Date().toISOString(),
       id: createPackageId(),
       orderNumber: "",
@@ -74,6 +83,8 @@ export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
     };
     persist([item, ...items]);
     setForm(emptyItem());
+    setManualOpen(false);
+    setFeedback("快递已保存。");
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,7 +92,15 @@ export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      setForm((previous) => ({ ...previous, image: String(reader.result) }));
+      const extracted = extractPackageFieldsFromText(file.name);
+      setForm((previous) => ({
+        ...previous,
+        ...extracted,
+        arrivalDate: extracted.arrivalDate || previous.arrivalDate || todayIso(),
+        image: String(reader.result)
+      }));
+      setManualOpen(true);
+      setFeedback(Object.keys(extracted).length > 0 ? "已根据截图文件名尝试填入信息，请核对后保存。" : "已上传截图。暂未识别到文字，可直接保存或手动补充。");
     };
     reader.readAsDataURL(file);
   };
@@ -89,121 +108,67 @@ export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
   const unpicked = items.filter((item) => !item.pickedUp);
   const picked = items.filter((item) => item.pickedUp);
 
-  const PackageCard = ({
-    item
-  }: {
-    item: PackageItem;
-  }) => {
-    return (
-      <View style={[styles.itemCard, item.pickedUp ? styles.itemCardDone : null]}>
-        <View style={styles.itemTop}>
-          <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: item.pickedUp }} onPress={() => togglePickedUp(item.id)} style={[styles.check, item.pickedUp ? styles.checkActive : null]}>
-            {item.pickedUp ? <Text style={styles.checkMark}>✓</Text> : null}
-          </Pressable>
-          <View style={styles.itemBody}>
-            <Text style={[styles.itemCompany, item.pickedUp ? styles.itemDoneText : null]} numberOfLines={1}>{item.company}</Text>
-            <Text style={styles.itemMeta} numberOfLines={1}>📍 {item.pickupLocation || "未填"}</Text>
-            <Text style={styles.itemMeta} numberOfLines={1}>🔑 {item.pickupCode || "未填"}</Text>
-            <Text style={styles.itemMeta} numberOfLines={1}>📅 {item.arrivalDate}</Text>
-          </View>
-          {item.image ? (
-            <Pressable onPress={() => setExpandedImage(item.image!)} style={styles.itemThumbWrap}>
-              <Image source={{ uri: item.image }} style={styles.itemThumb} />
-            </Pressable>
-          ) : null}
-        </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="删除快递" onPress={() => deleteItem(item.id)} style={styles.deleteButton}>
-          <Text style={styles.deleteText}>删除</Text>
-        </Pressable>
-      </View>
-    );
-  };
-
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <Text style={styles.icon}>📦</Text>
         <Text style={styles.title}>快递</Text>
-        <Text style={styles.subtitle}>手动添加包裹，上传截图更方便</Text>
+        <Text style={styles.subtitle}>待取 {unpicked.length} 个</Text>
       </View>
 
-      <View style={styles.form}>
-        <View style={styles.formRow}>
-          <TextInput
-            onChangeText={(text) => setForm((previous) => ({ ...previous, company: text }))}
-            placeholder="快递公司"
-            style={[styles.input, styles.inputHalf]}
-            value={form.company}
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="选择到达日期"
-            onPress={() => setDatePickerOpen(true)}
-            style={[styles.input, styles.inputHalf, styles.dateTrigger]}
-          >
-            <Text style={[styles.dateTriggerText, !form.arrivalDate ? styles.dateTriggerPlaceholder : null]} numberOfLines={1}>
-              {form.arrivalDate || "到达日期"}
-            </Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="上传快递截图" onPress={() => fileInputRef.current?.click()} style={styles.uploadHero}>
+        <Text style={styles.uploadHeroIcon}>+</Text>
+        <View style={styles.uploadHeroTextBox}>
+          <Text style={styles.uploadHeroTitle}>上传快递截图</Text>
+          <Text style={styles.uploadHeroSub}>截图可直接保存，信息识别不到也能手动补充。</Text>
+        </View>
+      </Pressable>
+
+      {typeof document !== "undefined" ? <input accept="image/*" onChange={handleFileChange} ref={fileInputRef} style={{ display: "none" }} type="file" /> : null}
+
+      {form.image ? (
+        <View style={styles.pendingImageRow}>
+          <Pressable onPress={() => setExpandedImage(form.image)} style={styles.thumbnailWrap}>
+            <Image source={{ uri: form.image }} style={styles.thumbnail} />
           </Pressable>
+          <Text style={styles.pendingImageText}>截图已添加，可以直接保存这条快递。</Text>
         </View>
-        <View style={styles.formRow}>
-          <TextInput
-            onChangeText={(text) => setForm((previous) => ({ ...previous, pickupLocation: text }))}
-            placeholder="取件地点"
-            style={[styles.input, styles.inputHalf]}
-            value={form.pickupLocation}
-          />
-          <TextInput
-            onChangeText={(text) => setForm((previous) => ({ ...previous, pickupCode: text }))}
-            placeholder="取件码"
-            style={[styles.input, styles.inputHalf]}
-            value={form.pickupCode}
-          />
-        </View>
-        <View style={styles.imageRow}>
-          {form.image ? (
-            <View style={styles.imagePickedRow}>
-              <Pressable onPress={() => setExpandedImage(form.image)} style={styles.thumbnailWrap}>
-                <Image source={{ uri: form.image }} style={styles.thumbnail} />
-              </Pressable>
-              <Pressable onPress={() => fileInputRef.current?.click()} style={styles.replaceImageButton}>
-                <Text style={styles.uploadText}>更换截图</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <Pressable
-              onPress={() => fileInputRef.current?.click()}
-              style={styles.uploadButton}
-            >
-              <Text style={styles.uploadText}>📷 添加截图</Text>
+      ) : null}
+
+      <Pressable accessibilityRole="button" accessibilityLabel="切换手动填写快递信息" onPress={() => setManualOpen((value) => !value)} style={styles.manualToggle}>
+        <Text style={styles.manualToggleText}>{manualOpen ? "收起手动填写" : "手动填写（备用）"}</Text>
+      </Pressable>
+
+      {manualOpen ? (
+        <View style={styles.form}>
+          <View style={styles.formRow}>
+            <TextInput onChangeText={(text) => setForm((previous) => ({ ...previous, company: text }))} placeholder="快递公司（可空）" placeholderTextColor="#9ca3af" style={[styles.input, styles.inputHalf]} value={form.company} />
+            <Pressable accessibilityRole="button" accessibilityLabel="选择到达日期" onPress={() => setDatePickerOpen(true)} style={[styles.input, styles.inputHalf, styles.dateTrigger]}>
+              <Text style={styles.dateTriggerText} numberOfLines={1}>{form.arrivalDate || todayIso()}</Text>
             </Pressable>
-          )}
-          {typeof document !== "undefined" ? (
-            <input
-              accept="image/*"
-              onChange={handleFileChange}
-              ref={fileInputRef}
-              style={{ display: "none" }}
-              type="file"
-            />
-          ) : null}
-          <Pressable accessibilityRole="button" accessibilityLabel="添加快递" onPress={addItem} style={styles.addButton}>
-            <Text style={styles.addText}>+ 添加</Text>
-          </Pressable>
+          </View>
+          <View style={styles.formRow}>
+            <TextInput onChangeText={(text) => setForm((previous) => ({ ...previous, pickupLocation: text }))} placeholder="取件地点（可空）" placeholderTextColor="#9ca3af" style={[styles.input, styles.inputHalf]} value={form.pickupLocation} />
+            <TextInput onChangeText={(text) => setForm((previous) => ({ ...previous, pickupCode: text }))} placeholder="取件码（可空）" placeholderTextColor="#9ca3af" style={[styles.input, styles.inputHalf]} value={form.pickupCode} />
+          </View>
         </View>
-      </View>
+      ) : null}
+
+      <Pressable accessibilityRole="button" accessibilityLabel="保存快递" onPress={addItem} style={[styles.addButton, !isPackageDraftAddable(form) ? styles.addButtonDisabled : null]}>
+        <Text style={styles.addText}>保存快递</Text>
+      </Pressable>
+      {feedback ? <Text style={styles.feedback}>{feedback}</Text> : null}
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.list} contentContainerStyle={styles.listInner}>
-        {unpicked.length === 0 && picked.length === 0 ? (
-          <Text style={styles.empty}>还没有快递，添加一个吧</Text>
-        ) : null}
+        {unpicked.length === 0 && picked.length === 0 ? <Text style={styles.empty}>还没有快递。上传截图就能先记一条。</Text> : null}
         {unpicked.map((item) => (
-          <PackageCard key={item.id} item={item} />
+          <PackageCard item={item} key={item.id} onDelete={deleteItem} onPreview={setExpandedImage} onToggle={togglePickedUp} styles={styles} />
         ))}
-        {picked.length > 0 ? <View style={styles.divider} /> : null}
-        {picked.map((item) => (
-          <PackageCard key={item.id} item={item} />
-        ))}
+        {picked.length > 0 ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="展开已取快递" onPress={() => setPickedOpen((value) => !value)} style={styles.pickedToggle}>
+            <Text style={styles.pickedToggleText}>已取 {picked.length} 个 {pickedOpen ? "收起" : "展开"}</Text>
+          </Pressable>
+        ) : null}
+        {pickedOpen ? picked.map((item) => <PackageCard item={item} key={item.id} onDelete={deleteItem} onPreview={setExpandedImage} onToggle={togglePickedUp} styles={styles} />) : null}
       </ScrollView>
 
       {expandedImage ? (
@@ -226,15 +191,54 @@ export function PackagePanel({ storage, themeTokens }: PackagePanelProps) {
   );
 }
 
-function getDefaultPackageStorage() {
-  if (typeof window !== "undefined" && window.localStorage) {
-    return window.localStorage;
+function PackageCard({
+  item,
+  onDelete,
+  onPreview,
+  onToggle,
+  styles
+}: {
+  item: PackageItem;
+  onDelete: (id: string) => void;
+  onPreview: (image: string) => void;
+  onToggle: (id: string) => void;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <View style={[styles.itemCard, item.pickedUp ? styles.itemCardDone : null]}>
+      <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: item.pickedUp }} onPress={() => onToggle(item.id)} style={[styles.check, item.pickedUp ? styles.checkActive : null]}>
+        {item.pickedUp ? <Text style={styles.checkMark}>✓</Text> : null}
+      </Pressable>
+      <View style={styles.itemBody}>
+        <Text style={[styles.itemCompany, item.pickedUp ? styles.itemDoneText : null]} numberOfLines={1}>{item.company || "未填写快递公司"}</Text>
+        <Text style={styles.itemMeta} numberOfLines={1}>取件码：{item.pickupCode || "未填"} · 地点：{item.pickupLocation || "未填"}</Text>
+        <Text style={styles.itemMeta}>{item.arrivalDate}</Text>
+      </View>
+      {item.image ? (
+        <Pressable onPress={() => onPreview(item.image!)} style={styles.itemThumbWrap}>
+          <Image source={{ uri: item.image }} style={styles.itemThumb} />
+        </Pressable>
+      ) : null}
+      <Pressable accessibilityRole="button" accessibilityLabel={`删除快递${item.company || item.pickupCode || ""}`} onPress={() => onDelete(item.id)} style={styles.deleteButton}>
+        <Text style={styles.deleteText}>删除</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function extractPackageFieldsFromText(text: string): Partial<Omit<PackageItem, "id" | "createTime" | "image" | "pickedUp" | "orderNumber">> {
+  const result: Partial<Omit<PackageItem, "id" | "createTime" | "image" | "pickedUp" | "orderNumber">> = {};
+  const codeMatch = text.match(/(?:取件码|取件|code|码)[^\dA-Za-z]*([A-Za-z0-9-]{3,12})/i);
+  if (codeMatch) result.pickupCode = codeMatch[1];
+  const dateMatch = text.match(/(20\d{2})[-年.](\d{1,2})[-月.](\d{1,2})/);
+  if (dateMatch) result.arrivalDate = `${dateMatch[1]}-${dateMatch[2].padStart(2, "0")}-${dateMatch[3].padStart(2, "0")}`;
+  for (const company of ["顺丰", "中通", "圆通", "韵达", "申通", "京东", "邮政", "极兔"]) {
+    if (text.includes(company)) {
+      result.company = company;
+      break;
+    }
   }
-  return {
-    getItem: () => null,
-    removeItem: () => {},
-    setItem: () => {}
-  };
+  return result;
 }
 
 function createStyles(tokens: UiTokens) {
@@ -244,14 +248,15 @@ function createStyles(tokens: UiTokens) {
       backgroundColor: tokens.accent,
       borderRadius: 12,
       justifyContent: "center",
-      minHeight: 40,
-      minWidth: 86,
-      paddingHorizontal: 14,
-      paddingVertical: 10
+      minHeight: 46,
+      paddingVertical: 11
+    },
+    addButtonDisabled: {
+      opacity: 0.45
     },
     addText: {
       color: "#ffffff",
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: "900"
     },
     card: {
@@ -259,7 +264,7 @@ function createStyles(tokens: UiTokens) {
       borderColor: "#e3e6eb",
       borderRadius: 18,
       borderWidth: 1,
-      gap: 12,
+      gap: 10,
       overflow: "hidden",
       padding: 14,
       position: "relative",
@@ -267,20 +272,20 @@ function createStyles(tokens: UiTokens) {
     },
     check: {
       alignItems: "center",
-      borderColor: tokens.border,
+      borderColor: tokens.textMuted,
       borderRadius: 999,
       borderWidth: 1.5,
-      height: 22,
+      height: 24,
       justifyContent: "center",
-      width: 22
+      width: 24
     },
     checkActive: {
-      backgroundColor: tokens.accent,
-      borderColor: tokens.accent
+      backgroundColor: "#34a853",
+      borderColor: "#34a853"
     },
     checkMark: {
       color: "#ffffff",
-      fontSize: 12,
+      fontSize: 13,
       fontWeight: "900"
     },
     dateTrigger: {
@@ -288,30 +293,21 @@ function createStyles(tokens: UiTokens) {
       flexDirection: "row",
       justifyContent: "flex-start"
     },
-    dateTriggerPlaceholder: {
-      color: "#9ca3af"
-    },
     dateTriggerText: {
       color: tokens.text,
       fontSize: 13,
       fontWeight: "700"
     },
     deleteButton: {
-      alignItems: "center",
-      backgroundColor: "#fdeaea",
+      backgroundColor: "#fff1f1",
       borderRadius: 10,
-      paddingVertical: 6
+      paddingHorizontal: 10,
+      paddingVertical: 8
     },
     deleteText: {
-      color: "#e57373",
+      color: "#d14d4d",
       fontSize: 12,
       fontWeight: "900"
-    },
-    divider: {
-      backgroundColor: tokens.border,
-      height: 1,
-      marginVertical: 8,
-      width: "100%"
     },
     empty: {
       color: tokens.textMuted,
@@ -321,6 +317,11 @@ function createStyles(tokens: UiTokens) {
     expandedImage: {
       height: "80%",
       width: "90%"
+    },
+    feedback: {
+      color: tokens.accent,
+      fontSize: 12,
+      fontWeight: "800"
     },
     form: {
       gap: 8
@@ -334,10 +335,7 @@ function createStyles(tokens: UiTokens) {
     header: {
       alignItems: "center",
       flexDirection: "row",
-      gap: 6
-    },
-    icon: {
-      fontSize: 20
+      justifyContent: "space-between"
     },
     imageModal: {
       alignItems: "center",
@@ -349,24 +347,6 @@ function createStyles(tokens: UiTokens) {
       right: 0,
       top: 0,
       zIndex: 200
-    },
-    imageRow: {
-      alignItems: "center",
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8
-    },
-    imagePickedRow: {
-      alignItems: "center",
-      backgroundColor: "#f0f7f0",
-      borderColor: tokens.border,
-      borderRadius: 12,
-      borderWidth: 1,
-      flex: 1,
-      flexDirection: "row",
-      gap: 8,
-      minWidth: 150,
-      padding: 5
     },
     input: {
       backgroundColor: "#f8fafc",
@@ -386,13 +366,16 @@ function createStyles(tokens: UiTokens) {
     },
     itemBody: {
       flex: 1,
-      gap: 2
+      gap: 3
     },
     itemCard: {
+      alignItems: "center",
       backgroundColor: "#f8fafc",
       borderColor: "#e3e6eb",
       borderRadius: 14,
       borderWidth: 1,
+      flexDirection: "row",
+      flexWrap: "wrap",
       gap: 8,
       padding: 10,
       width: "100%"
@@ -415,35 +398,66 @@ function createStyles(tokens: UiTokens) {
     },
     itemThumb: {
       borderRadius: 8,
-      height: 56,
-      width: 56
+      height: 50,
+      width: 50
     },
     itemThumbWrap: {
       borderRadius: 8
     },
-    itemTop: {
-      flexDirection: "row",
-      gap: 8
-    },
     list: {
       flexGrow: 0,
-      maxHeight: 320
+      maxHeight: 340
     },
     listInner: {
       gap: 8,
       paddingBottom: 4
     },
-    subtitle: {
+    manualToggle: {
+      alignSelf: "flex-start",
+      backgroundColor: "#f1f5f9",
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 7
+    },
+    manualToggleText: {
+      color: "#64748b",
+      fontSize: 12,
+      fontWeight: "900"
+    },
+    pendingImageRow: {
+      alignItems: "center",
+      backgroundColor: "#f0f7f0",
+      borderRadius: 12,
+      flexDirection: "row",
+      gap: 10,
+      padding: 8
+    },
+    pendingImageText: {
       color: tokens.textMuted,
       flex: 1,
-      fontSize: 11,
-      fontWeight: "700",
-      textAlign: "right"
+      fontSize: 12,
+      fontWeight: "700"
+    },
+    pickedToggle: {
+      alignItems: "center",
+      backgroundColor: "#f1f5f9",
+      borderRadius: 12,
+      paddingVertical: 9
+    },
+    pickedToggleText: {
+      color: "#64748b",
+      fontSize: 13,
+      fontWeight: "900"
+    },
+    subtitle: {
+      color: tokens.textMuted,
+      fontSize: 12,
+      fontWeight: "800"
     },
     thumbnail: {
       borderRadius: 10,
-      height: 38,
-      width: 38
+      height: 48,
+      width: 48
     },
     thumbnailWrap: {
       borderRadius: 10
@@ -453,28 +467,36 @@ function createStyles(tokens: UiTokens) {
       fontSize: 17,
       fontWeight: "900"
     },
-    uploadButton: {
+    uploadHero: {
       alignItems: "center",
       backgroundColor: "#f0f7f0",
       borderColor: tokens.accent,
-      borderRadius: 12,
+      borderRadius: 16,
       borderStyle: "dashed",
-      borderWidth: 1,
-      flex: 1,
-      minHeight: 40,
-      minWidth: 150,
-      paddingVertical: 10
+      borderWidth: 1.5,
+      flexDirection: "row",
+      gap: 12,
+      padding: 14
     },
-    uploadText: {
+    uploadHeroIcon: {
       color: tokens.accent,
-      fontSize: 13,
-      fontWeight: "900"
+      fontSize: 28,
+      fontWeight: "900",
+      lineHeight: 30
     },
-    replaceImageButton: {
-      alignItems: "center",
+    uploadHeroSub: {
+      color: tokens.textMuted,
+      fontSize: 12,
+      lineHeight: 17
+    },
+    uploadHeroTextBox: {
       flex: 1,
-      justifyContent: "center",
-      minHeight: 32
+      gap: 2
+    },
+    uploadHeroTitle: {
+      color: tokens.accent,
+      fontSize: 15,
+      fontWeight: "900"
     }
   });
 }

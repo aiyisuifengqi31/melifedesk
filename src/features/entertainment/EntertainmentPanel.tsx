@@ -1,18 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
-import {
-  FASHION_CHANNELS,
-  MAKEUP_CHANNELS,
-  generateFashion,
-  generateMakeup,
-  openLink,
-  type FashionCategory,
-  type FashionGender,
-  type MakeupItem
-} from "./entertainmentData";
+import { openLink } from "./entertainmentData";
 import { fetchHotList, type HotItem, type HotSource } from "./hotListService";
 
 type EntertainmentPanelProps = {
@@ -22,33 +13,74 @@ type EntertainmentPanelProps = {
   themeTokens: UiTokens;
 };
 
-export type EntTab = "trend" | "fashion" | "makeup";
+export type EntTab = "hot" | "film" | "useful";
 
 export const entertainmentTabs: FixedBottomTabItem<EntTab>[] = [
-  { label: "热点", value: "trend" },
-  { label: "穿搭", value: "fashion" },
-  { label: "化妆", value: "makeup" }
+  { label: "热点", value: "hot" },
+  { label: "影视", value: "film" },
+  { label: "实用", value: "useful" }
 ];
 
-const FASHION_CATEGORIES: FashionCategory[] = ["衣服", "鞋子", "上衣", "裤子", "裙子"];
 const HOT_SOURCES: HotSource[] = ["百度", "微博", "知乎"];
+
+const FILM_ITEMS = [
+  {
+    id: "film-weekend",
+    title: "周末观影清单",
+    type: "电影",
+    time: "近期可看",
+    summary: "把想看的电影先记在这里，周末前快速筛选，不需要来回翻聊天记录。"
+  },
+  {
+    id: "film-drama",
+    title: "追剧进度",
+    type: "电视剧",
+    time: "随用随记",
+    summary: "适合记录正在看的剧、看到第几集、是否适合两个人一起看。"
+  },
+  {
+    id: "film-variety",
+    title: "下饭综艺",
+    type: "综艺",
+    time: "晚饭前查看",
+    summary: "保留轻量推荐，不做复杂评分；收藏后可以作为下一次娱乐选择。"
+  }
+];
+
+const USEFUL_ITEMS = [
+  {
+    id: "useful-holiday",
+    title: "节假日和调休提醒",
+    tag: "生活",
+    summary: "提前记录假期、调休、车票、出行安排，避免临时手忙脚乱。"
+  },
+  {
+    id: "useful-delivery",
+    title: "快递和取件提醒",
+    tag: "实用",
+    summary: "和快递模块配合使用，优先关注待取快递和取件码。"
+  },
+  {
+    id: "useful-date",
+    title: "约会小安排",
+    tag: "关系",
+    summary: "记录想去的地方、想看的电影、想吃的店，避免每次都临时想。"
+  }
+];
 
 export function EntertainmentPanel({ activeTab, onTabChange, showInlineTabs = true, themeTokens: tokens }: EntertainmentPanelProps) {
   const styles = useMemo(() => createStyles(tokens), [tokens]);
-  const [localTab, setLocalTab] = useState<EntTab>("trend");
+  const [localTab, setLocalTab] = useState<EntTab>("hot");
   const tab = activeTab ?? localTab;
   const setTab = onTabChange ?? setLocalTab;
-
   const [hotSource, setHotSource] = useState<HotSource>("百度");
   const [hotItems, setHotItems] = useState<HotItem[]>([]);
   const [hotLoading, setHotLoading] = useState(false);
   const [hotError, setHotError] = useState("");
   const [hotUpdatedAt, setHotUpdatedAt] = useState("");
-
-  const [fashionGender, setFashionGender] = useState<FashionGender>("女");
-  const [fashionCategory, setFashionCategory] = useState<FashionCategory>("衣服");
-  const [fashion, setFashion] = useState(() => generateFashion("女", "衣服"));
-  const [makeup, setMakeup] = useState<MakeupItem[]>(() => generateMakeup());
+  const [expandedHotId, setExpandedHotId] = useState<string | null>(null);
+  const [readIds, setReadIds] = useState<string[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
 
   const loadHot = useCallback(async (source: HotSource, force = false) => {
     setHotLoading(true);
@@ -64,22 +96,27 @@ export function EntertainmentPanel({ activeTab, onTabChange, showInlineTabs = tr
     void loadHot(hotSource);
   }, [hotSource, loadHot]);
 
-  const refreshFashion = () => setFashion(generateFashion(fashionGender, fashionCategory));
-  const refreshMakeup = () => setMakeup(generateMakeup());
+  const toggleRead = (id: string) => {
+    setReadIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [id, ...current]));
+  };
+
+  const toggleFavorite = (id: string) => {
+    setFavoriteIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [id, ...current]));
+  };
 
   return (
     <View style={styles.stack}>
       <View style={styles.hero}>
         <Text style={styles.heroTitle}>娱乐</Text>
-        <Text style={styles.heroSub}>实时热榜、穿搭灵感与妆容教程</Text>
+        <Text style={styles.heroSub}>先看摘要，再决定要不要打开原文或收藏。</Text>
       </View>
 
-      {tab === "trend" ? (
+      {tab === "hot" ? (
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>{hotSource}热榜</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="刷新热榜" onPress={() => void loadHot(hotSource, true)} style={styles.refreshButton}>
-              <Text style={styles.refreshText}>↻ 刷新</Text>
+            <Text style={styles.cardTitle}>{hotSource}热点</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="刷新热点" onPress={() => void loadHot(hotSource, true)} style={styles.refreshButton}>
+              <Text style={styles.refreshText}>刷新</Text>
             </Pressable>
           </View>
 
@@ -88,7 +125,7 @@ export function EntertainmentPanel({ activeTab, onTabChange, showInlineTabs = tr
               <Pressable
                 key={source}
                 accessibilityRole="button"
-                accessibilityLabel={`${source}热榜`}
+                accessibilityLabel={`${source}热点`}
                 onPress={() => setHotSource(source)}
                 style={[styles.sourceChip, hotSource === source ? styles.sourceChipActive : null]}
               >
@@ -97,160 +134,82 @@ export function EntertainmentPanel({ activeTab, onTabChange, showInlineTabs = tr
             ))}
           </View>
 
-          {hotUpdatedAt ? <Text style={styles.updatedText}>更新于 {hotUpdatedAt} · 点击条目查看原文</Text> : null}
+          {hotUpdatedAt ? <Text style={styles.updatedText}>更新于 {hotUpdatedAt}</Text> : null}
           {hotError ? <Text style={styles.errorText}>{hotError}</Text> : null}
 
           {hotLoading && hotItems.length === 0 ? (
             <View style={styles.loadingBox}>
               <ActivityIndicator color={tokens.accent} />
-              <Text style={styles.loadingText}>正在获取实时热榜…</Text>
+              <Text style={styles.loadingText}>正在获取实时热点...</Text>
             </View>
           ) : null}
 
-          <View style={styles.trendList}>
+          <View style={styles.list}>
             {hotItems.map((item) => (
-              <Pressable
+              <HotRow
+                expanded={expandedHotId === item.id}
+                favorite={favoriteIds.includes(item.id)}
+                item={item}
                 key={item.id}
-                accessibilityRole="button"
-                accessibilityLabel={item.title}
-                disabled={!item.url}
-                onPress={() => (item.url ? openLink(item.url) : undefined)}
-                style={styles.trendRow}
-              >
-                <Text style={[styles.trendRank, item.rank <= 3 ? styles.trendRankTop : null]}>{item.rank}</Text>
-                <View style={styles.trendBody}>
-                  <Text style={styles.trendTitle} numberOfLines={2}>
-                    {item.title}
-                  </Text>
-                  {item.desc ? (
-                    <Text style={styles.trendDesc} numberOfLines={1}>
-                      {item.desc}
-                    </Text>
-                  ) : null}
-                </View>
-                {item.hot ? <Text style={styles.trendHot}>{item.hot}</Text> : null}
-              </Pressable>
+                onOpen={() => (item.url ? openLink(item.url) : undefined)}
+                onPress={() => setExpandedHotId(expandedHotId === item.id ? null : item.id)}
+                onRead={() => toggleRead(item.id)}
+                onToggleFavorite={() => toggleFavorite(item.id)}
+                read={readIds.includes(item.id)}
+                styles={styles}
+              />
             ))}
           </View>
 
-          {!hotLoading && hotItems.length === 0 ? <Text style={styles.emptyText}>暂时没有拿到数据，点击“刷新”再试一次。</Text> : null}
+          {!hotLoading && hotItems.length === 0 ? <Text style={styles.emptyText}>暂时没有拿到数据，点“刷新”再试一次。</Text> : null}
         </View>
       ) : null}
 
-      {tab === "fashion" ? (
+      {tab === "film" ? (
         <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>今日穿搭推荐</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="换一批穿搭" onPress={refreshFashion} style={styles.refreshButton}>
-              <Text style={styles.refreshText}>↻ 换一批</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.fashionFilters}>
-            <View style={styles.genderToggle}>
-              {(["女", "男"] as FashionGender[]).map((gender) => (
-                <Pressable
-                  key={gender}
-                  accessibilityRole="button"
-                  accessibilityLabel={`性别：${gender}`}
-                  onPress={() => {
-                    setFashionGender(gender);
-                    setFashion(generateFashion(gender, fashionCategory));
-                  }}
-                  style={[styles.genderChip, fashionGender === gender ? styles.genderChipActive : null]}
-                >
-                  <Text style={[styles.genderChipText, fashionGender === gender ? styles.genderChipTextActive : null]}>{gender}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
-              {FASHION_CATEGORIES.map((category) => (
-                <Pressable
-                  key={category}
-                  accessibilityRole="button"
-                  accessibilityLabel={`品类：${category}`}
-                  onPress={() => {
-                    setFashionCategory(category);
-                    setFashion(generateFashion(fashionGender, category));
-                  }}
-                  style={[styles.categoryChip, fashionCategory === category ? styles.categoryChipActive : null]}
-                >
-                  <Text style={[styles.categoryText, fashionCategory === category ? styles.categoryTextActive : null]}>{category}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-
-          <View style={styles.itemList}>
-            {fashion.map((item) => (
-              <View key={item.id} style={styles.itemCard}>
-                <View style={styles.itemHead}>
-                  <Text style={styles.itemEmoji}>{item.imageEmoji}</Text>
-                  <View style={styles.itemInfo}>
-                    <Text style={styles.itemTitle}>{item.title}</Text>
-                    <Text style={styles.itemTip}>{item.tip}</Text>
-                  </View>
-                </View>
-                <View style={styles.channelRow}>
-                  {FASHION_CHANNELS.map((channel) => (
-                    <Pressable
-                      key={channel.id}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${channel.label}搜索 ${item.title}`}
-                      onPress={() => openLink(channel.build(item.keyword))}
-                      style={styles.channelChip}
-                    >
-                      <Text style={styles.channelText}>{channel.label}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            ))}
-          </View>
+          <Text style={styles.cardTitle}>影视</Text>
+          <Text style={styles.cardHint}>轻量记录近期想看的内容，不做复杂评分。</Text>
+          {FILM_ITEMS.map((item) => (
+            <InfoRow
+              favorite={favoriteIds.includes(item.id)}
+              key={item.id}
+              meta={`${item.type} · ${item.time}`}
+              onRead={() => toggleRead(item.id)}
+              onToggleFavorite={() => toggleFavorite(item.id)}
+              read={readIds.includes(item.id)}
+              styles={styles}
+              summary={item.summary}
+              title={item.title}
+            />
+          ))}
         </View>
       ) : null}
 
-      {tab === "makeup" ? (
+      {tab === "useful" ? (
         <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>热门化妆教程</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="换一批" onPress={refreshMakeup} style={styles.refreshButton}>
-              <Text style={styles.refreshText}>↻ 换一批</Text>
-            </Pressable>
-          </View>
-          <View style={styles.itemList}>
-            {makeup.map((item) => (
-              <View key={item.id} style={styles.itemCard}>
-                <View style={styles.itemHead}>
-                  <Text style={styles.itemEmoji}>{item.emoji}</Text>
-                  <View style={styles.itemInfo}>
-                    <Text style={styles.itemTitle}>{item.title}</Text>
-                    <Text style={styles.itemTip}>{item.level}向 · 点击下方渠道看教程</Text>
-                  </View>
-                </View>
-                <View style={styles.channelRow}>
-                  {MAKEUP_CHANNELS.map((channel) => (
-                    <Pressable
-                      key={channel.id}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${channel.label}搜索 ${item.title}`}
-                      onPress={() => openLink(channel.build(item.keyword))}
-                      style={styles.channelChip}
-                    >
-                      <Text style={styles.channelText}>{channel.label}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            ))}
-          </View>
+          <Text style={styles.cardTitle}>实用</Text>
+          <Text style={styles.cardHint}>只保留能配合日常使用的提醒，不放空功能。</Text>
+          {USEFUL_ITEMS.map((item) => (
+            <InfoRow
+              favorite={favoriteIds.includes(item.id)}
+              key={item.id}
+              meta={item.tag}
+              onRead={() => toggleRead(item.id)}
+              onToggleFavorite={() => toggleFavorite(item.id)}
+              read={readIds.includes(item.id)}
+              styles={styles}
+              summary={item.summary}
+              title={item.title}
+            />
+          ))}
         </View>
       ) : null}
+
       {showInlineTabs ? (
-        <View testID="entertainment-floating-tabs" style={[styles.tabs, styles.inlineTabs]}>
+        <View testID="entertainment-floating-tabs" style={styles.inlineTabs}>
           {entertainmentTabs.map((item) => (
             <Pressable key={item.value} accessibilityRole="button" accessibilityLabel={item.label} onPress={() => setTab(item.value)} style={[styles.tab, tab === item.value ? styles.tabActive : null]}>
-              <Text style={[styles.tabText, tab === item.value ? styles.tabTextActive : null]}>{item.label}</Text>
+              <Text numberOfLines={1} style={[styles.tabText, tab === item.value ? styles.tabTextActive : null]}>{item.label}</Text>
             </Pressable>
           ))}
         </View>
@@ -259,62 +218,124 @@ export function EntertainmentPanel({ activeTab, onTabChange, showInlineTabs = tr
   );
 }
 
+function HotRow({
+  expanded,
+  favorite,
+  item,
+  onOpen,
+  onPress,
+  onRead,
+  onToggleFavorite,
+  read,
+  styles
+}: {
+  expanded: boolean;
+  favorite: boolean;
+  item: HotItem;
+  onOpen: () => void;
+  onPress: () => void;
+  onRead: () => void;
+  onToggleFavorite: () => void;
+  read: boolean;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={item.title} onPress={onPress} style={[styles.row, read ? styles.rowRead : null]}>
+      <Text style={[styles.rank, item.rank <= 3 ? styles.rankTop : null]}>{item.rank}</Text>
+      <View style={styles.rowBody}>
+        <Text numberOfLines={expanded ? 4 : 2} style={[styles.rowTitle, read ? styles.readText : null]}>{item.title}</Text>
+        {item.desc || expanded ? <Text style={styles.summary}>{item.desc || "暂无摘要，点击查看原文前可先收藏或标记已读。"}</Text> : null}
+        {expanded ? (
+          <View style={styles.actionRow}>
+            <Pressable accessibilityRole="button" accessibilityLabel={`标记已读${item.title}`} onPress={onRead} style={styles.softButton}>
+              <Text style={styles.softButtonText}>{read ? "取消已读" : "已读"}</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={`收藏${item.title}`} onPress={onToggleFavorite} style={styles.softButton}>
+              <Text style={styles.softButtonText}>{favorite ? "已收藏" : "收藏"}</Text>
+            </Pressable>
+            {item.url ? (
+              <Pressable accessibilityRole="button" accessibilityLabel={`查看原文${item.title}`} onPress={onOpen} style={styles.softButton}>
+                <Text style={styles.softButtonText}>原文</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+      {item.hot ? <Text style={styles.hot}>{item.hot}</Text> : null}
+    </Pressable>
+  );
+}
+
+function InfoRow({
+  favorite,
+  meta,
+  onRead,
+  onToggleFavorite,
+  read,
+  styles,
+  summary,
+  title
+}: {
+  favorite: boolean;
+  meta: string;
+  onRead: () => void;
+  onToggleFavorite: () => void;
+  read: boolean;
+  styles: ReturnType<typeof createStyles>;
+  summary: string;
+  title: string;
+}) {
+  return (
+    <View style={[styles.infoCard, read ? styles.rowRead : null]}>
+      <View style={styles.infoTop}>
+        <View style={styles.rowBody}>
+          <Text style={[styles.rowTitle, read ? styles.readText : null]}>{title}</Text>
+          <Text style={styles.updatedText}>{meta}</Text>
+        </View>
+        <Text style={styles.statePill}>{read ? "已读" : "未读"}</Text>
+      </View>
+      <Text style={styles.summary}>{summary}</Text>
+      <View style={styles.actionRow}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`标记已读${title}`} onPress={onRead} style={styles.softButton}>
+          <Text style={styles.softButtonText}>{read ? "取消已读" : "已读"}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={`收藏${title}`} onPress={onToggleFavorite} style={styles.softButton}>
+          <Text style={styles.softButtonText}>{favorite ? "已收藏" : "收藏"}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function createStyles(tokens: UiTokens) {
   return StyleSheet.create({
+    actionRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8
+    },
     card: {
       backgroundColor: tokens.surface,
       borderColor: tokens.border,
-      borderRadius: 20,
+      borderRadius: 18,
       borderWidth: 1,
       gap: 12,
-      padding: 16
+      padding: 14
     },
     cardHeader: {
       alignItems: "center",
       flexDirection: "row",
       justifyContent: "space-between"
     },
+    cardHint: {
+      color: tokens.textMuted,
+      fontSize: 12,
+      lineHeight: 18
+    },
     cardTitle: {
       color: tokens.text,
-      fontSize: 16,
+      fontSize: 17,
       fontWeight: "900"
-    },
-    categoryChip: {
-      backgroundColor: tokens.surfaceMuted,
-      borderRadius: 999,
-      paddingHorizontal: 14,
-      paddingVertical: 7
-    },
-    categoryChipActive: {
-      backgroundColor: tokens.accent
-    },
-    categoryRow: {
-      flexDirection: "row",
-      gap: 8
-    },
-    categoryText: {
-      color: tokens.textMuted,
-      fontSize: 13,
-      fontWeight: "800"
-    },
-    categoryTextActive: {
-      color: "#ffffff"
-    },
-    channelChip: {
-      backgroundColor: tokens.accentSoft,
-      borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 6
-    },
-    channelRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8
-    },
-    channelText: {
-      color: tokens.accent,
-      fontSize: 12,
-      fontWeight: "800"
     },
     emptyText: {
       color: tokens.textMuted,
@@ -325,47 +346,6 @@ function createStyles(tokens: UiTokens) {
     errorText: {
       color: "#d97706",
       fontSize: 12
-    },
-    fashionFilters: {
-      gap: 10
-    },
-    floatingTabs: {
-      bottom: 10,
-      elevation: 10,
-      left: 76,
-      position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
-      right: 10,
-      shadowColor: "#000000",
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.12,
-      shadowRadius: 18,
-      zIndex: 80
-    },
-    genderChip: {
-      borderRadius: 999,
-      flex: 1,
-      paddingVertical: 8
-    },
-    genderChipActive: {
-      backgroundColor: tokens.accent
-    },
-    genderChipText: {
-      color: tokens.textMuted,
-      fontSize: 14,
-      fontWeight: "800",
-      textAlign: "center"
-    },
-    genderChipTextActive: {
-      color: "#ffffff"
-    },
-    genderToggle: {
-      alignSelf: "flex-start",
-      backgroundColor: tokens.surfaceMuted,
-      borderRadius: 999,
-      flexDirection: "row",
-      gap: 4,
-      minWidth: 140,
-      padding: 4
     },
     hero: {
       gap: 4
@@ -379,36 +359,33 @@ function createStyles(tokens: UiTokens) {
       fontSize: 22,
       fontWeight: "900"
     },
-    itemCard: {
+    hot: {
+      color: tokens.textMuted,
+      fontSize: 11,
+      fontWeight: "800"
+    },
+    infoCard: {
       backgroundColor: tokens.surfaceMuted,
-      borderRadius: 16,
-      gap: 10,
+      borderColor: tokens.border,
+      borderRadius: 14,
+      borderWidth: 1,
+      gap: 8,
       padding: 12
     },
-    itemEmoji: {
-      fontSize: 26
-    },
-    itemHead: {
+    infoTop: {
       alignItems: "flex-start",
       flexDirection: "row",
       gap: 10
     },
-    itemInfo: {
-      flex: 1,
-      gap: 3
+    inlineTabs: {
+      backgroundColor: tokens.surfaceMuted,
+      borderRadius: 14,
+      flexDirection: "row",
+      gap: 4,
+      padding: 4
     },
-    itemList: {
-      gap: 10
-    },
-    itemTip: {
-      color: tokens.textMuted,
-      fontSize: 12,
-      lineHeight: 18
-    },
-    itemTitle: {
-      color: tokens.text,
-      fontSize: 15,
-      fontWeight: "900"
+    list: {
+      gap: 2
     },
     loadingBox: {
       alignItems: "center",
@@ -418,6 +395,19 @@ function createStyles(tokens: UiTokens) {
     loadingText: {
       color: tokens.textMuted,
       fontSize: 13
+    },
+    rank: {
+      color: tokens.textMuted,
+      fontSize: 13,
+      fontWeight: "900",
+      minWidth: 22,
+      textAlign: "center"
+    },
+    rankTop: {
+      color: "#e05a4f"
+    },
+    readText: {
+      color: tokens.textMuted
     },
     refreshButton: {
       backgroundColor: tokens.surfaceMuted,
@@ -429,6 +419,40 @@ function createStyles(tokens: UiTokens) {
       color: tokens.accent,
       fontSize: 12,
       fontWeight: "800"
+    },
+    row: {
+      alignItems: "center",
+      borderBottomColor: tokens.border,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      flexDirection: "row",
+      gap: 10,
+      paddingVertical: 10
+    },
+    rowBody: {
+      flex: 1,
+      gap: 4
+    },
+    rowRead: {
+      opacity: 0.62
+    },
+    rowTitle: {
+      color: tokens.text,
+      fontSize: 14,
+      fontWeight: "800",
+      lineHeight: 20
+    },
+    softButton: {
+      backgroundColor: tokens.surface,
+      borderColor: tokens.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      paddingHorizontal: 10,
+      paddingVertical: 6
+    },
+    softButtonText: {
+      color: tokens.accent,
+      fontSize: 12,
+      fontWeight: "900"
     },
     sourceChip: {
       backgroundColor: tokens.surfaceMuted,
@@ -454,13 +478,29 @@ function createStyles(tokens: UiTokens) {
     },
     stack: {
       gap: 16,
-      paddingBottom: 108,
-      position: "relative"
+      paddingBottom: 108
+    },
+    statePill: {
+      backgroundColor: tokens.accentSoft,
+      borderRadius: 999,
+      color: tokens.accent,
+      fontSize: 11,
+      fontWeight: "900",
+      paddingHorizontal: 8,
+      paddingVertical: 4
+    },
+    summary: {
+      color: tokens.textMuted,
+      fontSize: 12,
+      lineHeight: 18
     },
     tab: {
       alignItems: "center",
       borderRadius: 12,
       flex: 1,
+      justifyContent: "center",
+      minWidth: 0,
+      paddingHorizontal: 4,
       paddingVertical: 10
     },
     tabActive: {
@@ -469,66 +509,15 @@ function createStyles(tokens: UiTokens) {
     tabText: {
       color: tokens.textMuted,
       fontSize: 14,
-      fontWeight: "800"
+      fontWeight: "900"
     },
     tabTextActive: {
       color: tokens.accent
     },
-    tabs: {
-      backgroundColor: tokens.surfaceMuted,
-      borderRadius: 14,
-      flexDirection: "row",
-      gap: 4,
-      padding: 4,
-      width: "auto"
-    },
-    inlineTabs: {
-      position: "relative",
-      width: "100%"
-    },
-    trendBody: {
-      flex: 1,
-      gap: 2
-    },
-    trendDesc: {
-      color: tokens.textMuted,
-      fontSize: 11
-    },
-    trendHot: {
-      color: tokens.textMuted,
-      fontSize: 11,
-      fontWeight: "800"
-    },
-    trendList: {
-      gap: 2
-    },
-    trendRank: {
-      color: tokens.textMuted,
-      fontSize: 13,
-      fontWeight: "900",
-      minWidth: 22,
-      textAlign: "center"
-    },
-    trendRankTop: {
-      color: "#e05a4f"
-    },
-    trendRow: {
-      alignItems: "center",
-      borderBottomColor: tokens.border,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      flexDirection: "row",
-      gap: 10,
-      paddingVertical: 10
-    },
-    trendTitle: {
-      color: tokens.text,
-      fontSize: 14,
-      fontWeight: "700",
-      lineHeight: 20
-    },
     updatedText: {
       color: tokens.textMuted,
-      fontSize: 11
+      fontSize: 11,
+      fontWeight: "700"
     }
   });
 }

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import type { UiTokens } from "@/shared/ui/primitives";
 import { getHolidayLabel, isWeekend } from "@/features/plan/holidays";
 import { resolveCurrentCityWeather, weatherEmoji, type WeatherState } from "@/features/plan/weatherProvider";
+import type { UiTokens } from "@/shared/ui/primitives";
 import { PackagePanel } from "./PackagePanel";
 
 type DailyPlanPanelProps = {
@@ -23,14 +23,12 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export function DailyPlanPanel({ shortcutNonce, shortcutTarget, themeTokens }: DailyPlanPanelProps) {
   const scrollRef = useRef<ScrollView>(null);
-  const [weather, setWeather] = useState<WeatherState>({ message: "点击后获取当前城市实时天气。", status: "idle" });
+  const [weather, setWeather] = useState<WeatherState>({ message: "未获取天气", status: "idle" });
 
   const loadWeather = async () => {
-    setWeather({ message: "正在读取当前城市天气...", status: "loading" });
+    setWeather({ message: "正在读取当前位置天气...", status: "loading" });
     setWeather(await resolveCurrentCityWeather());
   };
-
-  const today = todayIso();
 
   useEffect(() => {
     if (shortcutTarget !== "packages") return;
@@ -43,9 +41,7 @@ export function DailyPlanPanel({ shortcutNonce, shortcutTarget, themeTokens }: D
   return (
     <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.stack}>
       <WeatherCard onRefresh={loadWeather} weather={weather} />
-
-      <MonthCalendar onSelectDate={(date) => { /* 选中日期，未来可联动筛选当日待办 */ }} selectedDate={today} />
-
+      <MonthCalendar selectedDate={todayIso()} />
       <PackagePanel themeTokens={themeTokens} />
     </ScrollView>
   );
@@ -58,7 +54,6 @@ function WeatherCard({ onRefresh, weather }: { onRefresh: () => void; weather: W
         <View style={styles.weatherPlaceholder}>
           <Text style={styles.weatherCity}>当前城市天气</Text>
           <Text style={styles.weatherMeta}>{weather.message}</Text>
-          <Text style={styles.weatherPrivacy}>会请求定位权限，并用于当前城市天气查询。</Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="获取当前城市天气" onPress={onRefresh} style={styles.weatherButton}>
           <Text style={styles.weatherButtonText}>{weather.status === "loading" ? "读取中" : "获取天气"}</Text>
@@ -69,7 +64,7 @@ function WeatherCard({ onRefresh, weather }: { onRefresh: () => void; weather: W
 
   return (
     <View style={styles.weatherCard}>
-      <View>
+      <View style={styles.weatherMain}>
         <Text style={styles.weatherCity}>{weather.locationLabel}</Text>
         <Text style={styles.temperature}>{weather.temperature}°</Text>
         <Text style={styles.weatherMeta}>{weather.description} · 体感 {weather.apparentTemperature}°</Text>
@@ -77,6 +72,7 @@ function WeatherCard({ onRefresh, weather }: { onRefresh: () => void; weather: W
       <View style={styles.weatherRight}>
         <Text style={styles.weatherEmoji}>{weatherEmoji(weather.weatherCode)}</Text>
         <Text style={styles.weatherMeta}>湿度 {weather.humidity}%</Text>
+        <Text style={styles.weatherMeta}>降雨以实时接口为准</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="刷新当前城市天气" onPress={onRefresh} style={styles.weatherSmallButton}>
           <Text style={styles.weatherSmallButtonText}>刷新</Text>
         </Pressable>
@@ -85,37 +81,37 @@ function WeatherCard({ onRefresh, weather }: { onRefresh: () => void; weather: W
   );
 }
 
-function MonthCalendar({ onSelectDate, selectedDate }: { onSelectDate?: (date: string) => void; selectedDate: string }) {
+function MonthCalendar({ selectedDate }: { selectedDate: string }) {
   const [viewYear, setViewYear] = useState(parseIsoDate(selectedDate).getFullYear());
   const [viewMonth, setViewMonth] = useState(parseIsoDate(selectedDate).getMonth());
   const days = buildMonthDays(viewYear, viewMonth);
 
   const goPrevMonth = () => {
     if (viewMonth === 0) {
-      setViewYear((y) => y - 1);
+      setViewYear((year) => year - 1);
       setViewMonth(11);
     } else {
-      setViewMonth((m) => m - 1);
+      setViewMonth((month) => month - 1);
     }
   };
 
   const goNextMonth = () => {
     if (viewMonth === 11) {
-      setViewYear((y) => y + 1);
+      setViewYear((year) => year + 1);
       setViewMonth(0);
     } else {
-      setViewMonth((m) => m + 1);
+      setViewMonth((month) => month + 1);
     }
   };
 
   return (
     <View style={styles.calendarCard}>
       <View style={styles.calendarTop}>
-        <Pressable accessibilityRole="button" accessibilityLabel="上一月" onPress={goPrevMonth} hitSlop={12}>
+        <Pressable accessibilityRole="button" accessibilityLabel="上一个月" hitSlop={12} onPress={goPrevMonth}>
           <Text style={styles.calendarArrow}>‹</Text>
         </Pressable>
         <Text style={styles.calendarTitle}>{viewYear}年{viewMonth + 1}月</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="下一月" onPress={goNextMonth} hitSlop={12}>
+        <Pressable accessibilityRole="button" accessibilityLabel="下一个月" hitSlop={12} onPress={goNextMonth}>
           <Text style={styles.calendarArrow}>›</Text>
         </Pressable>
       </View>
@@ -130,16 +126,10 @@ function MonthCalendar({ onSelectDate, selectedDate }: { onSelectDate?: (date: s
           const weekend = day.inMonth && isWeekend(day.date);
           const selected = day.date === selectedDate;
           return (
-            <Pressable
-              key={day.date}
-              accessibilityRole="button"
-              accessibilityLabel={`选择日期 ${day.date}${holiday ? `，${holiday}` : ""}`}
-              onPress={() => day.inMonth && onSelectDate?.(day.date)}
-              style={[styles.dayCell, selected ? styles.dayCellSelected : null]}
-            >
+            <View key={day.date} style={[styles.dayCell, selected ? styles.dayCellSelected : null]}>
               <Text style={[styles.dayText, !day.inMonth ? styles.mutedDay : null, weekend ? styles.weekendDay : null, selected ? styles.selectedDay : null]}>{day.day}</Text>
-              {holiday ? <Text style={styles.holidayText} numberOfLines={1}>{holiday}</Text> : <View style={styles.holidayPlaceholder} />}
-            </Pressable>
+              {holiday ? <Text numberOfLines={1} style={styles.holidayText}>{holiday}</Text> : <View style={styles.holidayPlaceholder} />}
+            </View>
           );
         })}
       </View>
@@ -173,8 +163,8 @@ function buildMonthDays(year: number, monthIndex: number): MonthDay[] {
 const styles = StyleSheet.create({
   calendarArrow: {
     color: "#111827",
-    fontSize: 20,
-    fontWeight: "500"
+    fontSize: 19,
+    fontWeight: "700"
   },
   calendarCard: {
     backgroundColor: "#ffffff",
@@ -194,30 +184,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 6
   },
-  checkbox: {
-    alignItems: "center",
-    borderColor: "#cfd8e3",
-    borderRadius: 8,
-    borderWidth: 2,
-    height: 26,
-    justifyContent: "center",
-    width: 26
-  },
-  checkboxChecked: {
-    backgroundColor: "#28aeea",
-    borderColor: "#28aeea"
-  },
-  checkboxText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "900"
-  },
   dayCell: {
     alignItems: "center",
     flexBasis: "14.285%",
-    height: 38,
+    height: 34,
     justifyContent: "center",
-    paddingVertical: 2
+    paddingVertical: 1
   },
   dayCellSelected: {
     backgroundColor: "#28aeea",
@@ -231,16 +203,11 @@ const styles = StyleSheet.create({
     color: "#111827",
     fontSize: 12,
     fontWeight: "800",
-    lineHeight: 16,
+    lineHeight: 15,
     textAlign: "center"
   },
-  emptyText: {
-    color: "#8b93a1",
-    fontSize: 14,
-    lineHeight: 20
-  },
   holidayPlaceholder: {
-    height: 9
+    height: 8
   },
   holidayText: {
     color: "#ef4444",
@@ -249,127 +216,32 @@ const styles = StyleSheet.create({
     marginTop: 1,
     textAlign: "center"
   },
-  moreButton: {
-    backgroundColor: "#f1f5f9",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8
-  },
-  moreText: {
-    color: "#697386",
-    fontSize: 12,
-    fontWeight: "800"
-  },
   mutedDay: {
     color: "#c9ced6"
-  },
-  priorityDotSmall: {
-    fontSize: 12,
-    lineHeight: 14
-  },
-  section: {
-    gap: 8,
-    marginTop: 12
-  },
-  sectionTitle: {
-    color: "#111827",
-    fontSize: 15,
-    fontWeight: "900"
   },
   selectedDay: {
     color: "#ffffff"
   },
   stack: {
-    gap: 18,
+    gap: 14,
     paddingBottom: 40
-  },
-  taskBody: {
-    flex: 1,
-    gap: 4
-  },
-  taskCard: {
-    alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderColor: "#edf0f4",
-    borderRadius: 14,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 12,
-    padding: 12
-  },
-  taskMeta: {
-    color: "#8b93a1",
-    fontSize: 12,
-    fontWeight: "700"
-  },
-  taskMetaRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8
-  },
-  taskPriority: {
-    alignItems: "center",
-    backgroundColor: "#f8fafc",
-    borderRadius: 999,
-    flexDirection: "row",
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 4
-  },
-  taskPriorityText: {
-    color: "#4b5563",
-    fontSize: 12,
-    fontWeight: "900"
-  },
-  taskTitle: {
-    color: "#111827",
-    fontSize: 16,
-    fontWeight: "800"
-  },
-  taskTitleDone: {
-    color: "#a8b0bc",
-    textDecorationLine: "line-through"
   },
   temperature: {
     color: "#111827",
-    fontSize: 52,
+    fontSize: 38,
     fontWeight: "900",
-    lineHeight: 58
-  },
-  todoCard: {
-    backgroundColor: "#ffffff",
-    borderColor: "#e3e6eb",
-    borderRadius: 18,
-    borderWidth: 1,
-    gap: 12,
-    padding: 14
-  },
-  todoHeader: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 8
-  },
-  todoIcon: {
-    color: "#28aeea",
-    fontSize: 20,
-    fontWeight: "900"
-  },
-  todoTitle: {
-    color: "#111827",
-    fontSize: 18,
-    fontWeight: "900"
+    lineHeight: 44
   },
   weatherButton: {
     alignItems: "center",
     backgroundColor: "#28aeea",
     borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 12
+    paddingVertical: 10
   },
   weatherButtonText: {
     color: "#ffffff",
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "900"
   },
   weatherCard: {
@@ -380,34 +252,33 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     justifyContent: "space-between",
-    padding: 14
+    padding: 12
   },
   weatherCity: {
     color: "#697386",
-    fontSize: 16,
-    fontWeight: "700"
+    fontSize: 15,
+    fontWeight: "800"
   },
   weatherEmoji: {
-    fontSize: 34,
-    lineHeight: 40
+    fontSize: 30,
+    lineHeight: 34
+  },
+  weatherMain: {
+    flex: 1,
+    gap: 2
   },
   weatherMeta: {
     color: "#697386",
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "700"
   },
   weatherPlaceholder: {
     flex: 1,
-    gap: 8
-  },
-  weatherPrivacy: {
-    color: "#9aa3af",
-    fontSize: 12,
-    lineHeight: 17
+    gap: 3
   },
   weatherRight: {
     alignItems: "center",
-    gap: 6
+    gap: 4
   },
   weatherSmallButton: {
     backgroundColor: "#eef7ff",
@@ -423,7 +294,7 @@ const styles = StyleSheet.create({
   weekday: {
     color: "#697386",
     flex: 1,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "800",
     textAlign: "center"
   },
@@ -431,7 +302,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 4,
     justifyContent: "space-between",
-    marginBottom: 8
+    marginBottom: 6
   },
   weekendDay: {
     color: "#ef4444"
