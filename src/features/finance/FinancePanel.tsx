@@ -3,6 +3,11 @@ import { Platform, Pressable, StyleSheet, Text, TextInput, View, type NativeSynt
 import Svg, { Circle } from "react-native-svg";
 
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
+import { ButtonFormField, TextFormField } from "@/shared/ui/FormField";
+import { MobileFormLayout, MobileFormRow } from "@/shared/ui/MobileFormLayout";
+import { BalanceSummaryCard, SummaryCard } from "@/shared/ui/SummaryCard";
+import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
+import type { UiTokens } from "@/shared/ui/primitives";
 import { buildFinanceSummary, type TransactionType } from "@/features/finance/financeService";
 import {
   createFinanceId,
@@ -30,10 +35,37 @@ import {
 } from "@/features/finance/financeStorage";
 
 type FinancePanelProps = {
+  activeTab?: FinanceTab;
+  onTabChange?: (tab: FinanceTab) => void;
+  showInlineTabs?: boolean;
   storage?: FinanceStorage;
+  themeTokens?: UiTokens;
 };
 
-type FinanceTab = "record" | "stats" | "gifts" | "saving" | "category";
+export type FinanceTab = "record" | "stats" | "gifts" | "saving" | "category";
+
+export const financeTabs: FixedBottomTabItem<FinanceTab>[] = [
+  { label: "记录", value: "record" },
+  { label: "统计", value: "stats" },
+  { label: "份子", value: "gifts" },
+  { label: "储蓄", value: "saving" },
+  { label: "分类", value: "category" }
+];
+
+const financeTokens: UiTokens = {
+  accent: "#1fa8e2",
+  accentSoft: "#eaf6ff",
+  background: "#f5fbf7",
+  border: "#e3e8ef",
+  danger: "#ef4444",
+  shadow: "#7cb87c",
+  success: "#16a34a",
+  surface: "#ffffff",
+  surfaceMuted: "#f8fafc",
+  text: "#111827",
+  textMuted: "#697386",
+  warning: "#f59e0b"
+};
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const expenseCategories = ["买菜", "加油", "餐饮", "出行", "随份子", "购物", "医疗", "更多"];
@@ -74,9 +106,11 @@ const noteInputWebProps = { id: "finance-note-input" } as object;
 const savingAmountInputWebProps = { id: "finance-saving-amount-input" } as object;
 const categoryInputWebProps = { id: "finance-category-input" } as object;
 
-export function FinancePanel({ storage }: FinancePanelProps) {
+export function FinancePanel({ activeTab, onTabChange, showInlineTabs = true, storage, themeTokens = financeTokens }: FinancePanelProps) {
   const financeStorage = useMemo(() => storage ?? getDefaultFinanceStorage(), [storage]);
-  const [tab, setTab] = useState<FinanceTab>("record");
+  const [localTab, setLocalTab] = useState<FinanceTab>("record");
+  const tab = activeTab ?? localTab;
+  const setTab = onTabChange ?? setLocalTab;
   const [detailType, setDetailType] = useState<TransactionType>("expense");
   const [transactions, setTransactions] = useState<FinanceTransaction[]>(() => sortTransactions(loadFinanceTransactions(financeStorage)));
   const [savingEntries, setSavingEntries] = useState<SavingEntry[]>(() => loadSavingEntries(financeStorage));
@@ -170,6 +204,7 @@ export function FinancePanel({ storage }: FinancePanelProps) {
   const sevenDayTrend = useMemo(() => buildSevenDayExpenseTrend(transactions), [transactions]);
   const savingTotal = useMemo(() => sumSavingEntries(savingEntries), [savingEntries]);
   const detailTransactions = transactions.filter((transaction) => transaction.transactionType === detailType).slice(0, 8);
+  const canSaveTransaction = Boolean(normalizeMoney(readWebInputValue("finance-amount-input") || amount));
 
   const persistTransactions = (nextTransactions: FinanceTransaction[]) => {
     localDirtyRef.current = true;
@@ -368,11 +403,13 @@ export function FinancePanel({ storage }: FinancePanelProps) {
         </View>
         <View testID="finance-summary-panel" style={styles.overviewMetricStack}>
           <View style={styles.metricGrid}>
-            <Metric count={`${todayExpenseCount} 笔`} title="今日支出" value={`¥${summary.todayExpense}`} />
-            <Metric count={`${monthExpenseCount} 笔`} title="本月支出" value={`¥${summary.monthExpense}`} />
-            <Metric count={`${monthIncomeCount} 笔`} title="本月收入" value={`¥${summary.monthIncome}`} />
+            <SummaryCard count={`${todayExpenseCount} 笔`} testID="finance-metric-今日支出" title="今日支出" tokens={themeTokens} value={`¥${summary.todayExpense}`} />
+            <SummaryCard count={`${monthExpenseCount} 笔`} testID="finance-metric-本月支出" title="本月支出" tokens={themeTokens} value={`¥${summary.monthExpense}`} />
+            <SummaryCard count={`${monthIncomeCount} 笔`} testID="finance-metric-本月收入" title="本月收入" tokens={themeTokens} value={`¥${summary.monthIncome}`} />
           </View>
-          <Metric count="收入 - 支出" title="本月结余" value={`¥${summary.monthBalance}`} wide />
+          <View testID="finance-metric-本月结余" style={styles.balanceMetricWrap}>
+            <BalanceSummaryCard expense={`¥${summary.monthExpense}`} income={`¥${summary.monthIncome}`} title="本月结余" tokens={themeTokens} value={`¥${summary.monthBalance}`} />
+          </View>
         </View>
       </View>
 
@@ -401,23 +438,47 @@ export function FinancePanel({ storage }: FinancePanelProps) {
                 </Pressable>
               ))}
             </View>
-            <View style={styles.formRow}>
-              <View style={styles.formCol}>
-                <Text style={styles.fieldLabel}>金额 (¥)</Text>
-                <TextInput {...amountInputWebProps} keyboardType="decimal-pad" nativeID="finance-amount-input" onChange={makeTextInputChangeHandler(setAmount)} onChangeText={setAmount} placeholder="0.00" style={[styles.input, styles.flexInput]} value={amount} />
-              </View>
-              <View style={styles.formCol}>
-                <Text style={styles.fieldLabel}>日期</Text>
-                <Pressable accessibilityRole="button" accessibilityLabel="选择记账日期" onPress={() => setDatePickerOpen((value) => !value)} style={[styles.dateField, styles.flexInput]}>
-                  <Text style={styles.dateValue}>{date.replaceAll("-", "/")}</Text>
-                  <Text style={styles.dateChevron}>⌄</Text>
-                </Pressable>
-                <DatePickerPopup onCancel={() => setDatePickerOpen(false)} onConfirm={(date) => { setDate(date); setDatePickerOpen(false); }} selectedDate={date} title="选择记账日期" visible={datePickerOpen} />
-              </View>
-            </View>
-            <Text style={styles.fieldLabel}>备注</Text>
-            <TextInput {...noteInputWebProps} nativeID="finance-note-input" onChange={makeTextInputChangeHandler(setNote)} onChangeText={setNote} placeholder="可选备注..." style={[styles.input, styles.noteInput]} value={note} />
-            <Pressable accessibilityRole="button" accessibilityLabel="快速记账" nativeID="finance-save-button" onPress={saveTransaction} style={styles.primaryButton}>
+            <MobileFormLayout testID="finance-quick-form">
+              <MobileFormRow testID="finance-money-date-row">
+                <TextFormField
+                  {...amountInputWebProps}
+                  containerStyle={styles.amountField}
+                  keyboardType="decimal-pad"
+                  label="金额 (¥)"
+                  nativeID="finance-amount-input"
+                  onChange={makeTextInputChangeHandler(setAmount)}
+                  onChangeText={setAmount}
+                  placeholder="0.00"
+                  style={styles.amountInput}
+                  testID="finance-amount-input"
+                  tokens={themeTokens}
+                  value={amount}
+                />
+                <ButtonFormField
+                  containerStyle={styles.dateFieldCompact}
+                  label="日期"
+                  onPress={() => setDatePickerOpen((value) => !value)}
+                  testID="finance-date-field"
+                  tokens={themeTokens}
+                  value={date.replaceAll("-", "/")}
+                />
+              </MobileFormRow>
+              <DatePickerPopup onCancel={() => setDatePickerOpen(false)} onConfirm={(date) => { setDate(date); setDatePickerOpen(false); }} selectedDate={date} title="选择记账日期" visible={datePickerOpen} />
+              <TextFormField
+                {...noteInputWebProps}
+                compact
+                label="备注"
+                nativeID="finance-note-input"
+                onChange={makeTextInputChangeHandler(setNote)}
+                onChangeText={setNote}
+                placeholder="可选备注..."
+                style={styles.noteInput}
+                testID="finance-note-input"
+                tokens={themeTokens}
+                value={note}
+              />
+            </MobileFormLayout>
+            <Pressable accessibilityRole="button" accessibilityLabel="快速记账" accessibilityState={{ disabled: !canSaveTransaction }} disabled={!canSaveTransaction} nativeID="finance-save-button" onPress={saveTransaction} style={[styles.primaryButton, transactionType === "income" ? styles.primaryButtonIncome : null, !canSaveTransaction ? styles.primaryButtonDisabled : null]} testID="finance-save-button">
               <Text style={styles.primaryText}>记一笔</Text>
             </Pressable>
             {feedback ? <Text nativeID="finance-feedback" style={styles.feedback}>{feedback}</Text> : null}
@@ -633,13 +694,13 @@ export function FinancePanel({ storage }: FinancePanelProps) {
           ))}
         </>
       ) : null}
-      <View testID="finance-floating-tabs" style={[styles.tabs, styles.floatingTabs]}>
-        <TabButton active={tab === "record"} label="记录" onPress={() => setTab("record")} />
-        <TabButton active={tab === "stats"} label="统计" onPress={() => setTab("stats")} />
-        <TabButton active={tab === "gifts"} label="份子" onPress={() => setTab("gifts")} />
-        <TabButton active={tab === "saving"} label="储蓄" onPress={() => setTab("saving")} />
-        <TabButton active={tab === "category"} label="分类" onPress={() => setTab("category")} />
-      </View>
+      {showInlineTabs ? (
+        <View testID="finance-floating-tabs" style={[styles.tabs, styles.inlineTabs]}>
+          {financeTabs.map((item) => (
+            <TabButton key={item.value} active={tab === item.value} label={item.label} onPress={() => setTab(item.value)} />
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -778,6 +839,9 @@ function normalizeMoney(value: string) {
   if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) {
     return "";
   }
+  if (Number(trimmed) <= 0) {
+    return "";
+  }
   return Number(trimmed).toFixed(2);
 }
 
@@ -830,6 +894,17 @@ const styles = StyleSheet.create({
     color: "#111827",
     fontSize: 18,
     fontWeight: "900"
+  },
+  amountInput: {
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  amountField: {
+    flex: 0.64
+  },
+  balanceMetricWrap: {
+    flexBasis: "100%",
+    width: "100%"
   },
   categoryBadge: {
     backgroundColor: "#f1f5f9",
@@ -1173,6 +1248,9 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "900"
   },
+  dateFieldCompact: {
+    flex: 0.36
+  },
   floatingTabs: {
     bottom: 10,
     elevation: 10,
@@ -1263,14 +1341,21 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   noteInput: {
-    minHeight: 64,
-    textAlignVertical: "top"
+    minHeight: 44
   },
   primaryButton: {
     alignItems: "center",
     backgroundColor: "#1fa8e2",
     borderRadius: 12,
+    justifyContent: "center",
+    minHeight: 54,
     paddingVertical: 12
+  },
+  primaryButtonDisabled: {
+    backgroundColor: "#cbd5e1"
+  },
+  primaryButtonIncome: {
+    backgroundColor: "#16a34a"
   },
   primaryText: {
     color: "#ffffff",
@@ -1452,7 +1537,7 @@ const styles = StyleSheet.create({
   },
   stack: {
     gap: 18,
-    paddingBottom: 84,
+    paddingBottom: 108,
     position: "relative"
   },
   tab: {
@@ -1471,6 +1556,10 @@ const styles = StyleSheet.create({
     gap: 4,
     padding: 4,
     width: "auto"
+  },
+  inlineTabs: {
+    position: "relative",
+    width: "100%"
   },
   tabText: {
     color: "#697386",

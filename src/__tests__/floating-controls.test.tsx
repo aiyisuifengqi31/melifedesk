@@ -1,30 +1,39 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 
 import { AppShell } from "@/components/AppShell";
-import { EntertainmentPanel } from "@/features/entertainment/EntertainmentPanel";
-import { FinancePanel } from "@/features/finance/FinancePanel";
-import { LovePanel } from "@/features/love/LovePanel";
-import { getTheme } from "@/theme/registry";
-
-const tokens = getTheme("default").tokens.light;
 
 describe("floating page controls", () => {
-  it("keeps love diary tabs in the bottom floating control", () => {
-    render(<LovePanel themeTokens={tokens} />);
+  it("renders finance secondary tabs as a fixed app-shell layer aligned to mobile content", () => {
+    render(<AppShell initialRoute="/finance" viewport="mobile" />);
 
-    expect(screen.getByTestId("love-floating-tabs")).toHaveStyle({ left: 76, right: 10 });
+    expect(screen.queryByTestId("finance-floating-tabs")).toBeNull();
+    expect(screen.getByTestId("secondary-floating-tabs")).toHaveStyle({
+      left: 84,
+      position: "absolute",
+      right: 16
+    });
+    expect(screen.getByTestId("secondary-tab-record")).toHaveStyle({ flex: 1 });
   });
 
-  it("keeps entertainment tabs in the bottom floating control", () => {
-    render(<EntertainmentPanel themeTokens={tokens} />);
+  it("aligns secondary tabs to the desktop content area instead of covering the sidebar", () => {
+    render(<AppShell initialRoute="/finance" viewport="desktop" />);
 
-    expect(screen.getByTestId("entertainment-floating-tabs")).toHaveStyle({ left: 76, right: 10 });
+    expect(screen.getByTestId("secondary-floating-tabs")).toHaveStyle({
+      left: 252,
+      right: 28
+    });
   });
 
-  it("keeps finance tabs spread across the bottom row", () => {
-    render(<FinancePanel />);
+  it("shares the same fixed secondary tab bar across love diary and entertainment", () => {
+    const { rerender } = render(<AppShell route="/love" viewport="mobile" />);
 
-    expect(screen.getByTestId("finance-floating-tabs")).toHaveStyle({ left: 76, right: 10 });
+    expect(screen.queryByTestId("love-floating-tabs")).toBeNull();
+    expect(screen.getByTestId("secondary-floating-tabs")).toBeOnTheScreen();
+
+    rerender(<AppShell route="/fun" viewport="mobile" />);
+
+    expect(screen.queryByTestId("entertainment-floating-tabs")).toBeNull();
+    expect(screen.getByTestId("secondary-floating-tabs")).toBeOnTheScreen();
   });
 
   it("opens the sidebar quick shortcut arc above settings", () => {

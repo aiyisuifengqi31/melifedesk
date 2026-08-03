@@ -58,8 +58,20 @@ describe("FinancePanel interactions", () => {
     expect(screen.getByText("本月收入")).toBeOnTheScreen();
     expect(screen.getByText("本月结余")).toBeOnTheScreen();
     expect(screen.getByTestId("finance-metric-今日支出")).toHaveStyle({ flexBasis: "31%" });
-    expect(screen.getByTestId("finance-metric-本月结余")).toHaveStyle({ flexBasis: "100%" });
-    expect(screen.getByTestId("finance-floating-tabs")).toBeOnTheScreen();
+    expect(screen.getByTestId("finance-balance-summary")).toHaveStyle({ flexDirection: "row" });
+    expect(screen.getByText(/收入 ¥0.00/)).toBeOnTheScreen();
+    expect(screen.getByText(/支出 ¥0.00/)).toBeOnTheScreen();
+  });
+
+  it("uses the compact mobile quick record form layout", () => {
+    render(<FinancePanel storage={makeStorage()} />);
+
+    expect(screen.getByTestId("finance-quick-form")).toHaveStyle({ gap: 16 });
+    expect(screen.getByTestId("finance-money-date-row")).toHaveStyle({ flexDirection: "row", gap: 12 });
+    expect(screen.getByTestId("finance-amount-input")).toHaveStyle({ minHeight: 48, borderWidth: 1.5 });
+    expect(screen.getByTestId("finance-date-field")).toHaveStyle({ minHeight: 48, borderWidth: 1.5 });
+    expect(screen.getByTestId("finance-note-input")).toHaveStyle({ minHeight: 44 });
+    expect(screen.getByTestId("finance-save-button")).toHaveProp("accessibilityState", { disabled: true });
   });
 
   it("keeps large summary amounts inside their metric cards", () => {

@@ -6,10 +6,14 @@ export type UiTokens = {
   accentSoft: string;
   background: string;
   border: string;
+  danger?: string;
+  shadow?: string;
+  success?: string;
   surface: string;
   surfaceMuted: string;
   text: string;
   textMuted: string;
+  warning?: string;
 };
 
 type TokenProps = {

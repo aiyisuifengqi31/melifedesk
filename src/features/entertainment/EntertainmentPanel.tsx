@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
 import {
   FASHION_CHANNELS,
@@ -15,17 +16,28 @@ import {
 import { fetchHotList, type HotItem, type HotSource } from "./hotListService";
 
 type EntertainmentPanelProps = {
+  activeTab?: EntTab;
+  onTabChange?: (tab: EntTab) => void;
+  showInlineTabs?: boolean;
   themeTokens: UiTokens;
 };
 
-type EntTab = "trend" | "fashion" | "makeup";
+export type EntTab = "trend" | "fashion" | "makeup";
+
+export const entertainmentTabs: FixedBottomTabItem<EntTab>[] = [
+  { label: "热点", value: "trend" },
+  { label: "穿搭", value: "fashion" },
+  { label: "化妆", value: "makeup" }
+];
 
 const FASHION_CATEGORIES: FashionCategory[] = ["衣服", "鞋子", "上衣", "裤子", "裙子"];
 const HOT_SOURCES: HotSource[] = ["百度", "微博", "知乎"];
 
-export function EntertainmentPanel({ themeTokens: tokens }: EntertainmentPanelProps) {
+export function EntertainmentPanel({ activeTab, onTabChange, showInlineTabs = true, themeTokens: tokens }: EntertainmentPanelProps) {
   const styles = useMemo(() => createStyles(tokens), [tokens]);
-  const [tab, setTab] = useState<EntTab>("trend");
+  const [localTab, setLocalTab] = useState<EntTab>("trend");
+  const tab = activeTab ?? localTab;
+  const setTab = onTabChange ?? setLocalTab;
 
   const [hotSource, setHotSource] = useState<HotSource>("百度");
   const [hotItems, setHotItems] = useState<HotItem[]>([]);
@@ -234,17 +246,15 @@ export function EntertainmentPanel({ themeTokens: tokens }: EntertainmentPanelPr
           </View>
         </View>
       ) : null}
-      <View testID="entertainment-floating-tabs" style={[styles.tabs, styles.floatingTabs]}>
-        <Pressable accessibilityRole="button" accessibilityLabel="热点推荐" onPress={() => setTab("trend")} style={[styles.tab, tab === "trend" ? styles.tabActive : null]}>
-          <Text style={[styles.tabText, tab === "trend" ? styles.tabTextActive : null]}>📰 热点</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="衣服推荐" onPress={() => setTab("fashion")} style={[styles.tab, tab === "fashion" ? styles.tabActive : null]}>
-          <Text style={[styles.tabText, tab === "fashion" ? styles.tabTextActive : null]}>👗 穿搭</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="化妆教程" onPress={() => setTab("makeup")} style={[styles.tab, tab === "makeup" ? styles.tabActive : null]}>
-          <Text style={[styles.tabText, tab === "makeup" ? styles.tabTextActive : null]}>💄 化妆</Text>
-        </Pressable>
-      </View>
+      {showInlineTabs ? (
+        <View testID="entertainment-floating-tabs" style={[styles.tabs, styles.inlineTabs]}>
+          {entertainmentTabs.map((item) => (
+            <Pressable key={item.value} accessibilityRole="button" accessibilityLabel={item.label} onPress={() => setTab(item.value)} style={[styles.tab, tab === item.value ? styles.tabActive : null]}>
+              <Text style={[styles.tabText, tab === item.value ? styles.tabTextActive : null]}>{item.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -444,7 +454,7 @@ function createStyles(tokens: UiTokens) {
     },
     stack: {
       gap: 16,
-      paddingBottom: 84,
+      paddingBottom: 108,
       position: "relative"
     },
     tab: {
@@ -471,6 +481,10 @@ function createStyles(tokens: UiTokens) {
       gap: 4,
       padding: 4,
       width: "auto"
+    },
+    inlineTabs: {
+      position: "relative",
+      width: "100%"
     },
     trendBody: {
       flex: 1,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ViewStyle } from "react-native";
+import { Image, ImageBackground, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ImageStyle, type ViewStyle } from "react-native";
 
 import { saveUserSettings } from "@/auth/authRepository";
 import { getSupabaseClient } from "@/auth/supabaseClient";
@@ -8,16 +8,17 @@ import { SettingsPanel } from "@/features/settings/SettingsPanel";
 import { getPublicAppConfig } from "@/config/app";
 import { hydrateProfileFromCloud, loadProfile, openImagePicker, saveProfile, type AppProfile } from "@/features/profile/profileStorage";
 import { ExamPanel } from "@/features/exam/ExamPanel";
-import { EntertainmentPanel } from "@/features/entertainment/EntertainmentPanel";
-import { FinancePanel } from "@/features/finance/FinancePanel";
+import { EntertainmentPanel, entertainmentTabs, type EntTab } from "@/features/entertainment/EntertainmentPanel";
+import { FinancePanel, financeTabs, type FinanceTab } from "@/features/finance/FinancePanel";
 import { HomePanel } from "@/features/home/HomePanel";
-import { LovePanel } from "@/features/love/LovePanel";
+import { LovePanel, loveTabs, type LoveTab } from "@/features/love/LovePanel";
 import { DailyPlanPanel } from "@/features/plan/DailyPlanPanel";
 import { WorkoutPanel } from "@/features/workout/WorkoutPanel";
 import { NAV_ITEMS, type NavItem, routeToKey } from "@/navigation/items";
 import { getTheme } from "@/theme/registry";
 import type { ColorMode, ThemeId } from "@/theme/types";
 import { hydrateBackgroundFromCloud, loadBackground, saveBackground, type BackgroundSource, getImageSource } from "@/theme/background";
+import { FixedBottomTabs } from "@/shared/ui/FixedBottomTabs";
 import { ThemedNavIcon } from "./ThemedNavIcon";
 
 type AppShellProps = {
@@ -39,6 +40,10 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const inferredViewport = viewport ?? (dimensions.width < 720 ? "mobile" : "desktop");
   const [currentRoute, setCurrentRoute] = useState(route ?? initialRoute);
   const [collapsed, setCollapsed] = useState(false);
+  const [entertainmentTab, setEntertainmentTab] = useState<EntTab>("trend");
+  const [financeTab, setFinanceTab] = useState<FinanceTab>("record");
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [loveTab, setLoveTab] = useState<LoveTab>("diary");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
   const [shortcutRequest, setShortcutRequest] = useState<ShortcutRequest | null>(null);
@@ -83,14 +88,49 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const isMobile = inferredViewport === "mobile";
   const sidebarWidth = isMobile ? 68 : collapsed ? 72 : 224;
 
-  const viewportHeight = Math.max(dimensions.height, 640);
+  const viewportHeight = isMobile && Platform.OS === "web" ? ("100dvh" as const) : Math.max(dimensions.height, 640);
+  const hasSecondaryTabs = activeKey === "finance" || activeKey === "love" || activeKey === "fun";
   const imageSource = useMemo(() => getImageSource(background), [background]);
-  const styles = useMemo(() => createStyles(tokens, sidebarWidth, isMobile, viewportHeight), [tokens, sidebarWidth, isMobile, viewportHeight]);
+  const styles = useMemo(() => createStyles(tokens, sidebarWidth, isMobile, viewportHeight, hasSecondaryTabs), [tokens, sidebarWidth, isMobile, viewportHeight, hasSecondaryTabs]);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.title = app.webTitle;
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return;
+    }
+
+    const visualViewport = window.visualViewport;
+    const initialHeight = window.innerHeight;
+    const updateKeyboardState = () => {
+      const currentHeight = visualViewport?.height ?? window.innerHeight;
+      setKeyboardOpen(currentHeight < initialHeight - 120);
+    };
+    const handleFocusIn = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target || !["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) {
+        return;
+      }
+      window.setTimeout(() => {
+        target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      }, 80);
+    };
+
+    visualViewport?.addEventListener("resize", updateKeyboardState);
+    window.addEventListener("resize", updateKeyboardState);
+    document.addEventListener("focusin", handleFocusIn);
+    document.addEventListener("focusout", updateKeyboardState);
+
+    return () => {
+      visualViewport?.removeEventListener("resize", updateKeyboardState);
+      window.removeEventListener("resize", updateKeyboardState);
+      document.removeEventListener("focusin", handleFocusIn);
+      document.removeEventListener("focusout", updateKeyboardState);
+    };
   }, []);
 
   const handleNavigate = (href: NavItem["href"]) => {
@@ -170,7 +210,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
               saveProfile(next);
             })} style={styles.avatarMark}>
               {profile.avatarUri ? (
-                <Image accessibilityIgnoresInvertColors source={{ uri: profile.avatarUri }} style={styles.avatarImage} />
+                <Image accessibilityIgnoresInvertColors source={{ uri: profile.avatarUri }} style={styles.avatarImage as ImageStyle} />
               ) : (
                 <Text style={styles.avatarText}>{Array.from(profile.displayName)[0] ?? "友"}</Text>
               )}
@@ -237,20 +277,50 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
 
       {imageSource ? (
         <ImageBackground
-          imageStyle={styles.backgroundImage}
+          imageStyle={styles.backgroundImage as ImageStyle}
           resizeMode="cover"
           source={imageSource}
           style={styles.content}
         >
           <ScrollView testID="page-content" nativeID="page-content" style={styles.contentScroll} contentContainerStyle={styles.contentInner}>
-            <PageContent activeKey={activeKey} handleNavigate={handleNavigate} shortcutRequest={shortcutRequest} styles={styles} themeEmptyState={theme.emptyState} tokens={tokens} />
+            <PageContent
+              activeKey={activeKey}
+              entertainmentTab={entertainmentTab}
+              financeTab={financeTab}
+              handleNavigate={handleNavigate}
+              loveTab={loveTab}
+              onEntertainmentTabChange={setEntertainmentTab}
+              onFinanceTabChange={setFinanceTab}
+              onLoveTabChange={setLoveTab}
+              shortcutRequest={shortcutRequest}
+              styles={styles}
+              themeEmptyState={theme.emptyState}
+              tokens={tokens}
+            />
           </ScrollView>
         </ImageBackground>
       ) : (
         <ScrollView testID="page-content" nativeID="page-content" style={styles.content} contentContainerStyle={styles.contentInner}>
-          <PageContent activeKey={activeKey} handleNavigate={handleNavigate} shortcutRequest={shortcutRequest} styles={styles} themeEmptyState={theme.emptyState} tokens={tokens} />
+          <PageContent
+            activeKey={activeKey}
+            entertainmentTab={entertainmentTab}
+            financeTab={financeTab}
+            handleNavigate={handleNavigate}
+            loveTab={loveTab}
+            onEntertainmentTabChange={setEntertainmentTab}
+            onFinanceTabChange={setFinanceTab}
+            onLoveTabChange={setLoveTab}
+            shortcutRequest={shortcutRequest}
+            styles={styles}
+            themeEmptyState={theme.emptyState}
+            tokens={tokens}
+          />
         </ScrollView>
       )}
+
+      {activeKey === "finance" ? <FixedBottomTabs activeValue={financeTab} hidden={keyboardOpen} items={financeTabs} onChange={setFinanceTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
+      {activeKey === "love" ? <FixedBottomTabs activeValue={loveTab} hidden={keyboardOpen} items={loveTabs} onChange={setLoveTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
+      {activeKey === "fun" ? <FixedBottomTabs activeValue={entertainmentTab} hidden={keyboardOpen} items={entertainmentTabs} onChange={setEntertainmentTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
 
       {settingsOpen ? (
         <SettingsPanel
@@ -272,14 +342,26 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
 
 function PageContent({
   activeKey,
+  entertainmentTab,
+  financeTab,
   handleNavigate,
+  loveTab,
+  onEntertainmentTabChange,
+  onFinanceTabChange,
+  onLoveTabChange,
   shortcutRequest,
   styles,
   themeEmptyState,
   tokens
 }: {
   activeKey: string;
+  entertainmentTab: EntTab;
+  financeTab: FinanceTab;
   handleNavigate: (href: NavItem["href"]) => void;
+  loveTab: LoveTab;
+  onEntertainmentTabChange: (tab: EntTab) => void;
+  onFinanceTabChange: (tab: FinanceTab) => void;
+  onLoveTabChange: (tab: LoveTab) => void;
   shortcutRequest: ShortcutRequest | null;
   styles: ReturnType<typeof createStyles>;
   themeEmptyState: string;
@@ -290,10 +372,10 @@ function PageContent({
       {activeKey === "home" ? <HomePanel shortcutNonce={shortcutRequest?.nonce} shortcutView={shortcutRequest?.kind === "notes" || shortcutRequest?.kind === "todos" ? shortcutRequest.kind : undefined} themeTokens={tokens} /> : null}
       {activeKey === "plan" ? <DailyPlanPanel shortcutNonce={shortcutRequest?.nonce} shortcutTarget={shortcutRequest?.kind === "packages" ? "packages" : undefined} themeTokens={tokens} /> : null}
       {activeKey === "workout" ? <WorkoutPanel /> : null}
-      {activeKey === "finance" ? <FinancePanel /> : null}
-      {activeKey === "love" ? <LovePanel themeTokens={tokens} /> : null}
+      {activeKey === "finance" ? <FinancePanel activeTab={financeTab} onTabChange={onFinanceTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
+      {activeKey === "love" ? <LovePanel activeTab={loveTab} onTabChange={onLoveTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
       {activeKey === "exam" ? <ExamPanel themeTokens={tokens} /> : null}
-      {activeKey === "fun" ? <EntertainmentPanel themeTokens={tokens} /> : null}
+      {activeKey === "fun" ? <EntertainmentPanel activeTab={entertainmentTab} onTabChange={onEntertainmentTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
       {activeKey !== "home" && activeKey !== "plan" && activeKey !== "workout" && activeKey !== "finance" && activeKey !== "love" && activeKey !== "exam" && activeKey !== "fun" ? <GenericModuleSkeleton themeEmptyState={themeEmptyState} styles={styles} /> : null}
     </>
   );
@@ -360,20 +442,24 @@ function GenericModuleSkeleton({ themeEmptyState, styles }: { themeEmptyState: s
   );
 }
 
-function createStyles(tokens: ReturnType<typeof getTheme>["tokens"][ColorMode], sidebarWidth: number, isMobile: boolean, viewportHeight: number) {
+function createStyles(tokens: ReturnType<typeof getTheme>["tokens"][ColorMode], sidebarWidth: number, isMobile: boolean, viewportHeight: number | "100dvh", hasSecondaryTabs: boolean) {
   const compactSidebar = isMobile || sidebarWidth < 160;
+  const contentPadding = isMobile ? 16 : 28;
+  const shellHeight = viewportHeight as unknown as number;
 
   return StyleSheet.create({
     root: {
-      height: viewportHeight,
-      minHeight: "100%",
+      height: shellHeight,
+      maxHeight: shellHeight,
+      minHeight: shellHeight,
       flexDirection: "row",
-      backgroundColor: tokens.background
+      backgroundColor: tokens.background,
+      overflow: "hidden"
     },
     sidebar: {
       width: sidebarWidth,
       minWidth: sidebarWidth,
-      height: viewportHeight,
+      height: shellHeight,
       backgroundColor: tokens.surface,
       borderRightColor: tokens.border,
       borderRightWidth: 1,
@@ -550,18 +636,26 @@ function createStyles(tokens: ReturnType<typeof getTheme>["tokens"][ColorMode], 
     },
     content: {
       flex: 1,
-      height: viewportHeight,
+      height: shellHeight,
       marginLeft: 0,
+      overflow: "hidden",
       zIndex: 0
     },
     contentScroll: {
       flex: 1,
-      height: viewportHeight
+      height: shellHeight
     },
     contentInner: {
       gap: 16,
-      padding: isMobile ? 16 : 28,
-      paddingBottom: 42
+      padding: contentPadding,
+      paddingBottom: hasSecondaryTabs ? 132 : 42
+    },
+    secondaryTabs: {
+      bottom: Platform.OS === "web" ? ("calc(12px + env(safe-area-inset-bottom))" as unknown as number) : 12,
+      left: sidebarWidth + contentPadding,
+      position: "absolute",
+      right: contentPadding,
+      zIndex: 80
     },
     card: {
       backgroundColor: tokens.surface,

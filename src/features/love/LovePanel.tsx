@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
+import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { hydrateFromCloud, saveCloudValue } from "@/features/sync/cloudSync";
 import { deleteDiaryFromCloud, getCurrentLoveUserId, loadDiariesFromCloud, saveDiariesToCloud } from "./loveDiaryCloud";
 
-type LoveTab = "diary" | "anniversary";
+export type LoveTab = "diary" | "anniversary";
 type DiaryVisibility = "private" | "couple_read";
+
+export const loveTabs: FixedBottomTabItem<LoveTab>[] = [
+  { label: "日记", value: "diary" },
+  { label: "纪念日", value: "anniversary" }
+];
 
 export type DiaryEntry = {
   content: string;
@@ -53,9 +59,22 @@ const memoryStorage: LoveStorage = {
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
-export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: UiTokens }) {
+export function LovePanel({
+  activeTab,
+  onTabChange,
+  showInlineTabs = true,
+  storage
+}: {
+  activeTab?: LoveTab;
+  onTabChange?: (tab: LoveTab) => void;
+  showInlineTabs?: boolean;
+  storage?: LoveStorage;
+  themeTokens?: UiTokens;
+}) {
   const loveStorage = useMemo(() => storage ?? getDefaultLoveStorage(), [storage]);
-  const [tab, setTab] = useState<LoveTab>("diary");
+  const [localTab, setLocalTab] = useState<LoveTab>("diary");
+  const tab = activeTab ?? localTab;
+  const setTab = onTabChange ?? setLocalTab;
   const [diaries, setDiaries] = useState<DiaryEntry[]>(() => loadArray<DiaryEntry>(loveStorage, DIARY_KEY));
   const [anniversaries, setAnniversaries] = useState<AnniversaryEntry[]>(() => loadArray<AnniversaryEntry>(loveStorage, ANNIVERSARY_KEY));
   const [content, setContent] = useState("");
@@ -285,10 +304,13 @@ export function LovePanel({ storage }: { storage?: LoveStorage; themeTokens?: Ui
           )}
         </>
       ) : null}
-      <View testID="love-floating-tabs" style={[styles.tabs, styles.floatingTabs]}>
-        <TabButton active={tab === "diary"} label="日记" onPress={() => setTab("diary")} />
-        <TabButton active={tab === "anniversary"} label="纪念日" onPress={() => setTab("anniversary")} />
-      </View>
+      {showInlineTabs ? (
+        <View testID="love-floating-tabs" style={[styles.tabs, styles.inlineTabs]}>
+          {loveTabs.map((item) => (
+            <TabButton key={item.value} active={tab === item.value} label={item.label} onPress={() => setTab(item.value)} />
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -560,7 +582,7 @@ const styles = StyleSheet.create({
   },
   stack: {
     gap: 18,
-    paddingBottom: 84,
+    paddingBottom: 108,
     position: "relative"
   },
   switchThumb: {
@@ -597,6 +619,10 @@ const styles = StyleSheet.create({
     gap: 4,
     padding: 4,
     width: "auto"
+  },
+  inlineTabs: {
+    position: "relative",
+    width: "100%"
   },
   tabText: {
     color: "#697386",
