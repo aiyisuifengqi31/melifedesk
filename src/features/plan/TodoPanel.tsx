@@ -12,6 +12,7 @@ import {
   type TodoStorage,
   type TodoTask
 } from "@/features/plan/todoStorage";
+import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
 
 type TodoPanelProps = {
   shortcutCreate?: boolean;
@@ -66,6 +67,13 @@ export function TodoPanel({ onClose, shortcutCreate = false, storage, themeToken
     const timer = setTimeout(() => newTitleInputRef.current?.focus(), 120);
     return () => clearTimeout(timer);
   }, [shortcutCreate]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.addEventListener !== "function") return;
+    const refresh = () => setTasks(sortTodos(loadLocalTodos(todoStorage)));
+    window.addEventListener(QUICK_CAPTURE_DATA_EVENT, refresh);
+    return () => window.removeEventListener(QUICK_CAPTURE_DATA_EVENT, refresh);
+  }, [todoStorage]);
 
   const persistTasks = (nextTasks: TodoTask[]) => {
     const sorted = sortTodos(nextTasks);

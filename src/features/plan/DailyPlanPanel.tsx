@@ -8,7 +8,7 @@ import { PackagePanel } from "./PackagePanel";
 
 type DailyPlanPanelProps = {
   shortcutNonce?: number;
-  shortcutTarget?: "packages";
+  shortcutTarget?: "packages" | "packageScan";
   storage?: unknown;
   themeTokens: UiTokens;
 };
@@ -31,7 +31,7 @@ export function DailyPlanPanel({ shortcutNonce, shortcutTarget, themeTokens }: D
   };
 
   useEffect(() => {
-    if (shortcutTarget !== "packages") return;
+    if (shortcutTarget !== "packages" && shortcutTarget !== "packageScan") return;
     const timer = setTimeout(() => {
       scrollRef.current?.scrollToEnd({ animated: true });
     }, 80);
@@ -42,7 +42,7 @@ export function DailyPlanPanel({ shortcutNonce, shortcutTarget, themeTokens }: D
     <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.stack}>
       <WeatherCard onRefresh={loadWeather} weather={weather} />
       <MonthCalendar selectedDate={todayIso()} />
-      <PackagePanel shortcutCreate={shortcutTarget === "packages"} themeTokens={themeTokens} />
+      <PackagePanel shortcutCreate={shortcutTarget === "packages"} shortcutScan={shortcutTarget === "packageScan"} themeTokens={themeTokens} />
     </ScrollView>
   );
 }

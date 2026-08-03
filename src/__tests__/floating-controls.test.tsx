@@ -45,16 +45,16 @@ describe("floating page controls", () => {
     expect(screen.getByTestId("secondary-tab-useful")).toHaveStyle({ flex: 1 });
   });
 
-  it("opens the sidebar quick shortcut arc above settings", () => {
+  it("opens the sidebar quick shortcut panel above settings", () => {
     render(<AppShell initialRoute="/home" viewport="mobile" />);
 
     fireEvent.press(screen.getByRole("button", { name: "打开快捷入口" }));
 
     expect(screen.getByTestId("quick-shortcut-menu")).toBeOnTheScreen();
-    expect(screen.getByRole("button", { name: "备忘录快捷入口" })).toBeOnTheScreen();
-    expect(screen.getByRole("button", { name: "待办快捷入口" })).toHaveStyle({ bottom: 138, left: 82 });
-    expect(screen.getByRole("button", { name: "快递快捷入口" })).toHaveStyle({ bottom: 76, left: 104 });
-    expect(screen.getByRole("button", { name: "支出快捷入口" })).toHaveStyle({ bottom: 14, left: 82 });
+    expect(screen.getByTestId("quick-shortcut-voice")).toBeOnTheScreen();
+    expect(screen.getByTestId("quick-shortcut-finance")).toBeOnTheScreen();
+    expect(screen.getByTestId("quick-shortcut-package-scan")).toBeOnTheScreen();
+    expect(screen.getByTestId("quick-shortcut-workout")).toBeOnTheScreen();
   });
 
   it("dismisses the shortcut arc when tapping outside it", () => {
@@ -86,14 +86,14 @@ describe("floating page controls", () => {
     expect(screen.getByTestId("todo-title-input").props.autoFocus).toBe(true);
   });
 
-  it("opens the package shortcut with the manual create form focused", () => {
+  it("opens the package screenshot shortcut in the express capture area", () => {
     render(<AppShell initialRoute="/home" viewport="mobile" />);
 
     fireEvent.press(screen.getByTestId("quick-fab"));
-    fireEvent.press(screen.getByTestId("quick-shortcut-packages"));
+    fireEvent.press(screen.getByTestId("quick-shortcut-package-scan"));
 
     expect(screen.queryByTestId("quick-shortcut-menu")).toBeNull();
-    expect(screen.getByTestId("package-company-input").props.autoFocus).toBe(true);
+    expect(screen.getByRole("button", { name: "上传快递截图" })).toBeOnTheScreen();
   });
 
   it("opens the finance shortcut on expense quick entry", () => {
@@ -105,5 +105,16 @@ describe("floating page controls", () => {
     expect(screen.queryByTestId("quick-shortcut-menu")).toBeNull();
     expect(screen.getByTestId("finance-amount-input").props.autoFocus).toBe(true);
     expect(screen.getByTestId("secondary-tab-record")).toHaveStyle({ flex: 1 });
+  });
+
+  it("opens global voice capture from the first quick action", () => {
+    render(<AppShell initialRoute="/home" viewport="mobile" />);
+
+    fireEvent.press(screen.getByTestId("quick-fab"));
+    fireEvent.press(screen.getByTestId("quick-shortcut-voice"));
+
+    expect(screen.queryByTestId("quick-shortcut-menu")).toBeNull();
+    expect(screen.getByTestId("global-quick-capture")).toBeOnTheScreen();
+    expect(screen.getByTestId("quick-capture-text-input").props.autoFocus).toBe(true);
   });
 });

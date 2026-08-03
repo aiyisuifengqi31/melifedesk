@@ -8,6 +8,7 @@ import { MobileFormLayout, MobileFormRow } from "@/shared/ui/MobileFormLayout";
 import { BalanceSummaryCard, SummaryCard } from "@/shared/ui/SummaryCard";
 import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
+import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
 import { buildFinanceSummary, type TransactionType } from "@/features/finance/financeService";
 import {
   createFinanceId,
@@ -237,6 +238,18 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
 
     return () => clearTimeout(timer);
   }, [shortcutCreate, shortcutNonce]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.addEventListener !== "function") return;
+    const refresh = () => {
+      setTransactions(sortTransactions(loadFinanceTransactions(financeStorage)));
+      setSavingEntries(loadSavingEntries(financeStorage));
+      setCustomCategories(loadCustomCategories(financeStorage));
+      setGiftRecords(sortGiftRecords(loadGiftRecords(financeStorage)));
+    };
+    window.addEventListener(QUICK_CAPTURE_DATA_EVENT, refresh);
+    return () => window.removeEventListener(QUICK_CAPTURE_DATA_EVENT, refresh);
+  }, [financeStorage]);
 
   const persistTransactions = (nextTransactions: FinanceTransaction[]) => {
     localDirtyRef.current = true;

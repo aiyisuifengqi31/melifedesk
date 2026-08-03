@@ -5,6 +5,7 @@ import { hydrateFinanceTransactionsFromCloud, loadFinanceTransactions, type Fina
 import { hydrateNotesFromCloud, loadNotes } from "@/features/home/notesStorage";
 import { hydratePackagesFromCloud, loadPackages, type PackageItem } from "@/features/plan/packageStorage";
 import { getDefaultTodoStorage, hydrateTodosFromCloud, loadLocalTodos, saveLocalTodos, sortTodos, type TodoStorage, type TodoTask } from "@/features/plan/todoStorage";
+import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { MealSpinner } from "./MealSpinner";
 import { NotesPanel } from "./NotesPanel";
@@ -59,7 +60,7 @@ function centsToMoney(cents: number) {
 export function HomePanel({ onOpenFinance, onOpenPackages, shortcutNonce, shortcutView, storage, themeTokens }: HomePanelProps) {
   const todoStorage = useMemo(() => storage ?? getDefaultTodoStorage(), [storage]);
   const [todos, setTodos] = useState<TodoTask[]>(() => loadLocalTodos(todoStorage));
-  const [notes] = useState(() => loadNotes());
+  const [notes, setNotes] = useState(() => loadNotes());
   const [packages, setPackages] = useState<PackageItem[]>(() => loadPackages());
   const [transactions, setTransactions] = useState<FinanceTransaction[]>(() => loadFinanceTransactions());
   const [viewState, setViewState] = useState<ViewState>("home");
@@ -73,12 +74,24 @@ export function HomePanel({ onOpenFinance, onOpenPackages, shortcutNonce, shortc
   useEffect(() => {
     let cancelled = false;
     hydrateTodosFromCloud(todoStorage).then((next) => !cancelled && setTodos(next)).catch(() => {});
-    hydrateNotesFromCloud().catch(() => {});
+    hydrateNotesFromCloud().then((next) => !cancelled && setNotes(next)).catch(() => {});
     hydratePackagesFromCloud().then((next) => !cancelled && setPackages(next)).catch(() => {});
     hydrateFinanceTransactionsFromCloud().then((next) => !cancelled && setTransactions(next)).catch(() => {});
     return () => {
       cancelled = true;
     };
+  }, [todoStorage]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.addEventListener !== "function") return;
+    const refresh = () => {
+      setTodos(sortTodos(loadLocalTodos(todoStorage)));
+      setNotes(loadNotes());
+      setPackages(loadPackages());
+      setTransactions(loadFinanceTransactions());
+    };
+    window.addEventListener(QUICK_CAPTURE_DATA_EVENT, refresh);
+    return () => window.removeEventListener(QUICK_CAPTURE_DATA_EVENT, refresh);
   }, [todoStorage]);
 
   const completedCount = todos.filter((todo) => todo.completed).length;

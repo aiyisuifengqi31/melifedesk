@@ -3,10 +3,12 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
 import type { UiTokens } from "@/shared/ui/primitives";
+import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
 import { createPackageId, getDefaultPackageStorage, hydratePackagesFromCloud, loadPackages, savePackages, type PackageItem, type PackageStorage } from "./packageStorage";
 
 type PackagePanelProps = {
   shortcutCreate?: boolean;
+  shortcutScan?: boolean;
   storage?: PackageStorage;
   themeTokens: UiTokens;
 };
@@ -27,7 +29,7 @@ export function isPackageDraftAddable(form: Omit<PackageItem, "id" | "createTime
   return Boolean(form.company.trim() || form.image || form.pickupCode.trim() || form.pickupLocation.trim());
 }
 
-export function PackagePanel({ shortcutCreate = false, storage, themeTokens }: PackagePanelProps) {
+export function PackagePanel({ shortcutCreate = false, shortcutScan = false, storage, themeTokens }: PackagePanelProps) {
   const pkgStorage = useMemo(() => storage ?? getDefaultPackageStorage(), [storage]);
   const companyInputRef = useRef<TextInput>(null);
   const [items, setItems] = useState<PackageItem[]>(() => loadPackages(pkgStorage));
@@ -60,6 +62,19 @@ export function PackagePanel({ shortcutCreate = false, storage, themeTokens }: P
     const timer = setTimeout(() => companyInputRef.current?.focus(), 140);
     return () => clearTimeout(timer);
   }, [shortcutCreate]);
+
+  useEffect(() => {
+    if (!shortcutScan) return;
+    const timer = setTimeout(() => fileInputRef.current?.click(), 180);
+    return () => clearTimeout(timer);
+  }, [shortcutScan]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.addEventListener !== "function") return;
+    const refresh = () => setItems(loadPackages(pkgStorage));
+    window.addEventListener(QUICK_CAPTURE_DATA_EVENT, refresh);
+    return () => window.removeEventListener(QUICK_CAPTURE_DATA_EVENT, refresh);
+  }, [pkgStorage]);
 
   const persist = (next: PackageItem[]) => {
     setItems(next);

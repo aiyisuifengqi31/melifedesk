@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Image, ImageBackground, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ImageStyle, type ViewStyle } from "react-native";
+import { Image, ImageBackground, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ImageStyle } from "react-native";
 
 import { saveUserSettings } from "@/auth/authRepository";
 import { getSupabaseClient } from "@/auth/supabaseClient";
@@ -13,6 +13,7 @@ import { FinancePanel, financeTabs, type FinanceTab } from "@/features/finance/F
 import { HomePanel } from "@/features/home/HomePanel";
 import { LovePanel, loveTabs, type LoveTab } from "@/features/love/LovePanel";
 import { DailyPlanPanel } from "@/features/plan/DailyPlanPanel";
+import { GlobalQuickCapture } from "@/features/quick-capture/GlobalQuickCapture";
 import { WorkoutPanel } from "@/features/workout/WorkoutPanel";
 import { NAV_ITEMS, type NavItem, routeToKey } from "@/navigation/items";
 import { getTheme } from "@/theme/registry";
@@ -29,7 +30,7 @@ type AppShellProps = {
 };
 
 type ShortcutRequest = {
-  kind: "notes" | "todos" | "packages" | "finance";
+  kind: "notes" | "todos" | "packages" | "packageScan" | "finance" | "workout";
   nonce: number;
 };
 
@@ -47,6 +48,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const [loveTab, setLoveTab] = useState<LoveTab>("diary");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
+  const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const [shortcutRequest, setShortcutRequest] = useState<ShortcutRequest | null>(null);
   const [themeId, setThemeId] = useState<ThemeId>(() => readStoredThemeId(typeof window === "undefined" ? undefined : window.localStorage) ?? "default");
   const [mode, setMode] = useState<ColorMode>(() => readStoredColorMode(typeof window === "undefined" ? undefined : window.localStorage) ?? "light");
@@ -145,8 +147,9 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   };
 
   const openShortcut = (kind: ShortcutRequest["kind"]) => {
-    const href: NavItem["href"] = kind === "packages" ? "/plan" : kind === "finance" ? "/finance" : "/home";
+    const href: NavItem["href"] = kind === "packages" || kind === "packageScan" ? "/plan" : kind === "finance" ? "/finance" : kind === "workout" ? "/workout" : "/home";
     setQuickMenuOpen(false);
+    setQuickCaptureOpen(false);
     setSettingsOpen(false);
     if (kind === "finance") {
       setFinanceTab("record");
@@ -157,6 +160,12 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
       return;
     }
     setCurrentRoute(href);
+  };
+
+  const openQuickCapture = () => {
+    setQuickMenuOpen(false);
+    setSettingsOpen(false);
+    setQuickCaptureOpen(true);
   };
 
   const handleThemeChange = async (nextThemeId: ThemeId) => {
@@ -251,10 +260,12 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
           <View style={styles.quickDock}>
             {quickMenuOpen ? (
               <View testID="quick-shortcut-menu" style={styles.quickMenu}>
-                <ShortcutButton label="备忘录" style={styles.quickActionNotes} testID="quick-shortcut-notes" onPress={() => openShortcut("notes")} />
-                <ShortcutButton label="待办" style={styles.quickActionTodos} testID="quick-shortcut-todos" onPress={() => openShortcut("todos")} />
-                <ShortcutButton label="快递" style={styles.quickActionPackages} testID="quick-shortcut-packages" onPress={() => openShortcut("packages")} />
-                <ShortcutButton label="支出" style={styles.quickActionFinance} testID="quick-shortcut-finance" onPress={() => openShortcut("finance")} />
+                <ShortcutButton icon="🎙" label="语音记录" testID="quick-shortcut-voice" onPress={openQuickCapture} />
+                <ShortcutButton icon="¥" label="记一笔支出" testID="quick-shortcut-finance" onPress={() => openShortcut("finance")} />
+                <ShortcutButton icon="▣" label="上传快递截图" testID="quick-shortcut-package-scan" onPress={() => openShortcut("packageScan")} />
+                <ShortcutButton icon="□" label="添加待办" testID="quick-shortcut-todos" onPress={() => openShortcut("todos")} />
+                <ShortcutButton icon="✎" label="写备忘录" testID="quick-shortcut-notes" onPress={() => openShortcut("notes")} />
+                <ShortcutButton icon="↗" label="记录运动" testID="quick-shortcut-workout" onPress={() => openShortcut("workout")} />
               </View>
             ) : null}
             <Pressable
@@ -329,10 +340,12 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
         </ScrollView>
       )}
 
-      {activeKey === "finance" ? <FixedBottomTabs activeValue={financeTab} hidden={keyboardOpen} items={financeTabs} onChange={setFinanceTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
-      {activeKey === "love" ? <FixedBottomTabs activeValue={loveTab} hidden={keyboardOpen} items={loveTabs} onChange={setLoveTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
-      {activeKey === "exam" ? <FixedBottomTabs activeValue={examTab} hidden={keyboardOpen} items={examTabs} onChange={setExamTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
-      {activeKey === "fun" ? <FixedBottomTabs activeValue={entertainmentTab} hidden={keyboardOpen} items={entertainmentTabs} onChange={setEntertainmentTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
+      {activeKey === "finance" ? <FixedBottomTabs activeValue={financeTab} hidden={keyboardOpen || quickCaptureOpen} items={financeTabs} onChange={setFinanceTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
+      {activeKey === "love" ? <FixedBottomTabs activeValue={loveTab} hidden={keyboardOpen || quickCaptureOpen} items={loveTabs} onChange={setLoveTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
+      {activeKey === "exam" ? <FixedBottomTabs activeValue={examTab} hidden={keyboardOpen || quickCaptureOpen} items={examTabs} onChange={setExamTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
+      {activeKey === "fun" ? <FixedBottomTabs activeValue={entertainmentTab} hidden={keyboardOpen || quickCaptureOpen} items={entertainmentTabs} onChange={setEntertainmentTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
+
+      {quickCaptureOpen ? <GlobalQuickCapture onClose={() => setQuickCaptureOpen(false)} tokens={tokens} /> : null}
 
       {settingsOpen ? (
         <SettingsPanel
@@ -396,7 +409,7 @@ function PageContent({
           themeTokens={tokens}
         />
       ) : null}
-      {activeKey === "plan" ? <DailyPlanPanel shortcutNonce={shortcutRequest?.nonce} shortcutTarget={shortcutRequest?.kind === "packages" ? "packages" : undefined} themeTokens={tokens} /> : null}
+      {activeKey === "plan" ? <DailyPlanPanel shortcutNonce={shortcutRequest?.nonce} shortcutTarget={shortcutRequest?.kind === "packages" ? "packages" : shortcutRequest?.kind === "packageScan" ? "packageScan" : undefined} themeTokens={tokens} /> : null}
       {activeKey === "workout" ? <WorkoutPanel /> : null}
       {activeKey === "finance" ? (
         <FinancePanel
@@ -416,9 +429,10 @@ function PageContent({
   );
 }
 
-function ShortcutButton({ label, onPress, style, testID }: { label: string; onPress: () => void; style: ViewStyle; testID?: string }) {
+function ShortcutButton({ icon, label, onPress, testID }: { icon: string; label: string; onPress: () => void; testID?: string }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label}快捷入口`} onPress={onPress} style={[shortcutButtonBase, style]} testID={testID}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}快捷入口`} onPress={onPress} style={shortcutButtonBase} testID={testID}>
+      <Text style={shortcutButtonIcon}>{icon}</Text>
       <Text style={shortcutButtonText}>{label}</Text>
     </Pressable>
   );
@@ -426,23 +440,33 @@ function ShortcutButton({ label, onPress, style, testID }: { label: string; onPr
 
 const shortcutButtonBase = {
   alignItems: "center" as const,
-  backgroundColor: "#ffffff",
+  backgroundColor: "rgba(255, 255, 255, 0.96)",
   borderColor: "#dce8dc",
-  borderRadius: 999,
+  borderRadius: 14,
   borderWidth: 1,
-  height: 54,
-  justifyContent: "center" as const,
-  position: "absolute" as const,
+  flexDirection: "row" as const,
+  gap: 8,
+  minHeight: 42,
+  justifyContent: "flex-start" as const,
+  paddingHorizontal: 10,
+  paddingVertical: 8,
   shadowColor: "#000000",
-  shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.14,
-  shadowRadius: 10,
-  width: 54
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.08,
+  shadowRadius: 8
+};
+
+const shortcutButtonIcon = {
+  color: "#1f8f55",
+  fontSize: 15,
+  fontWeight: "900" as const,
+  textAlign: "center" as const,
+  width: 20
 };
 
 const shortcutButtonText = {
   color: "#1f2937",
-  fontSize: 12,
+  fontSize: 13,
   fontWeight: "900" as const
 };
 
@@ -594,22 +618,6 @@ function createStyles(tokens: ReturnType<typeof getTheme>["tokens"][ColorMode], 
       gap: 8,
       position: "relative"
     },
-    quickActionFinance: {
-      bottom: 14,
-      left: compactSidebar ? 82 : sidebarWidth - 2
-    },
-    quickActionNotes: {
-      bottom: 200,
-      left: compactSidebar ? 34 : sidebarWidth - 84
-    },
-    quickActionPackages: {
-      bottom: 76,
-      left: compactSidebar ? 104 : sidebarWidth + 18
-    },
-    quickActionTodos: {
-      bottom: 138,
-      left: compactSidebar ? 82 : sidebarWidth - 2
-    },
     quickDismissLayer: {
       bottom: 0,
       left: 0,
@@ -645,11 +653,20 @@ function createStyles(tokens: ReturnType<typeof getTheme>["tokens"][ColorMode], 
       lineHeight: 32
     },
     quickMenu: {
-      bottom: 8,
-      height: 260,
-      left: 0,
+      backgroundColor: "rgba(255, 255, 255, 0.92)",
+      borderColor: tokens.border,
+      borderRadius: 18,
+      borderWidth: 1,
+      bottom: 52,
+      gap: 8,
+      left: compactSidebar ? 4 : 0,
+      padding: 8,
       position: "absolute",
-      width: compactSidebar ? 174 : sidebarWidth + 92,
+      shadowColor: "#000000",
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.14,
+      shadowRadius: 18,
+      width: compactSidebar ? 178 : 196,
       zIndex: 90
     },
     settingsFab: {
