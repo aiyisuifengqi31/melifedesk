@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, TextInput, View, type NativeSyntheticEvent, type TextInputChangeEventData } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type NativeSyntheticEvent, type TextInputChangeEventData } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
@@ -112,6 +112,9 @@ export function FinancePanel({ activeTab, onTabChange, showInlineTabs = true, st
   const tab = activeTab ?? localTab;
   const setTab = onTabChange ?? setLocalTab;
   const [detailType, setDetailType] = useState<TransactionType>("expense");
+  const [detailCategory, setDetailCategory] = useState("全部");
+  const [detailMonth, setDetailMonth] = useState(todayIso().slice(0, 7));
+  const [openActionId, setOpenActionId] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<FinanceTransaction[]>(() => sortTransactions(loadFinanceTransactions(financeStorage)));
   const [savingEntries, setSavingEntries] = useState<SavingEntry[]>(() => loadSavingEntries(financeStorage));
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>(() => loadCustomCategories(financeStorage));
@@ -203,7 +206,18 @@ export function FinancePanel({ activeTab, onTabChange, showInlineTabs = true, st
   const monthIncomeCount = transactions.filter((transaction) => transaction.localDate.startsWith(todayIso().slice(0, 7)) && transaction.transactionType === "income").length;
   const sevenDayTrend = useMemo(() => buildSevenDayExpenseTrend(transactions), [transactions]);
   const savingTotal = useMemo(() => sumSavingEntries(savingEntries), [savingEntries]);
-  const detailTransactions = transactions.filter((transaction) => transaction.transactionType === detailType).slice(0, 8);
+  const detailCategories = useMemo(() => {
+    const names = transactions.filter((transaction) => transaction.transactionType === detailType).map((transaction) => transaction.categoryName);
+    return ["全部", ...Array.from(new Set(names))];
+  }, [detailType, transactions]);
+  const detailMonths = useMemo(() => {
+    const months = transactions.filter((transaction) => transaction.transactionType === detailType).map((transaction) => transaction.localDate.slice(0, 7));
+    return Array.from(new Set([todayIso().slice(0, 7), ...months])).sort((left, right) => right.localeCompare(left));
+  }, [detailType, transactions]);
+  const detailTransactions = transactions.filter(
+    (transaction) => transaction.transactionType === detailType && transaction.localDate.startsWith(detailMonth) && (detailCategory === "全部" || transaction.categoryName === detailCategory)
+  );
+  const detailTotal = centsToMoney(detailTransactions.reduce((sum, transaction) => sum + moneyToCents(transaction.amount), 0));
   const canSaveTransaction = Boolean(normalizeMoney(readWebInputValue("finance-amount-input") || amount));
 
   const persistTransactions = (nextTransactions: FinanceTransaction[]) => {
@@ -249,6 +263,7 @@ export function FinancePanel({ activeTab, onTabChange, showInlineTabs = true, st
       saveFinanceTransactions(sorted, financeStorage);
       return sorted;
     });
+    setOpenActionId(null);
     setFeedback("账单已删除。");
   };
 
@@ -486,22 +501,35 @@ export function FinancePanel({ activeTab, onTabChange, showInlineTabs = true, st
 
           <View style={styles.card}>
             <View style={styles.detailTabs}>
-              <Pressable accessibilityRole="button" accessibilityLabel="支出明细" onPress={() => setDetailType("expense")} style={[styles.detailTab, detailType === "expense" ? styles.detailTabActive : null]}>
+              <Pressable accessibilityRole="button" accessibilityLabel="支出明细" onPress={() => {
+                setDetailType("expense");
+                setDetailCategory("全部");
+                setOpenActionId(null);
+              }} style={[styles.detailTab, detailType === "expense" ? styles.detailTabActive : null]}>
                 <Text style={[styles.detailTabText, detailType === "expense" ? styles.detailTabTextActive : null]}>支出明细</Text>
               </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="收入明细" onPress={() => setDetailType("income")} style={[styles.detailTab, detailType === "income" ? styles.detailTabActive : null]}>
+              <Pressable accessibilityRole="button" accessibilityLabel="收入明细" onPress={() => {
+                setDetailType("income");
+                setDetailCategory("全部");
+                setOpenActionId(null);
+              }} style={[styles.detailTab, detailType === "income" ? styles.detailTabActive : null]}>
                 <Text style={[styles.detailTabText, detailType === "income" ? styles.detailTabTextActive : null]}>收入明细</Text>
               </Pressable>
             </View>
-            {detailTransactions.length === 0 ? (
-              <View style={styles.emptyBox}>
-                <Text style={styles.emptyIcon}>💰</Text>
-                <Text style={styles.emptyTitle}>{detailType === "expense" ? "暂无支出记录" : "暂无收入记录"}</Text>
-                <Text style={styles.emptyText}>{detailType === "expense" ? "开始记录你的第一笔支出" : "开始记录你的第一笔收入"}</Text>
-              </View>
-            ) : (
-              detailTransactions.map((transaction) => <TransactionItem key={transaction.id} onDelete={deleteTransaction} transaction={transaction} />)
-            )}
+            <FinanceStatementList
+              activeActionId={openActionId}
+              categories={detailCategories}
+              month={detailMonth}
+              months={detailMonths}
+              onCategoryChange={setDetailCategory}
+              onDelete={deleteTransaction}
+              onMonthChange={setDetailMonth}
+              onToggleActions={(id) => setOpenActionId((current) => (current === id ? null : id))}
+              selectedCategory={detailCategory}
+              total={detailTotal}
+              transactions={detailTransactions}
+              type={detailType}
+            />
           </View>
         </>
       ) : null}
@@ -724,20 +752,170 @@ function Metric({ count, title, value, wide = false }: { count: string; title: s
   );
 }
 
-function TransactionItem({ onDelete, transaction }: { onDelete: (transactionId: string) => void; transaction: FinanceTransaction }) {
-  const isIncome = transaction.transactionType === "income";
+function FinanceStatementList({
+  activeActionId,
+  categories,
+  month,
+  months,
+  onCategoryChange,
+  onDelete,
+  onMonthChange,
+  onToggleActions,
+  selectedCategory,
+  total,
+  transactions,
+  type
+}: {
+  activeActionId: string | null;
+  categories: string[];
+  month: string;
+  months: string[];
+  onCategoryChange: (category: string) => void;
+  onDelete: (transactionId: string) => void;
+  onMonthChange: (month: string) => void;
+  onToggleActions: (transactionId: string) => void;
+  selectedCategory: string;
+  total: string;
+  transactions: FinanceTransaction[];
+  type: TransactionType;
+}) {
+  const groups = groupTransactionsByDate(transactions);
+  const summaryLabel = type === "expense" ? "本月支出" : "本月收入";
+
   return (
-    <View style={styles.transactionItem}>
-      <View style={styles.transactionBody}>
-        <Text style={styles.transactionTitle}>{transaction.categoryName}</Text>
-        <Text style={styles.transactionMeta}>{transaction.localDate}{transaction.note ? ` · ${transaction.note}` : ""}</Text>
+    <View testID="finance-statement-list" style={styles.statementList}>
+      <View style={styles.statementHeader}>
+        <View>
+          <Text style={styles.statementMonth}>{formatMonthLabel(month)}</Text>
+          <Text style={styles.statementMeta}>{summaryLabel} ¥{total} · {transactions.length} 笔</Text>
+        </View>
       </View>
-      <Text style={[styles.transactionAmount, isIncome ? styles.transactionAmountIncome : null]}>{isIncome ? "+" : "-"}¥{transaction.amount}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={`删除账单：${transaction.categoryName}`} onPress={() => onDelete(transaction.id)} style={styles.deleteButton}>
-        <Text style={styles.deleteText}>删除</Text>
-      </Pressable>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+        {months.map((item) => (
+          <Pressable key={item} accessibilityRole="button" accessibilityLabel={`筛选月份：${item}`} onPress={() => onMonthChange(item)} style={[styles.filterChip, month === item ? styles.filterChipActive : null]}>
+            <Text style={[styles.filterText, month === item ? styles.filterTextActive : null]}>{formatMonthLabel(item)}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+        {categories.map((item) => (
+          <Pressable key={item} accessibilityRole="button" accessibilityLabel={`筛选分类：${item}`} onPress={() => onCategoryChange(item)} style={[styles.filterChip, selectedCategory === item ? styles.filterChipActive : null]}>
+            <Text style={[styles.filterText, selectedCategory === item ? styles.filterTextActive : null]}>{item}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      {groups.length === 0 ? (
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyIcon}>💰</Text>
+          <Text style={styles.emptyTitle}>{type === "expense" ? "暂无支出记录" : "暂无收入记录"}</Text>
+          <Text style={styles.emptyText}>{type === "expense" ? "开始记录你的第一笔支出" : "开始记录你的第一笔收入"}</Text>
+        </View>
+      ) : (
+        groups.map((group) => (
+          <View key={group.date} testID={`finance-date-group-${group.date}`} style={styles.statementGroup}>
+            <View style={styles.statementGroupHeader}>
+              <Text style={styles.statementGroupTitle}>{formatStatementDate(group.date)}</Text>
+              <Text style={[styles.statementGroupTotal, type === "income" ? styles.statementAmountIncome : null]}>{type === "expense" ? "支出" : "收入"} ¥{group.total}</Text>
+            </View>
+            <View style={styles.statementRows}>
+              {group.items.map((transaction) => (
+                <StatementRow
+                  key={transaction.id}
+                  actionsOpen={activeActionId === transaction.id}
+                  onDelete={onDelete}
+                  onToggleActions={onToggleActions}
+                  transaction={transaction}
+                />
+              ))}
+            </View>
+          </View>
+        ))
+      )}
     </View>
   );
+}
+
+function StatementRow({
+  actionsOpen,
+  onDelete,
+  onToggleActions,
+  transaction
+}: {
+  actionsOpen: boolean;
+  onDelete: (transactionId: string) => void;
+  onToggleActions: (transactionId: string) => void;
+  transaction: FinanceTransaction;
+}) {
+  const isIncome = transaction.transactionType === "income";
+  return (
+    <View testID={`finance-transaction-row-${transaction.id}`} style={styles.statementRow}>
+      <Text style={[styles.statementIcon, { backgroundColor: getCategorySoftColor(transaction.categoryName) }]}>{categoryIcons[transaction.categoryName] ?? transaction.categoryName.slice(0, 1)}</Text>
+      <View style={styles.statementBody}>
+        <Text style={styles.statementCategory} numberOfLines={1}>{transaction.categoryName}</Text>
+        {transaction.note ? <Text style={styles.statementNote} numberOfLines={1}>{transaction.note}</Text> : null}
+      </View>
+      <View style={styles.statementRight}>
+        <Text style={[styles.statementAmount, isIncome ? styles.statementAmountIncome : null]}>{isIncome ? "+" : "-"}¥{transaction.amount}</Text>
+        <Text style={styles.statementTime}>{formatCreateTime(transaction.createTime)}</Text>
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel={`更多操作：${transaction.categoryName}`} onPress={() => onToggleActions(transaction.id)} style={styles.statementMoreButton}>
+        <Text style={styles.statementMoreText}>···</Text>
+      </Pressable>
+      {actionsOpen ? (
+        <View style={styles.statementActions}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`编辑账单：${transaction.categoryName}`} style={styles.statementActionButton}>
+            <Text style={styles.statementActionText}>编辑</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={`删除账单：${transaction.categoryName}`} onPress={() => onDelete(transaction.id)} style={[styles.statementActionButton, styles.statementDeleteAction]}>
+            <Text style={[styles.statementActionText, styles.statementDeleteText]}>删除</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function groupTransactionsByDate(transactions: FinanceTransaction[]) {
+  const groupMap = new Map<string, FinanceTransaction[]>();
+  for (const transaction of transactions) {
+    groupMap.set(transaction.localDate, [...(groupMap.get(transaction.localDate) ?? []), transaction]);
+  }
+
+  return Array.from(groupMap.entries())
+    .sort(([left], [right]) => right.localeCompare(left))
+    .map(([date, items]) => ({
+      date,
+      items,
+      total: centsToMoney(items.reduce((sum, item) => sum + moneyToCents(item.amount), 0))
+    }));
+}
+
+function formatStatementDate(date: string) {
+  const today = todayIso();
+  const yesterday = shiftDate(new Date(), -1).toISOString().slice(0, 10);
+  const [, month, day] = date.split("-");
+  if (date === today) return `今天 ${Number(month)}月${Number(day)}日`;
+  if (date === yesterday) return `昨天 ${Number(month)}月${Number(day)}日`;
+  return `${Number(month)}月${Number(day)}日`;
+}
+
+function formatMonthLabel(month: string) {
+  const [year, value] = month.split("-");
+  return `${year}年${Number(value)}月`;
+}
+
+function formatCreateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function getCategorySoftColor(categoryName: string) {
+  const index = Math.abs(categoryName.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0)) % categoryColors.length;
+  return categoryColors[index];
 }
 
 function GiftItem({ onDelete, record }: { onDelete: (giftId: string) => void; record: GiftRecord }) {
@@ -1141,6 +1319,31 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800"
   },
+  filterChip: {
+    backgroundColor: "#f8fafc",
+    borderColor: "#e3e8ef",
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 7
+  },
+  filterChipActive: {
+    backgroundColor: "#eaf6ff",
+    borderColor: "#1fa8e2"
+  },
+  filterRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingRight: 4
+  },
+  filterText: {
+    color: "#697386",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  filterTextActive: {
+    color: "#1677a8"
+  },
   fieldLabel: {
     color: "#111827",
     fontSize: 13,
@@ -1534,6 +1737,151 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 30,
     fontWeight: "500"
+  },
+  statementActionButton: {
+    alignItems: "center",
+    borderRadius: 10,
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  statementActionText: {
+    color: "#1677a8",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  statementActions: {
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderColor: "#e3e8ef",
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 4,
+    padding: 3,
+    position: "absolute",
+    right: 36,
+    top: 10,
+    zIndex: 5
+  },
+  statementAmount: {
+    color: "#ef4444",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  statementAmountIncome: {
+    color: "#16a34a"
+  },
+  statementBody: {
+    flex: 1,
+    gap: 3,
+    minWidth: 0
+  },
+  statementCategory: {
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  statementDeleteAction: {
+    backgroundColor: "#fee2e2"
+  },
+  statementDeleteText: {
+    color: "#ef4444"
+  },
+  statementGroup: {
+    borderTopColor: "#eef2f7",
+    borderTopWidth: 1,
+    gap: 6,
+    paddingTop: 10
+  },
+  statementGroupHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  statementGroupTitle: {
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  statementGroupTotal: {
+    color: "#ef4444",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  statementHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  statementIcon: {
+    borderRadius: 999,
+    color: "#1599d3",
+    fontSize: 13,
+    fontWeight: "900",
+    height: 34,
+    lineHeight: 34,
+    overflow: "hidden",
+    textAlign: "center",
+    width: 34
+  },
+  statementList: {
+    gap: 12,
+    paddingBottom: 88
+  },
+  statementMeta: {
+    color: "#697386",
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 3
+  },
+  statementMonth: {
+    color: "#111827",
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  statementMoreButton: {
+    alignItems: "center",
+    borderRadius: 999,
+    height: 32,
+    justifyContent: "center",
+    width: 28
+  },
+  statementMoreText: {
+    color: "#9aa3af",
+    fontSize: 16,
+    fontWeight: "900",
+    lineHeight: 16
+  },
+  statementNote: {
+    color: "#8b93a1",
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  statementRight: {
+    alignItems: "flex-end",
+    gap: 3,
+    minWidth: 78
+  },
+  statementRow: {
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderBottomColor: "#edf1f5",
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 56,
+    paddingHorizontal: 2,
+    paddingVertical: 8,
+    position: "relative"
+  },
+  statementRows: {
+    gap: 0
+  },
+  statementTime: {
+    color: "#a0a8b3",
+    fontSize: 11,
+    fontWeight: "700"
   },
   stack: {
     gap: 18,

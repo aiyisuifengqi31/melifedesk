@@ -38,6 +38,60 @@ describe("finance storage", () => {
 });
 
 describe("FinancePanel interactions", () => {
+  it("groups income and expense details by date in a compact statement list", async () => {
+    const storage = makeStorage();
+    const today = new Date().toISOString().slice(0, 10);
+    saveFinanceTransactions(
+      [
+        {
+          amount: "11.00",
+          categoryName: "买菜",
+          createTime: `${today}T08:10:00.000Z`,
+          id: "expense-today-1",
+          localDate: today,
+          note: "早餐",
+          transactionType: "expense"
+        },
+        {
+          amount: "500.00",
+          categoryName: "其他",
+          createTime: `${today}T09:20:00.000Z`,
+          id: "expense-today-2",
+          localDate: today,
+          note: "情侣存款",
+          transactionType: "expense"
+        },
+        {
+          amount: "300.00",
+          categoryName: "工资",
+          createTime: `${today}T10:20:00.000Z`,
+          id: "income-today-1",
+          localDate: today,
+          note: "兼职",
+          transactionType: "income"
+        }
+      ],
+      storage
+    );
+
+    render(<FinancePanel storage={storage} />);
+
+    expect(screen.getByTestId("finance-statement-list")).toBeOnTheScreen();
+    expect(screen.getByTestId(`finance-date-group-${today}`)).toBeOnTheScreen();
+    expect(screen.getByText(/今天/)).toBeOnTheScreen();
+    expect(screen.getAllByText(/支出 ¥511.00/).length).toBeGreaterThan(0);
+    expect(screen.getByTestId("finance-transaction-row-expense-today-1")).toHaveStyle({ minHeight: 56 });
+    expect(screen.getByText("-¥11.00")).toBeOnTheScreen();
+    expect(screen.queryByRole("button", { name: "删除账单：买菜" })).toBeNull();
+
+    fireEvent.press(screen.getByRole("button", { name: "更多操作：买菜" }));
+    expect(screen.getByRole("button", { name: "删除账单：买菜" })).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole("button", { name: "收入明细" }));
+    expect(screen.getAllByText(/收入 ¥300.00/).length).toBeGreaterThan(0);
+    expect(screen.getByText("+¥300.00")).toBeOnTheScreen();
+  });
+
   it("uses four-column category buttons and does not show the old input hint", () => {
     render(<FinancePanel storage={makeStorage()} />);
 
@@ -60,7 +114,7 @@ describe("FinancePanel interactions", () => {
     expect(screen.getByTestId("finance-metric-今日支出")).toHaveStyle({ flexBasis: "31%" });
     expect(screen.getByTestId("finance-balance-summary")).toHaveStyle({ flexDirection: "row" });
     expect(screen.getByText(/收入 ¥0.00/)).toBeOnTheScreen();
-    expect(screen.getByText(/支出 ¥0.00/)).toBeOnTheScreen();
+    expect(screen.getAllByText(/支出 ¥0.00/).length).toBeGreaterThan(0);
   });
 
   it("uses the compact mobile quick record form layout", () => {
@@ -123,6 +177,7 @@ describe("FinancePanel interactions", () => {
     fireEvent.press(screen.getByRole("button", { name: "记录" }));
     expect(screen.getByRole("button", { name: "支出明细" })).toBeOnTheScreen();
     expect(screen.getByRole("button", { name: "收入明细" })).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("button", { name: "更多操作：餐饮" }));
     fireEvent.press(screen.getByRole("button", { name: "删除账单：餐饮" }));
     await waitFor(() => expect(screen.getAllByText("餐饮")).toHaveLength(1));
     await waitFor(() => expect(screen.getAllByText("¥0.00").length).toBeGreaterThanOrEqual(3));
@@ -136,6 +191,7 @@ describe("FinancePanel interactions", () => {
     fireEvent.press(screen.getByRole("button", { name: "收入明细" }));
     await waitFor(() => expect(screen.getAllByText("工资").length).toBeGreaterThan(1));
     expect(screen.getByText("+¥300.00")).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("button", { name: "更多操作：工资" }));
     fireEvent.press(screen.getByRole("button", { name: "删除账单：工资" }));
     await waitFor(() => expect(screen.getAllByText("工资")).toHaveLength(1));
     await waitFor(() => expect(screen.queryByText("+¥300.00")).toBeNull());

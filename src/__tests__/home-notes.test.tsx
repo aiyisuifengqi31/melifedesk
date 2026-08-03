@@ -55,21 +55,19 @@ describe("HomePanel notes", () => {
     jest.restoreAllMocks();
   });
 
-  it("shows more than three notes as separate rows and deletes one after confirmation", async () => {
+  it("keeps home notes compact as a quick entry and opens the full notes page", async () => {
     saveNotes([makeNote("1", "买菜清单"), makeNote("2", "周末安排"), makeNote("3", "读书摘记"), makeNote("4", "旅行备忘")], window.localStorage);
 
     render(<HomePanel themeTokens={testTokens} />);
 
-    expect(screen.getByText("买菜清单")).toBeOnTheScreen();
-    expect(screen.getByText("周末安排")).toBeOnTheScreen();
-    expect(screen.getByText("读书摘记")).toBeOnTheScreen();
-    expect(screen.getByText("旅行备忘")).toBeOnTheScreen();
-    expect(screen.queryByText(/还有 1 条/)).toBeNull();
+    expect(screen.getByTestId("home-notes-quick-entry")).toBeOnTheScreen();
+    expect(screen.getByText("已有 4 条")).toBeOnTheScreen();
+    expect(screen.queryByText("买菜清单")).toBeNull();
+    expect(screen.queryByRole("button", { name: "删除备忘：周末安排" })).toBeNull();
 
-    fireEvent.press(screen.getByRole("button", { name: "删除备忘：周末安排" }));
+    fireEvent.press(screen.getByRole("button", { name: "快速记一条备忘" }));
 
-    await waitFor(() => expect(screen.queryByText("周末安排")).toBeNull());
-    expect(window.confirm).toHaveBeenCalledWith("确定删除这条备忘吗？");
-    expect(loadNotes(window.localStorage).map((note) => note.title)).toEqual(["买菜清单", "读书摘记", "旅行备忘"]);
+    await waitFor(() => expect(screen.getByText("买菜清单")).toBeOnTheScreen());
+    expect(loadNotes(window.localStorage).map((note) => note.title)).toEqual(["买菜清单", "周末安排", "读书摘记", "旅行备忘"]);
   });
 });

@@ -292,6 +292,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
               onEntertainmentTabChange={setEntertainmentTab}
               onFinanceTabChange={setFinanceTab}
               onLoveTabChange={setLoveTab}
+              onOpenPackages={() => openShortcut("packages")}
               shortcutRequest={shortcutRequest}
               styles={styles}
               themeEmptyState={theme.emptyState}
@@ -310,6 +311,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
             onEntertainmentTabChange={setEntertainmentTab}
             onFinanceTabChange={setFinanceTab}
             onLoveTabChange={setLoveTab}
+            onOpenPackages={() => openShortcut("packages")}
             shortcutRequest={shortcutRequest}
             styles={styles}
             themeEmptyState={theme.emptyState}
@@ -349,6 +351,7 @@ function PageContent({
   onEntertainmentTabChange,
   onFinanceTabChange,
   onLoveTabChange,
+  onOpenPackages,
   shortcutRequest,
   styles,
   themeEmptyState,
@@ -362,6 +365,7 @@ function PageContent({
   onEntertainmentTabChange: (tab: EntTab) => void;
   onFinanceTabChange: (tab: FinanceTab) => void;
   onLoveTabChange: (tab: LoveTab) => void;
+  onOpenPackages: () => void;
   shortcutRequest: ShortcutRequest | null;
   styles: ReturnType<typeof createStyles>;
   themeEmptyState: string;
@@ -369,7 +373,15 @@ function PageContent({
 }) {
   return (
     <>
-      {activeKey === "home" ? <HomePanel shortcutNonce={shortcutRequest?.nonce} shortcutView={shortcutRequest?.kind === "notes" || shortcutRequest?.kind === "todos" ? shortcutRequest.kind : undefined} themeTokens={tokens} /> : null}
+      {activeKey === "home" ? (
+        <HomePanel
+          onOpenFinance={() => handleNavigate("/finance")}
+          onOpenPackages={onOpenPackages}
+          shortcutNonce={shortcutRequest?.nonce}
+          shortcutView={shortcutRequest?.kind === "notes" || shortcutRequest?.kind === "todos" ? shortcutRequest.kind : undefined}
+          themeTokens={tokens}
+        />
+      ) : null}
       {activeKey === "plan" ? <DailyPlanPanel shortcutNonce={shortcutRequest?.nonce} shortcutTarget={shortcutRequest?.kind === "packages" ? "packages" : undefined} themeTokens={tokens} /> : null}
       {activeKey === "workout" ? <WorkoutPanel /> : null}
       {activeKey === "finance" ? <FinancePanel activeTab={financeTab} onTabChange={onFinanceTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}

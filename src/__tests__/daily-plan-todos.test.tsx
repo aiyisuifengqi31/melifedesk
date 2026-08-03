@@ -4,6 +4,8 @@ import type { UiTokens } from "@/shared/ui/primitives";
 
 import { AppShell } from "@/components/AppShell";
 import { HomePanel } from "@/features/home/HomePanel";
+import { saveFinanceTransactions } from "@/features/finance/financeStorage";
+import { savePackages, type PackageItem } from "@/features/plan/packageStorage";
 import { DailyPlanPanel } from "@/features/plan/DailyPlanPanel";
 import { TodoPanel } from "@/features/plan/TodoPanel";
 import { loadLocalTodos, saveLocalTodos, type TodoTask } from "@/features/plan/todoStorage";
@@ -93,7 +95,7 @@ describe("Todo route interactions", () => {
 
     render(<HomePanel storage={window.localStorage} themeTokens={testTokens} />);
 
-    expect(screen.getByText("今日待办")).toBeOnTheScreen();
+    expect(screen.getAllByText("今日待办").length).toBeGreaterThan(0);
     expect(screen.getByText("复盘页面交互")).toBeOnTheScreen();
     fireEvent.press(screen.getByRole("checkbox", { name: "完成首页待办：复盘页面交互" }));
     expect(loadLocalTodos(window.localStorage)[0]?.completed).toBe(true);
@@ -103,7 +105,7 @@ describe("Todo route interactions", () => {
     expect(screen.getByText("每日待办")).toBeOnTheScreen();
     expect(await screen.findByText("复盘页面交互")).toBeOnTheScreen();
     fireEvent.press(screen.getByRole("button", { name: "返回首页" }));
-    expect(screen.getByText("生活控制中心")).toBeOnTheScreen();
+    expect(screen.getByText("今日概览")).toBeOnTheScreen();
   });
 
   it("does not expose a standalone daily todo navigation tab", () => {
@@ -119,6 +121,49 @@ describe("Todo route interactions", () => {
     expect(screen.queryByRole("button", { name: "切换为小猫" })).toBeNull();
     expect(screen.queryByRole("button", { name: "切换为小狗" })).toBeNull();
     expect(screen.queryByRole("button", { name: "摸摸小宠物" })).toBeNull();
+  });
+
+  it("renders a compact real-data today overview and trims home widgets", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const todoStorage = window.localStorage;
+    const packageItem: PackageItem = {
+      arrivalDate: today,
+      company: "顺丰",
+      createTime: `${today}T08:00:00.000Z`,
+      id: "pkg-1",
+      image: null,
+      orderNumber: "",
+      pickedUp: false,
+      pickupCode: "3-2-1",
+      pickupLocation: "驿站"
+    };
+    saveLocalTodos(
+      [
+        { completed: true, createTime: `${today}T07:00:00.000Z`, deadline: `${today}T10:00:00.000Z`, id: "todo-1", priority: "normal", remindAt: "", title: "读书" },
+        { completed: false, createTime: `${today}T07:20:00.000Z`, deadline: `${today}T11:00:00.000Z`, id: "todo-2", priority: "normal", remindAt: "", title: "写日记" }
+      ],
+      todoStorage
+    );
+    savePackages([packageItem], window.localStorage);
+    saveFinanceTransactions(
+      [
+        { amount: "52.00", categoryName: "餐饮", createTime: `${today}T12:00:00.000Z`, id: "finance-1", localDate: today, note: "午饭", transactionType: "expense" }
+      ],
+      window.localStorage
+    );
+
+    render(<HomePanel storage={todoStorage} themeTokens={testTokens} />);
+
+    expect(screen.getByText("今日概览")).toBeOnTheScreen();
+    expect(screen.queryByText("生活控制中心")).toBeNull();
+    expect(screen.getByText("1/2")).toBeOnTheScreen();
+    expect(screen.getByText("待取快递")).toBeOnTheScreen();
+    expect(screen.getByText("¥52.00")).toBeOnTheScreen();
+    expect(screen.queryByText("金币")).toBeNull();
+    expect(screen.getByTestId("home-todo-widget")).not.toHaveStyle({ height: 210 });
+    expect(screen.getByTestId("home-notes-quick-entry")).toBeOnTheScreen();
+    expect(screen.getByTestId("meal-spinner-compact-entry")).toBeOnTheScreen();
+    expect(screen.queryByTestId("meal-spinner-wheel")).toBeNull();
   });
 
   it("adds, edits, completes, restores, persists, and deletes tasks on the home-opened todo page", async () => {
