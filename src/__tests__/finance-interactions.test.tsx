@@ -104,17 +104,18 @@ describe("FinancePanel interactions", () => {
     expect(screen.getByTestId("finance-summary-panel")).toHaveStyle({ gap: 8 });
   });
 
-  it("shows three compact summary metrics plus a full-width monthly balance", () => {
+  it("shows a single monthly summary balance card instead of separate metric cards", () => {
     render(<FinancePanel storage={makeStorage()} />);
 
     expect(screen.getAllByText("今日支出").length).toBeGreaterThan(0);
-    expect(screen.getByText("本月支出")).toBeOnTheScreen();
-    expect(screen.getByText("本月收入")).toBeOnTheScreen();
-    expect(screen.getByText("本月结余")).toBeOnTheScreen();
-    expect(screen.getByTestId("finance-metric-今日支出")).toHaveStyle({ flexBasis: "31%" });
+    expect(screen.getAllByText("本月总结").length).toBeGreaterThan(0);
+    expect(screen.queryByText("今日收入")).toBeNull();
+    expect(screen.getByTestId("finance-metric-本月总结")).toHaveStyle({ flexBasis: "100%" });
     expect(screen.getByTestId("finance-balance-summary")).toHaveStyle({ flexDirection: "row" });
-    expect(screen.getByText(/收入 ¥0.00/)).toBeOnTheScreen();
-    expect(screen.getAllByText(/支出 ¥0.00/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/收入 ¥0\.00/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/支出 ¥0\.00/).length).toBeGreaterThan(0);
+    expect(screen.queryByText("本月支出")).toBeNull();
+    expect(screen.queryByText("本月收入")).toBeNull();
   });
 
   it("uses the compact mobile quick record form layout", () => {
@@ -128,7 +129,7 @@ describe("FinancePanel interactions", () => {
     expect(screen.getByTestId("finance-save-button")).toHaveProp("accessibilityState", { disabled: true });
   });
 
-  it("keeps large summary amounts inside their metric cards", () => {
+  it("renders very large monthly totals inside the summary card without breaking layout", () => {
     const storage = makeStorage();
     const transaction: FinanceTransaction = {
       amount: "1500000.00",
@@ -143,10 +144,8 @@ describe("FinancePanel interactions", () => {
 
     render(<FinancePanel storage={storage} />);
 
-    expect(screen.getAllByText("¥1500000.00")[0]).toHaveStyle({
-      flexShrink: 1,
-      maxWidth: "100%"
-    });
+    expect(screen.getByTestId("finance-balance-summary")).toBeOnTheScreen();
+    expect(screen.getByText("¥1500000.00")).toBeOnTheScreen();
   });
 
   it("creates expense and income details, updates summary, and recalculates after deletion", async () => {
@@ -154,10 +153,10 @@ describe("FinancePanel interactions", () => {
     render(<FinancePanel storage={storage} />);
 
     expect(screen.getAllByText("今日支出").length).toBeGreaterThan(0);
-    expect(screen.getByText("本月支出")).toBeOnTheScreen();
-    expect(screen.getByText("本月收入")).toBeOnTheScreen();
-    expect(screen.getByText("本月结余")).toBeOnTheScreen();
+    expect(screen.getAllByText("本月总结").length).toBeGreaterThan(0);
     expect(screen.queryByText("今日收入")).toBeNull();
+    expect(screen.queryByText("本月支出")).toBeNull();
+    expect(screen.queryByText("本月收入")).toBeNull();
     expect(screen.queryByText("预算剩余")).toBeNull();
 
     fireEvent.press(screen.getByRole("button", { name: "选择分类：餐饮" }));
@@ -166,13 +165,13 @@ describe("FinancePanel interactions", () => {
 
     await waitFor(() => expect(screen.getAllByText("餐饮").length).toBeGreaterThan(1));
     expect(screen.getByText("支出已保存，统计已更新。")).toBeOnTheScreen();
-    expect(screen.getAllByText("¥25.50").length).toBeGreaterThan(0);
-    expect(screen.getByText("¥-25.50")).toBeOnTheScreen();
+    expect(screen.getAllByText(/¥25\.50/).length).toBeGreaterThan(0);
+    expect(screen.getByText("-¥25.50")).toBeOnTheScreen();
 
     fireEvent.press(screen.getByRole("button", { name: "统计" }));
-    expect(screen.getByText("近7天支出趋势")).toBeOnTheScreen();
+    expect(screen.getByText("收支比例")).toBeOnTheScreen();
     expect(screen.getByText("本月分类占比")).toBeOnTheScreen();
-    expect(screen.getByText("本月结余")).toBeOnTheScreen();
+    expect(screen.queryByText("本月结余")).toBeNull();
 
     fireEvent.press(screen.getByRole("button", { name: "记录" }));
     expect(screen.getByRole("button", { name: "支出明细" })).toBeOnTheScreen();
@@ -180,14 +179,14 @@ describe("FinancePanel interactions", () => {
     fireEvent.press(screen.getByRole("button", { name: "更多操作：餐饮" }));
     fireEvent.press(screen.getByRole("button", { name: "删除账单：餐饮" }));
     await waitFor(() => expect(screen.getAllByText("餐饮")).toHaveLength(1));
-    await waitFor(() => expect(screen.getAllByText("¥0.00").length).toBeGreaterThanOrEqual(3));
+    await waitFor(() => expect(screen.getAllByText(/¥0\.00/).length).toBeGreaterThanOrEqual(3));
 
     fireEvent.press(screen.getByRole("button", { name: "收入" }));
     fireEvent.press(screen.getByRole("button", { name: "选择分类：工资" }));
     fireEvent.changeText(screen.getByPlaceholderText("0.00"), "300.00");
     fireEvent.press(screen.getByRole("button", { name: "快速记账" }));
 
-    expect(screen.getAllByText("¥300.00").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/¥300\.00/).length).toBeGreaterThan(0);
     fireEvent.press(screen.getByRole("button", { name: "收入明细" }));
     await waitFor(() => expect(screen.getAllByText("工资").length).toBeGreaterThan(1));
     expect(screen.getByText("+¥300.00")).toBeOnTheScreen();

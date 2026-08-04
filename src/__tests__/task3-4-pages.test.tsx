@@ -23,14 +23,13 @@ describe("Task 3 and Task 4 pages", () => {
     expect(screen.queryByText("今日待办")).toBeNull();
   });
 
-  it("renders the workout workspace controls with labeled optional inputs", () => {
+  it("renders the workout workspace controls with a single duration input", () => {
     render(<AppShell initialRoute="/workout" />);
 
-    expect(screen.UNSAFE_getAllByType(TextInput).length).toBeGreaterThanOrEqual(6);
-    expect(screen.getByText("训练时长（分钟）")).toBeOnTheScreen();
-    expect(screen.getByText("有氧距离")).toBeOnTheScreen();
-    expect(screen.getByText("力量组数")).toBeOnTheScreen();
-    expect(screen.getByText("训练重量")).toBeOnTheScreen();
+    expect(screen.UNSAFE_getAllByType(TextInput).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("训练时间")).toBeOnTheScreen();
+    expect(screen.getByText("训练部位")).toBeOnTheScreen();
+    expect(screen.getByText("本周训练统计")).toBeOnTheScreen();
   });
 
   it("keeps manual package entry compact and collapsed behind the screenshot-first flow", () => {

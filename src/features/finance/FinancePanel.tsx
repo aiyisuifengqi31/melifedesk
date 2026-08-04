@@ -204,10 +204,8 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
       }),
     [transactions]
   );
-  const todayExpenseCount = transactions.filter((transaction) => transaction.localDate === todayIso() && transaction.transactionType === "expense").length;
   const monthExpenseCount = transactions.filter((transaction) => transaction.localDate.startsWith(todayIso().slice(0, 7)) && transaction.transactionType === "expense").length;
   const monthIncomeCount = transactions.filter((transaction) => transaction.localDate.startsWith(todayIso().slice(0, 7)) && transaction.transactionType === "income").length;
-  const sevenDayTrend = useMemo(() => buildSevenDayExpenseTrend(transactions), [transactions]);
   const savingTotal = useMemo(() => sumSavingEntries(savingEntries), [savingEntries]);
   const detailCategories = useMemo(() => {
     const names = transactions.filter((transaction) => transaction.transactionType === detailType).map((transaction) => transaction.categoryName);
@@ -444,17 +442,12 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
     <View style={styles.stack}>
       <View style={styles.overviewCard}>
         <View style={styles.overviewHeader}>
-          <Text style={styles.overviewTitle}>支出</Text>
-          <Text style={styles.overviewSubTitle}>今日与本月概览</Text>
+          <Text style={styles.overviewTitle}>本月总结</Text>
+          <Text style={styles.overviewSubTitle}>收入与支出概览</Text>
         </View>
         <View testID="finance-summary-panel" style={styles.overviewMetricStack}>
-          <View style={styles.metricGrid}>
-            <SummaryCard count={`${todayExpenseCount} 笔`} testID="finance-metric-今日支出" title="今日支出" tokens={themeTokens} value={`¥${summary.todayExpense}`} />
-            <SummaryCard count={`${monthExpenseCount} 笔`} testID="finance-metric-本月支出" title="本月支出" tokens={themeTokens} value={`¥${summary.monthExpense}`} />
-            <SummaryCard count={`${monthIncomeCount} 笔`} testID="finance-metric-本月收入" title="本月收入" tokens={themeTokens} value={`¥${summary.monthIncome}`} />
-          </View>
-          <View testID="finance-metric-本月结余" style={styles.balanceMetricWrap}>
-            <BalanceSummaryCard expense={`¥${summary.monthExpense}`} income={`¥${summary.monthIncome}`} title="本月结余" tokens={themeTokens} value={`¥${summary.monthBalance}`} />
+          <View testID="finance-metric-本月总结" style={styles.balanceMetricWrap}>
+            <BalanceSummaryCard expense={`¥${summary.monthExpense}`} income={`¥${summary.monthIncome}`} title="本月总结" tokens={themeTokens} value={`¥${summary.monthBalance}`} />
           </View>
         </View>
       </View>
@@ -568,19 +561,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
 
       {tab === "stats" ? (
         <>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>近7天支出趋势</Text>
-            <View style={styles.lineChart}>
-              {sevenDayTrend.map((day) => (
-                <View key={day.date} style={styles.linePointWrap}>
-                  <View style={styles.lineTrack}>
-                    <View style={[styles.linePoint, { bottom: `${day.height}%` }]} />
-                  </View>
-                  <Text style={styles.chartLabel}>{day.label}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
+          <IncomeExpenseRatio expense={`¥${summary.monthExpense}`} income={`¥${summary.monthIncome}`} />
           <View style={styles.card}>
             <Text style={styles.cardTitle}>本月分类占比</Text>
             {summary.categoryShares.length === 0 ? <Text style={styles.emptyText}>暂无支出分类数据。</Text> : summary.categoryShares.map((share, index) => {
@@ -1018,26 +999,31 @@ function CategoryPieChart({ shares }: { shares: ReturnType<typeof buildFinanceSu
   );
 }
 
-function buildSevenDayExpenseTrend(transactions: FinanceTransaction[]) {
-  const days = Array.from({ length: 7 }, (_, index) => shiftDate(new Date(), index - 6));
-  const byDate = new Map<string, number>();
-
-  for (const transaction of transactions) {
-    if (transaction.transactionType === "expense") {
-      byDate.set(transaction.localDate, (byDate.get(transaction.localDate) ?? 0) + moneyToCents(transaction.amount));
-    }
-  }
-
-  const maxCents = Math.max(100, ...days.map((day) => byDate.get(day.toISOString().slice(0, 10)) ?? 0));
-  return days.map((day) => {
-    const date = day.toISOString().slice(0, 10);
-    const cents = byDate.get(date) ?? 0;
-    return {
-      date,
-      height: Math.max(cents ? 8 : 0, Math.round((cents / maxCents) * 86)),
-      label: date.slice(5)
-    };
-  });
+function IncomeExpenseRatio({ expense, income }: { expense: string; income: string }) {
+  const expenseCents = Math.max(0, moneyToCents(expense.replace("¥", "")));
+  const incomeCents = Math.max(0, moneyToCents(income.replace("¥", "")));
+  const total = expenseCents + incomeCents;
+  const expenseRatio = total > 0 ? expenseCents / total : 0;
+  const incomeRatio = total > 0 ? incomeCents / total : 0;
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>收支比例</Text>
+      <View style={styles.ratioBar}>
+        <View style={[styles.ratioFillExpense, { flexGrow: expenseRatio || 0.0001 }]} />
+        <View style={[styles.ratioFillIncome, { flexGrow: incomeRatio || 0.0001 }]} />
+      </View>
+      <View style={styles.ratioLegend}>
+        <View style={styles.ratioLegendItem}>
+          <View style={[styles.ratioDot, { backgroundColor: "#ef7a59" }]} />
+          <Text style={styles.ratioLegendText}>支出 ¥{(expenseCents / 100).toFixed(2)}（{Math.round(expenseRatio * 100)}%）</Text>
+        </View>
+        <View style={styles.ratioLegendItem}>
+          <View style={[styles.ratioDot, { backgroundColor: "#1fa8e2" }]} />
+          <Text style={styles.ratioLegendText}>收入 ¥{(incomeCents / 100).toFixed(2)}（{Math.round(incomeRatio * 100)}%）</Text>
+        </View>
+      </View>
+    </View>
+  );
 }
 
 function sumSavingEntries(entries: SavingEntry[]) {
@@ -1110,7 +1096,7 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   amountField: {
-    flex: 0.64
+    flex: 0.7
   },
   balanceMetricWrap: {
     flexBasis: "100%",
@@ -1451,32 +1437,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10
   },
-  lineChart: {
-    flexDirection: "row",
-    gap: 8,
-    height: 140
-  },
-  linePoint: {
-    backgroundColor: "#1fa8e2",
-    borderRadius: 999,
-    height: 12,
-    left: "50%",
-    marginLeft: -6,
-    position: "absolute",
-    width: 12
-  },
-  linePointWrap: {
-    alignItems: "center",
-    flex: 1,
-    gap: 8
-  },
-  lineTrack: {
+  ratioBar: {
     backgroundColor: "#f8fafc",
-    borderColor: "#edf1f5",
+    borderColor: "#e3e8ef",
     borderRadius: 10,
     borderWidth: 1,
-    flex: 1,
+    flexDirection: "row",
+    height: 26,
+    overflow: "hidden",
     width: "100%"
+  },
+  ratioFillExpense: {
+    backgroundColor: "#ef7a59",
+    height: "100%"
+  },
+  ratioFillIncome: {
+    backgroundColor: "#1fa8e2",
+    height: "100%"
+  },
+  ratioLegend: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 14,
+    marginTop: 10
+  },
+  ratioLegendItem: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6
+  },
+  ratioLegendText: {
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: "800"
+  },
+  ratioDot: {
+    borderRadius: 999,
+    height: 12,
+    width: 12
   },
   listTitle: {
     color: "#697386",
@@ -1484,7 +1482,7 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   dateFieldCompact: {
-    flex: 0.36
+    flex: 0.3
   },
   floatingTabs: {
     bottom: 10,

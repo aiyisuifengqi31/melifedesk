@@ -10,7 +10,6 @@ import {
   loadLocalWorkouts,
   saveLocalWorkouts,
   sortWorkoutLogs,
-  type WorkoutIntensity,
   type WorkoutLog,
   type WorkoutStatus,
   type WorkoutStorage
@@ -28,19 +27,7 @@ const WORKOUT_PARTS: Array<{ icon: string; name: string }> = [
   { icon: "🦵", name: "腿" },
   { icon: "🏃", name: "有氧" }
 ];
-const intensityOptions: Array<{ label: string; value: WorkoutIntensity }> = [
-  { label: "轻松", value: "easy" },
-  { label: "适中", value: "moderate" },
-  { label: "高强度", value: "hard" }
-];
-
 type ChartPeriod = "month" | "week" | "year";
-
-const REST_TYPES: Array<{ label: string; value: NonNullable<WorkoutLog["restType"]> }> = [
-  { label: "完全休息", value: "full" },
-  { label: "拉伸恢复", value: "stretch" },
-  { label: "轻度活动", value: "light" }
-];
 
 const chartPeriodOptions: Array<{ label: string; value: ChartPeriod }> = [
   { label: "近7天", value: "week" },
@@ -52,9 +39,7 @@ const chartPeriodTitle: Record<ChartPeriod, string> = {
   week: "近7天训练时长",
   year: "近一年训练时长"
 };
-const titleInputWebProps = { id: "workout-title-input" } as object;
 const durationInputWebProps = { id: "workout-duration-input" } as object;
-const kcalInputWebProps = { id: "workout-kcal-input" } as object;
 
 const toLocalIso = (date: Date) => {
   const year = date.getFullYear();
@@ -69,15 +54,8 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const [logs, setLogs] = useState<WorkoutLog[]>(() => sortWorkoutLogs(loadLocalWorkouts(workoutStorage)));
   const [status, setStatus] = useState<WorkoutStatus>("trained");
   const [selectedParts, setSelectedParts] = useState<string[]>(["背"]);
-  const [title, setTitle] = useState("");
   const [duration, setDuration] = useState("10");
-  const [kcal, setKcal] = useState("200");
-  const [distanceKm, setDistanceKm] = useState("");
-  const [sets, setSets] = useState("");
-  const [weightKg, setWeightKg] = useState("");
-  const [restType, setRestType] = useState<NonNullable<WorkoutLog["restType"]>>("full");
-  const [intensity, setIntensity] = useState<WorkoutIntensity>("moderate");
-  const [feedback, setFeedback] = useState("选择部位、填写时长和热量后保存训练记录。");
+  const [feedback, setFeedback] = useState("选择训练部位并填写时长后保存记录。");
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("week");
   const localDirtyRef = useRef(false);
 
@@ -112,13 +90,8 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   };
 
   const saveWorkout = async () => {
-    const cleanTitle = (title || readWebInputValue("workout-title-input")).trim();
     const parts = status === "rest" ? ["休息"] : selectedParts.filter((part) => part !== "休息");
     const durationMinutes = toNonNegativeInt(readWebInputValue("workout-duration-input") || duration);
-    const kcalValue = toNonNegativeInt(readWebInputValue("workout-kcal-input") || kcal);
-    const distanceValue = toNonNegativeNumber(distanceKm);
-    const setsValue = toNonNegativeInt(sets);
-    const weightValue = toNonNegativeNumber(weightKg);
 
     if (status === "trained" && parts.length === 0) {
       setFeedback("请至少选择一个训练部位。");
@@ -132,24 +105,21 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
 
     const log: WorkoutLog = {
       createTime: new Date().toISOString(),
-      distanceKm: status === "trained" && distanceValue > 0 ? distanceValue : undefined,
       durationMinutes: status === "rest" ? 0 : durationMinutes,
       id: createWorkoutId(),
-      intensity,
-      kcal: status === "rest" ? 0 : kcalValue,
+      intensity: "moderate",
+      kcal: 0,
       kcalSource: "manual",
       parts,
-      restType: status === "rest" ? restType : undefined,
+      restType: status === "rest" ? "full" : undefined,
       sessionDate: todayIso(),
-      sets: status === "trained" && setsValue > 0 ? setsValue : undefined,
       status,
-      title: status === "rest" ? "休息" : cleanTitle || parts.join("、")
+      title: status === "rest" ? "休息" : parts.join("、")
     };
 
     const nextLogs = [log, ...logs];
     persistLogs(nextLogs);
     setFeedback(status === "rest" ? "今天已记录为休息。" : "训练记录已保存。");
-    setTitle("");
 
     const client = getSupabaseClient();
     if (!client) {
@@ -205,67 +175,31 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
           </Pressable>
         </View>
 
-        <Text style={styles.sectionLabel}>训练部位</Text>
-        <View style={styles.partGrid}>
-          {WORKOUT_PARTS.map((part) => {
-            const selected = selectedParts.includes(part.name);
-            return (
-              <Pressable key={part.name} accessibilityRole="button" accessibilityLabel={`选择${part.name}`} onPress={() => togglePart(part.name)} style={[styles.partButton, selected ? styles.partButtonActive : null]}>
-                <Text style={styles.partIcon}>{part.icon}</Text>
-                <Text style={[styles.partText, selected ? styles.partTextActive : null]}>{part.name}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <View style={styles.tripleRow}>
-          <TextInput {...titleInputWebProps} nativeID="workout-title-input" onChange={makeTextInputChangeHandler(setTitle)} onChangeText={setTitle} placeholder="训练项目" style={[styles.input, styles.tripleInput]} value={title} />
-          <TextInput {...durationInputWebProps} keyboardType="numeric" nativeID="workout-duration-input" onChange={makeTextInputChangeHandler(setDuration)} onChangeText={setDuration} placeholder="训练时长" style={[styles.input, styles.tripleInput]} value={duration} />
-          <TextInput {...kcalInputWebProps} keyboardType="numeric" nativeID="workout-kcal-input" onChange={makeTextInputChangeHandler(setKcal)} onChangeText={setKcal} placeholder="消耗热量" style={[styles.input, styles.tripleInput]} value={kcal} />
-        </View>
-
-        <Text style={styles.sectionLabel}>训练强度</Text>
-        <View style={styles.segmentRow}>
-          {intensityOptions.map((option) => {
-            const selected = intensity === option.value;
-            return (
-              <Pressable key={option.value} accessibilityRole="button" accessibilityLabel={option.label} onPress={() => setIntensity(option.value)} style={[styles.chip, selected ? styles.chipActive : null]}>
-                <Text style={[styles.chipText, selected ? styles.chipTextActive : null]}>{option.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <Text style={styles.muted}>热量第一版为手动输入，不作为准确测量值。</Text>
-        <View style={styles.fieldHintRow}>
-          <Text style={styles.fieldHint}>训练项目</Text>
-          <Text style={styles.fieldHint}>训练时长（分钟）</Text>
-          <Text style={styles.fieldHint}>消耗热量（千卡）</Text>
-        </View>
-
         {status === "trained" ? (
-          <View style={styles.tripleRow}>
-            <LabeledInput label="有氧距离" styles={styles} unit="公里，可空">
-              <TextInput keyboardType="decimal-pad" onChangeText={setDistanceKm} placeholder="0" style={styles.input} value={distanceKm} />
-            </LabeledInput>
-            <LabeledInput label="力量组数" styles={styles} unit="组，可空">
-              <TextInput keyboardType="numeric" onChangeText={setSets} placeholder="0" style={styles.input} value={sets} />
-            </LabeledInput>
-            <LabeledInput label="训练重量" styles={styles} unit="kg，可空">
-              <TextInput keyboardType="decimal-pad" onChangeText={setWeightKg} placeholder="0" style={styles.input} value={weightKg} />
-            </LabeledInput>
-          </View>
+          <>
+            <Text style={styles.sectionLabel}>训练部位</Text>
+            <View style={styles.partGrid}>
+              {WORKOUT_PARTS.map((part) => {
+                const selected = selectedParts.includes(part.name);
+                return (
+                  <Pressable key={part.name} accessibilityRole="button" accessibilityLabel={`选择${part.name}`} onPress={() => togglePart(part.name)} style={[styles.partButton, selected ? styles.partButtonActive : null]}>
+                    <Text style={styles.partIcon}>{part.icon}</Text>
+                    <Text style={[styles.partText, selected ? styles.partTextActive : null]}>{part.name}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={styles.durationRow}>
+              <Text style={styles.sectionLabel}>训练时间</Text>
+              <View style={styles.durationInputWrap}>
+                <TextInput {...durationInputWebProps} keyboardType="numeric" nativeID="workout-duration-input" onChange={makeTextInputChangeHandler(setDuration)} onChangeText={setDuration} placeholder="45" style={[styles.input, styles.durationInput]} value={duration} />
+                <Text style={styles.durationUnit}>分钟</Text>
+              </View>
+            </View>
+          </>
         ) : (
-          <View style={styles.segmentRow}>
-            {REST_TYPES.map((option) => {
-              const selected = restType === option.value;
-              return (
-                <Pressable key={option.value} accessibilityRole="button" accessibilityLabel={option.label} onPress={() => setRestType(option.value)} style={[styles.chip, selected ? styles.chipActive : null]}>
-                  <Text style={[styles.chipText, selected ? styles.chipTextActive : null]}>{option.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <Text style={styles.restHint}>今天记录为休息，不记录训练部位与时长。</Text>
         )}
 
         <Pressable accessibilityRole="button" accessibilityLabel="保存记录" nativeID="workout-save-button" onPress={saveWorkout} style={styles.saveButton}>
@@ -274,9 +208,16 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
         <Text nativeID="workout-feedback" style={styles.feedback}>{feedback}</Text>
       </View>
 
-      <View style={styles.metricRow}>
-        <Metric compact title="本周训练" unit="分钟" value={String(stats.weekMinutes)} />
-        <Metric compact title="本周消耗" unit="千卡" value={String(stats.weekKcal)} />
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>本周训练统计</Text>
+        <Text style={styles.statLine}>本周训练 {stats.weekCount} 次</Text>
+        <View style={styles.partStatRow}>
+          {stats.weekPartCounts.map((item) => (
+            <View key={item.part} style={styles.partStatChip}>
+              <Text style={styles.partStatText}>{item.part} {item.count}</Text>
+            </View>
+          ))}
+        </View>
       </View>
 
       <View style={styles.chartCard}>
@@ -328,7 +269,7 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
               <View style={styles.logBody}>
                 <Text style={styles.logDate}>{formatChineseDate(log.sessionDate)}</Text>
                 <Text style={styles.logTitle}>{log.title}</Text>
-                <Text style={styles.logMeta}>{log.durationMinutes}分钟 · {log.kcal}千卡 · {intensityLabel(log.intensity)}</Text>
+                <Text style={styles.logMeta}>{log.durationMinutes}分钟</Text>
               </View>
               <Pressable accessibilityRole="button" accessibilityLabel={`删除训练记录：${log.title}`} onPress={() => deleteWorkout(log)} style={styles.deleteButton}>
                 <Text style={styles.deleteText}>删除</Text>
@@ -391,8 +332,8 @@ function buildWorkoutStats(logs: WorkoutLog[]) {
     monthCount: monthLogs.length,
     streakDays: countStreakDays(logs),
     topPart,
-    weekKcal: weekLogs.reduce((sum, log) => sum + log.kcal, 0),
-    weekMinutes: weekLogs.reduce((sum, log) => sum + log.durationMinutes, 0)
+    weekCount: weekLogs.length,
+    weekPartCounts: [...partCounts.entries()].map(([part, count]) => ({ part, count })).sort((left, right) => right.count - left.count)
   };
 }
 
@@ -465,10 +406,6 @@ function formatChineseDate(dateText: string) {
   return `${year}年${Number(month)}月${Number(day)}日`;
 }
 
-function intensityLabel(value: WorkoutIntensity) {
-  return intensityOptions.find((option) => option.value === value)?.label ?? "适中";
-}
-
 function shiftDate(date: Date, days: number) {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
@@ -486,15 +423,6 @@ function startOfWeek(date: Date) {
 function toNonNegativeInt(value: string) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-}
-
-function toNonNegativeNumber(value: string) {
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-}
-
-function restTypeLabel(value: NonNullable<WorkoutLog["restType"]>) {
-  return REST_TYPES.find((option) => option.value === value)?.label ?? "完全休息";
 }
 
 function readWebInputValue(id: string) {
@@ -908,6 +836,51 @@ const styles = StyleSheet.create({
   },
   segmentTextActive: {
     color: "#ffffff"
+  },
+  durationRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10
+  },
+  durationInputWrap: {
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    gap: 8
+  },
+  durationInput: {
+    flex: 1
+  },
+  durationUnit: {
+    color: "#697386",
+    fontSize: 14,
+    fontWeight: "800"
+  },
+  restHint: {
+    color: "#697386",
+    fontSize: 13,
+    fontWeight: "700"
+  },
+  statLine: {
+    color: "#111827",
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  partStatRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  partStatChip: {
+    backgroundColor: "#e2f2e2",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
+  partStatText: {
+    color: "#5a8a5a",
+    fontSize: 13,
+    fontWeight: "900"
   },
   stack: {
     gap: 18

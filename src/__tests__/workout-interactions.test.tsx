@@ -58,23 +58,17 @@ describe("WorkoutPanel interactions", () => {
     const storage = makeStorage();
     const { rerender } = render(<WorkoutPanel storage={storage} />);
 
-    fireEvent.press(screen.getByRole("button", { name: "选择背" }));
-    fireEvent.press(screen.getByRole("button", { name: "选择背" }));
-    fireEvent.changeText(screen.getByPlaceholderText("训练项目"), "背部训练");
-    fireEvent.changeText(screen.getByPlaceholderText("训练时长"), "10");
-    fireEvent.changeText(screen.getByPlaceholderText("消耗热量"), "200");
-    fireEvent.press(screen.getByRole("button", { name: "高强度" }));
+    // 默认已选中「背」且时长为 10 分钟，直接保存训练记录
     fireEvent.press(screen.getByRole("button", { name: "保存记录" }));
 
-    expect(await screen.findByText("背部训练")).toBeOnTheScreen();
-    expect(screen.getByText("10分钟 · 200千卡 · 高强度")).toBeOnTheScreen();
+    expect(await screen.findByText("10分钟")).toBeOnTheScreen();
     expect(screen.getByText("训练记录已保存。")).toBeOnTheScreen();
 
     rerender(<WorkoutPanel storage={storage} />);
-    expect(await screen.findByText("背部训练")).toBeOnTheScreen();
+    expect(await screen.findByText("10分钟")).toBeOnTheScreen();
 
-    fireEvent.press(screen.getByRole("button", { name: "删除训练记录：背部训练" }));
-    await waitFor(() => expect(screen.queryByText("背部训练")).toBeNull());
+    fireEvent.press(screen.getByRole("button", { name: "删除训练记录：背" }));
+    await waitFor(() => expect(screen.queryByText("10分钟")).toBeNull());
     expect(screen.getByText("训练记录已删除。")).toBeOnTheScreen();
   });
 });
