@@ -6,21 +6,27 @@ import type { UiTokens } from "@/shared/ui/primitives";
 import { hydrateFromCloud, saveCloudValue } from "@/features/sync/cloudSync";
 import { deleteDiaryFromCloud, getCurrentLoveUserId, loadDiariesFromCloud, saveDiariesToCloud } from "./loveDiaryCloud";
 
-export type LoveTab = "diary" | "anniversary";
-type DiaryVisibility = "private" | "couple_read";
+export type LoveTab = "diary" | "gifts" | "anniversary" | "photos";
+type DiaryVisibility = "private" | "couple_read" | "couple_edit";
 
 export const loveTabs: FixedBottomTabItem<LoveTab>[] = [
-  { label: "日记", value: "diary" },
-  { label: "纪念日", value: "anniversary" }
+  { label: "日记本", value: "diary" },
+  { label: "礼物", value: "gifts" },
+  { label: "纪念日", value: "anniversary" },
+  { label: "照片墙", value: "photos" }
 ];
 
 export type DiaryEntry = {
+  category?: string;
   content: string;
   createTime: string;
   date: string;
   id: string;
   mood: string;
   ownerUserId?: string;
+  title?: string;
+  updatedAt?: string;
+  updatedBy?: string;
   visibility: DiaryVisibility;
 };
 
@@ -58,6 +64,7 @@ const memoryStorage: LoveStorage = {
 };
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
+const diaryCategories = ["日常记录", "纪念时刻", "约会", "旅行", "其他"];
 
 export function LovePanel({
   activeTab,
@@ -77,10 +84,11 @@ export function LovePanel({
   const setTab = onTabChange ?? setLocalTab;
   const [diaries, setDiaries] = useState<DiaryEntry[]>(() => loadArray<DiaryEntry>(loveStorage, DIARY_KEY));
   const [anniversaries, setAnniversaries] = useState<AnniversaryEntry[]>(() => loadArray<AnniversaryEntry>(loveStorage, ANNIVERSARY_KEY));
+  const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [mood, setMood] = useState("开心");
+  const [category, setCategory] = useState("日常记录");
   const [date, setDate] = useState(todayIso());
-  const [visibility, setVisibility] = useState<DiaryVisibility>("couple_read");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [anniversaryTitle, setAnniversaryTitle] = useState("");
   const [anniversaryDate, setAnniversaryDate] = useState(todayIso());
@@ -109,27 +117,33 @@ export function LovePanel({
   }, [loveStorage]);
 
   const saveDiary = () => {
+    const cleanTitle = title.trim();
     const cleanContent = content.trim();
-    if (!cleanContent) {
-      setFeedback("请先写一点日记内容。");
+    if (!cleanTitle) {
+      setFeedback("请先填写日记标题。");
       return;
     }
 
     const entry: DiaryEntry = {
+      category,
       content: cleanContent,
       createTime: new Date().toISOString(),
       date,
       id: createLoveId("diary"),
       mood,
       ownerUserId: currentUserId ?? undefined,
-      visibility
+      title: cleanTitle,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUserId ?? undefined,
+      visibility: "couple_edit"
     };
     const nextEntries = [entry, ...diaries];
     setDiaries(nextEntries);
     localDirtyRef.current = true;
     saveDiaries(nextEntries, loveStorage);
+    setTitle("");
     setContent("");
-    setFeedback("日记已保存。");
+    setFeedback("日记已保存到情侣共享空间。");
   };
 
   const saveAnniversary = () => {
@@ -182,6 +196,13 @@ export function LovePanel({
           <View style={styles.card}>
             <Text style={styles.cardTitle}>写日记</Text>
             <TextInput
+              onChangeText={setTitle}
+              placeholder="标题，例如：一起吃饭"
+              style={styles.input}
+              testID="love-diary-title-input"
+              value={title}
+            />
+            <TextInput
               multiline
               onChangeText={setContent}
               onContentSizeChange={(event) => setDiaryHeight(event.nativeEvent.contentSize.height)}
@@ -190,20 +211,20 @@ export function LovePanel({
               value={content}
             />
             <View style={styles.moodGrid}>
+              {diaryCategories.map((item) => (
+                <Pressable key={item} accessibilityRole="button" accessibilityLabel={`选择日记分类：${item}`} onPress={() => setCategory(item)} style={[styles.moodChip, category === item ? styles.moodChipActive : null]}>
+                  <Text style={styles.moodText}>{item}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={styles.moodGrid}>
               {moods.map((item) => (
                 <Pressable key={item} accessibilityRole="button" accessibilityLabel={`选择心情：${item}`} onPress={() => setMood(item)} style={[styles.moodChip, mood === item ? styles.moodChipActive : null]}>
                   <Text style={styles.moodText}>{moodIcons[item]} {item}</Text>
                 </Pressable>
               ))}
             </View>
-            <View style={styles.visibilityRow}>
-              <Pressable accessibilityRole="button" accessibilityLabel="仅自己可见" onPress={() => setVisibility("private")} style={[styles.visibilityButton, visibility === "private" ? styles.visibilityActive : null]}>
-                <Text style={[styles.visibilityText, visibility === "private" ? styles.visibilityTextActive : null]}>仅自己可见</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="双方可见" onPress={() => setVisibility("couple_read")} style={[styles.visibilityButton, visibility === "couple_read" ? styles.visibilityActive : null]}>
-                <Text style={[styles.visibilityText, visibility === "couple_read" ? styles.visibilityTextActive : null]}>双方可见</Text>
-              </Pressable>
-            </View>
+            <Text style={styles.sharedHint}>恋爱空间内容会保存到双方共享空间，双方都可以查看和编辑。</Text>
             <View style={styles.saveRow}>
               <Pressable accessibilityRole="button" accessibilityLabel="选择日记日期" onPress={() => setDiaryDatePickerOpen((value) => !value)} style={[styles.input, styles.dateInput, styles.dateField]}>
                 <Text style={styles.dateValue}>{date.replaceAll("-", "/")}</Text>
@@ -237,13 +258,15 @@ export function LovePanel({
                   <View style={styles.diaryMetaRow}>
                     <Text style={styles.diaryDate}>{entry.date}</Text>
                     <View style={styles.diaryActions}>
-                      <Text style={styles.visibilityBadge}>{entry.visibility === "private" ? "仅自己可见" : "双方可见"}</Text>
+                      <Text style={styles.visibilityBadge}>共享</Text>
                       <Pressable accessibilityRole="button" accessibilityLabel={`删除日记：${entry.date}`} onPress={() => deleteDiary(entry.id)} style={styles.deleteButton}>
                         <Text style={styles.deleteText}>删除</Text>
                       </Pressable>
                     </View>
                   </View>
+                  <Text style={styles.diaryTitle}>{entry.title ?? (entry.content.slice(0, 24) || "恋爱日记")}</Text>
                   <Text style={styles.diaryMood}>{moodIcons[entry.mood]} {entry.mood}</Text>
+                  <Text style={styles.emptyText}>{entry.category ?? "日常记录"} · 最后由 {entry.updatedBy ?? entry.ownerUserId ?? "对方"} 修改</Text>
                   <Text style={styles.diaryContent}>{entry.content}</Text>
                 </View>
               ))}
@@ -303,6 +326,22 @@ export function LovePanel({
             </View>
           )}
         </>
+      ) : null}
+
+      {tab === "gifts" ? (
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyIcon}>♡</Text>
+          <Text style={styles.emptyTitle}>礼物记录</Text>
+          <Text style={styles.emptyText}>下一步会接入共享礼物表，不记录价格。</Text>
+        </View>
+      ) : null}
+
+      {tab === "photos" ? (
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyIcon}>♡</Text>
+          <Text style={styles.emptyTitle}>照片墙</Text>
+          <Text style={styles.emptyText}>照片将来自日记、礼物和纪念日上传内容。</Text>
+        </View>
       ) : null}
       {showInlineTabs ? (
         <View testID="love-floating-tabs" style={[styles.tabs, styles.inlineTabs]}>
@@ -435,9 +474,9 @@ const styles = StyleSheet.create({
   },
   diaryContent: {
     color: "#111827",
-    fontSize: 17,
-    fontWeight: "800",
-    lineHeight: 24
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 22
   },
   diaryDate: {
     color: "#697386",
@@ -463,6 +502,11 @@ const styles = StyleSheet.create({
     color: "#697386",
     fontSize: 15,
     fontWeight: "800"
+  },
+  diaryTitle: {
+    color: "#111827",
+    fontSize: 17,
+    fontWeight: "900"
   },
   emptyBox: {
     alignItems: "center",
@@ -584,6 +628,12 @@ const styles = StyleSheet.create({
     gap: 18,
     paddingBottom: 108,
     position: "relative"
+  },
+  sharedHint: {
+    color: "#0f79ad",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 18
   },
   switchThumb: {
     backgroundColor: "#ffffff",

@@ -6,17 +6,21 @@ import type { DiaryEntry } from "./LovePanel";
 
 type DiaryRow = {
   body: string | null;
+  category: string | null;
   created_at: string | null;
   entry_date: string | null;
   id: string;
   owner_user_id: string;
+  title: string | null;
   tags: string[] | null;
+  updated_at: string | null;
+  updated_by: string | null;
   visibility: DiaryEntry["visibility"];
 };
 
 type LoveClient = SupabaseClient;
 
-const DIARY_COLUMNS = "id, owner_user_id, visibility, entry_date, body, tags, created_at";
+const DIARY_COLUMNS = "id, owner_user_id, updated_by, visibility, entry_date, title, body, category, tags, created_at, updated_at";
 
 export async function loadDiariesFromCloud(
   localDiaries: DiaryEntry[],
@@ -25,10 +29,13 @@ export async function loadDiariesFromCloud(
 ): Promise<DiaryEntry[]> {
   const session = await getLoveSession(client);
   if (!session) return localDiaries;
+  const activeCoupleId = await getActiveCoupleId(session.client, session.userId);
+  if (!activeCoupleId) return localDiaries;
 
   const { data, error } = await session.client
     .from("diary_entries")
     .select(DIARY_COLUMNS)
+    .eq("couple_id", activeCoupleId)
     .is("deleted_at", null)
     .order("entry_date", { ascending: false })
     .order("created_at", { ascending: false });
@@ -36,13 +43,10 @@ export async function loadDiariesFromCloud(
   if (error || !Array.isArray(data)) return localDiaries;
 
   if (data.length === 0 && localDiaries.length > 0) {
-    const activeCoupleId = await getActiveCoupleId(session.client, session.userId);
-    if (activeCoupleId) {
-      const migratedDiaries = localDiaries.map((entry) => ({ ...entry, visibility: "couple_read" as const }));
-      await upsertOwnedDiaries(session.client, session.userId, activeCoupleId, migratedDiaries);
-      writeLocal(migratedDiaries);
-      return migratedDiaries;
-    }
+    const migratedDiaries = localDiaries.map((entry) => ({ ...entry, visibility: "couple_edit" as const }));
+    await upsertOwnedDiaries(session.client, session.userId, activeCoupleId, migratedDiaries);
+    writeLocal(migratedDiaries);
+    return migratedDiaries;
   }
 
   const diaries = data.map((row) => mapDiaryRow(row as DiaryRow));
@@ -82,18 +86,22 @@ async function upsertOwnedDiaries(
   entries: DiaryEntry[]
 ) {
   const rows = entries
-    .filter((entry) => !entry.ownerUserId || entry.ownerUserId === userId)
+    .filter((entry) => entry.visibility !== "private" ? Boolean(activeCoupleId) : (!entry.ownerUserId || entry.ownerUserId === userId))
     .map((entry) => {
       const canShare = entry.visibility !== "private" && Boolean(activeCoupleId);
+      const ownerUserId = entry.ownerUserId ?? userId;
       return {
         ...(isUuid(entry.id) ? { id: entry.id } : {}),
         body: entry.content,
+        category: entry.category ?? "日常记录",
         couple_id: canShare ? activeCoupleId : null,
         entry_date: entry.date,
-        owner_user_id: userId,
+        owner_user_id: ownerUserId,
+        title: entry.title || entry.content.slice(0, 24) || "恋爱日记",
         tags: entry.mood ? [`mood:${entry.mood}`] : [],
         updated_at: new Date().toISOString(),
-        visibility: canShare ? entry.visibility : "private"
+        updated_by: userId,
+        visibility: canShare ? "couple_edit" : "private"
       };
     });
 
@@ -118,10 +126,14 @@ function mapDiaryRow(row: DiaryRow): DiaryEntry {
   return {
     content: row.body ?? "",
     createTime: row.created_at ?? new Date().toISOString(),
+    category: row.category ?? "日常记录",
     date: row.entry_date ?? new Date().toISOString().slice(0, 10),
     id: row.id,
     mood: extractMood(row.tags),
     ownerUserId: row.owner_user_id,
+    title: row.title ?? row.body?.slice(0, 24) ?? "恋爱日记",
+    updatedAt: row.updated_at ?? row.created_at ?? new Date().toISOString(),
+    updatedBy: row.updated_by ?? row.owner_user_id,
     visibility: row.visibility
   };
 }

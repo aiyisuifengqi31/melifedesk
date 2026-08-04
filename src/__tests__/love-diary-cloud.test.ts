@@ -6,11 +6,17 @@ import {
 import type { DiaryEntry } from "@/features/love/LovePanel";
 
 function createDiaryClient(options?: { coupleId?: string | null; rows?: unknown[]; userId?: string }) {
+  type QueryMock = {
+    eq: jest.Mock<QueryMock, [string, unknown]>;
+    is: jest.Mock<QueryMock, unknown[]>;
+    order: jest.Mock<QueryMock | Promise<{ data: unknown[]; error: null }>, unknown[]>;
+  };
   const calls = {
     rpc: [] as Array<{ args: unknown; name: string }>,
     table: [] as string[],
     upsert: [] as unknown[],
-    select: [] as string[]
+    select: [] as string[],
+    eq: [] as Array<{ column: string; value: unknown }>
   };
   const userId = options?.userId ?? "user-a";
 
@@ -20,16 +26,22 @@ function createDiaryClient(options?: { coupleId?: string | null; rows?: unknown[
     },
     from: jest.fn((table: string) => {
       calls.table.push(table);
+      let orderCount = 0;
+      const query: QueryMock = {
+        eq: jest.fn((column, value) => {
+          calls.eq.push({ column, value });
+          return query;
+        }),
+        is: jest.fn(() => query),
+        order: jest.fn(() => {
+          orderCount += 1;
+          return orderCount >= 2 ? Promise.resolve({ data: options?.rows ?? [], error: null }) : query;
+        })
+      };
       return {
         select: jest.fn((columns: string) => {
           calls.select.push(columns);
-          return {
-            is: jest.fn(() => ({
-              order: jest.fn(() => ({
-                order: jest.fn(async () => ({ data: options?.rows ?? [], error: null }))
-              }))
-            }))
-          };
+          return query;
         }),
         upsert: jest.fn(async (rows: unknown, opts: unknown) => {
           calls.upsert.push({ opts, rows });
@@ -77,7 +89,62 @@ describe("love diary cloud sharing", () => {
           entry_date: "2026-08-02",
           id: "11111111-1111-4111-8111-111111111111",
           owner_user_id: "user-a",
-          visibility: "couple_read"
+          visibility: "couple_edit"
+        })
+      ]
+    });
+  });
+
+  it("loads diaries from the current couple shared space instead of an owner-only feed", async () => {
+    const { calls, client } = createDiaryClient({
+      coupleId: "couple-1",
+      rows: [
+        {
+          body: "共同空间里的日记",
+          created_at: "2026-08-04T08:00:00.000Z",
+          entry_date: "2026-08-04",
+          id: "44444444-4444-4444-8444-444444444444",
+          owner_user_id: "user-b",
+          tags: ["mood:甜蜜"],
+          visibility: "couple_edit"
+        }
+      ],
+      userId: "user-a"
+    });
+
+    await loadDiariesFromCloud([], jest.fn(), client as never);
+
+    expect(calls.rpc).toContainEqual({
+      args: { p_user_id: "user-a" },
+      name: "current_active_couple_id"
+    });
+    expect(calls.eq).toContainEqual({ column: "couple_id", value: "couple-1" });
+  });
+
+  it("saves partner edits into the shared couple row without changing the original author", async () => {
+    const { calls, client } = createDiaryClient({ coupleId: "couple-1", userId: "user-a" });
+    const partnerDiary: DiaryEntry = {
+      content: "我补充了一句",
+      createTime: "2026-08-02T08:00:00.000Z",
+      date: "2026-08-02",
+      id: "55555555-5555-4555-8555-555555555555",
+      mood: "甜蜜",
+      ownerUserId: "user-b",
+      title: "一起散步",
+      visibility: "couple_edit"
+    };
+
+    await saveDiariesToCloud([partnerDiary], client as never);
+
+    expect(calls.upsert[0]).toEqual({
+      opts: { onConflict: "id" },
+      rows: [
+        expect.objectContaining({
+          couple_id: "couple-1",
+          id: "55555555-5555-4555-8555-555555555555",
+          owner_user_id: "user-b",
+          updated_by: "user-a",
+          visibility: "couple_edit"
         })
       ]
     });
@@ -105,12 +172,16 @@ describe("love diary cloud sharing", () => {
 
     expect(diaries).toEqual([
       {
+        category: "日常记录",
         content: "对方写的日记",
         createTime: "2026-08-02T08:00:00.000Z",
         date: "2026-08-02",
         id: "22222222-2222-4222-8222-222222222222",
         mood: "甜蜜",
         ownerUserId: "user-b",
+        title: "对方写的日记",
+        updatedAt: "2026-08-02T08:00:00.000Z",
+        updatedBy: "user-b",
         visibility: "couple_read"
       }
     ]);
@@ -130,7 +201,7 @@ describe("love diary cloud sharing", () => {
 
     const diaries = await loadDiariesFromCloud([localDiary], jest.fn(), client as never);
 
-    expect(diaries).toEqual([{ ...localDiary, visibility: "couple_read" }]);
+    expect(diaries).toEqual([{ ...localDiary, visibility: "couple_edit" }]);
     expect(calls.upsert[0]).toEqual({
       opts: { onConflict: "id" },
       rows: [
@@ -138,7 +209,7 @@ describe("love diary cloud sharing", () => {
           body: "旧版本本地日记",
           couple_id: "couple-1",
           id: "33333333-3333-4333-8333-333333333333",
-          visibility: "couple_read"
+          visibility: "couple_edit"
         })
       ]
     });
