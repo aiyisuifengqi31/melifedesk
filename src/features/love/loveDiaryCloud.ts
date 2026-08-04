@@ -20,7 +20,8 @@ type DiaryRow = {
 
 type LoveClient = SupabaseClient;
 
-const DIARY_COLUMNS = "id, owner_user_id, updated_by, visibility, entry_date, title, body, category, tags, created_at, updated_at";
+const BASE_DIARY_COLUMNS = "id, owner_user_id, visibility, entry_date, title, body, tags, created_at, updated_at";
+const ENRICHED_DIARY_COLUMNS = "id, owner_user_id, updated_by, visibility, entry_date, title, body, category, tags, created_at, updated_at";
 
 export async function loadDiariesFromCloud(
   localDiaries: DiaryEntry[],
@@ -32,19 +33,30 @@ export async function loadDiariesFromCloud(
   const activeCoupleId = await getActiveCoupleId(session.client, session.userId);
   if (!activeCoupleId) return localDiaries;
 
-  const { data, error } = await session.client
-    .from("diary_entries")
-    .select(DIARY_COLUMNS)
-    .eq("couple_id", activeCoupleId)
-    .is("deleted_at", null)
-    .order("entry_date", { ascending: false })
-    .order("created_at", { ascending: false });
+  const { data, error } = await selectDiaryRows(session.client, activeCoupleId, ENRICHED_DIARY_COLUMNS);
 
-  if (error || !Array.isArray(data)) return localDiaries;
+  if (error) {
+    if (!isMissingColumnError(error)) return localDiaries;
+    const fallback = await selectDiaryRows(session.client, activeCoupleId, BASE_DIARY_COLUMNS);
+    if (fallback.error || !Array.isArray(fallback.data)) return localDiaries;
+    return handleLoadedDiaryRows(fallback.data, localDiaries, writeLocal, session.client, session.userId, activeCoupleId);
+  }
+  if (!Array.isArray(data)) return localDiaries;
 
+  return handleLoadedDiaryRows(data, localDiaries, writeLocal, session.client, session.userId, activeCoupleId);
+}
+
+async function handleLoadedDiaryRows(
+  data: unknown[],
+  localDiaries: DiaryEntry[],
+  writeLocal: (entries: DiaryEntry[]) => void,
+  client: LoveClient,
+  userId: string,
+  activeCoupleId: string
+): Promise<DiaryEntry[]> {
   if (data.length === 0 && localDiaries.length > 0) {
     const migratedDiaries = localDiaries.map((entry) => ({ ...entry, visibility: "couple_edit" as const }));
-    await upsertOwnedDiaries(session.client, session.userId, activeCoupleId, migratedDiaries);
+    await upsertOwnedDiaries(client, userId, activeCoupleId, migratedDiaries);
     writeLocal(migratedDiaries);
     return migratedDiaries;
   }
@@ -52,6 +64,16 @@ export async function loadDiariesFromCloud(
   const diaries = data.map((row) => mapDiaryRow(row as DiaryRow));
   writeLocal(diaries);
   return diaries;
+}
+
+async function selectDiaryRows(client: LoveClient, activeCoupleId: string, columns: string) {
+  return client
+    .from("diary_entries")
+    .select(columns)
+    .eq("couple_id", activeCoupleId)
+    .is("deleted_at", null)
+    .order("entry_date", { ascending: false })
+    .order("created_at", { ascending: false });
 }
 
 export async function saveDiariesToCloud(
@@ -106,7 +128,10 @@ async function upsertOwnedDiaries(
     });
 
   if (rows.length === 0) return;
-  await client.from("diary_entries").upsert(rows, { onConflict: "id" });
+  const { error } = await client.from("diary_entries").upsert(rows, { onConflict: "id" });
+  if (error && isMissingColumnError(error)) {
+    await client.from("diary_entries").upsert(rows.map(({ category: _category, updated_by: _updatedBy, ...row }) => row), { onConflict: "id" });
+  }
 }
 
 async function getLoveSession(client: LoveClient | null): Promise<{ client: LoveClient; userId: string } | null> {
@@ -145,4 +170,9 @@ function extractMood(tags: string[] | null) {
 
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function isMissingColumnError(error: unknown) {
+  const message = typeof error === "object" && error && "message" in error ? String((error as { message?: unknown }).message) : String(error);
+  return /column .* (category|updated_by).* does not exist|Could not find .* (category|updated_by)/i.test(message);
 }
