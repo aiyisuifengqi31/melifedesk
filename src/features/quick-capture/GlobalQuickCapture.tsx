@@ -65,12 +65,16 @@ export function GlobalQuickCapture({ onClose, tokens }: GlobalQuickCaptureProps)
     recognition.onend = () => setListening(false);
     recognitionRef.current = recognition;
     setListening(true);
-    setStatus("正在听，你说完后会自动整理成确认卡片。");
+    setStatus("正在听，再次点击按钮即可结束并整理成确认卡片。");
     recognition.start();
   };
 
   const stopSpeech = () => {
-    (recognitionRef.current as SpeechRecognitionLike | null)?.stop?.();
+    try {
+      (recognitionRef.current as SpeechRecognitionLike | null)?.stop?.();
+    } catch {
+      // 部分浏览器在未真正开始监听时调用 stop 会抛错，忽略即可
+    }
     setListening(false);
   };
 
@@ -238,13 +242,13 @@ function createStyles(tokens: UiTokens) {
     panel: { alignSelf: "center", backgroundColor: tokens.surface, borderColor: tokens.border, borderRadius: 20, borderWidth: 1, bottom: 24, maxHeight: "82%", maxWidth: 560, padding: 16, position: "absolute", shadowColor: "#000000", shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.18, shadowRadius: 28, width: "92%" },
     primaryButton: { alignItems: "center", backgroundColor: tokens.accent, borderRadius: 12, flex: 1, justifyContent: "center", minHeight: 46 },
     primaryButtonText: { color: "#ffffff", fontSize: 14, fontWeight: "900" },
-    recordingButton: { backgroundColor: "#fff1f2", borderColor: tokens.danger },
+    recordingButton: { backgroundColor: "#fff1f2", borderColor: tokens.danger, userSelect: "none", WebkitTouchCallout: "none", WebkitUserSelect: "none" } as never,
     recordingText: { color: tokens.danger },
     reviewCard: { backgroundColor: "#ffffff", borderColor: tokens.border, borderRadius: 16, borderWidth: 1, gap: 10, padding: 12 },
     reviewTitle: { color: tokens.text, fontSize: 16, fontWeight: "900" },
     saveButton: { alignItems: "center", backgroundColor: tokens.accent, borderRadius: 14, justifyContent: "center", minHeight: 50 },
     saveButtonText: { color: "#ffffff", fontSize: 15, fontWeight: "900" },
-    secondaryButton: { alignItems: "center", backgroundColor: tokens.surfaceMuted, borderColor: tokens.border, borderRadius: 12, borderWidth: 1, flex: 1, justifyContent: "center", minHeight: 46 },
+    secondaryButton: { alignItems: "center", backgroundColor: tokens.surfaceMuted, borderColor: tokens.border, borderRadius: 12, borderWidth: 1, flex: 1, justifyContent: "center", minHeight: 46, userSelect: "none", WebkitTouchCallout: "none", WebkitUserSelect: "none" } as never,
     secondaryButtonText: { color: tokens.text, fontSize: 14, fontWeight: "900" },
     subtitle: { color: tokens.textMuted, fontSize: 12, fontWeight: "700", marginTop: 4 },
     textArea: { backgroundColor: tokens.surfaceMuted, borderColor: tokens.border, borderRadius: 14, borderWidth: 1, color: tokens.text, fontSize: 15, minHeight: 92, paddingHorizontal: 12, paddingVertical: 10, textAlignVertical: "top" },

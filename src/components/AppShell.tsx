@@ -449,11 +449,14 @@ const shortcutButtonBase = {
   justifyContent: "flex-start" as const,
   paddingHorizontal: 10,
   paddingVertical: 8,
+  userSelect: "none",
+  WebkitTouchCallout: "none",
+  WebkitUserSelect: "none",
   shadowColor: "#000000",
   shadowOffset: { width: 0, height: 2 },
   shadowOpacity: 0.08,
   shadowRadius: 8
-};
+} as never;
 
 const shortcutButtonIcon = {
   color: "#1f8f55",
