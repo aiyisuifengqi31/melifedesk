@@ -20,6 +20,7 @@ import { getTheme } from "@/theme/registry";
 import type { ColorMode, ThemeId } from "@/theme/types";
 import { hydrateBackgroundFromCloud, loadBackground, saveBackground, type BackgroundSource, getImageSource } from "@/theme/background";
 import { FixedBottomTabs } from "@/shared/ui/FixedBottomTabs";
+import { useDisableTouchCallout } from "@/shared/ui/useDisableTouchCallout";
 import { ThemedNavIcon } from "./ThemedNavIcon";
 
 type AppShellProps = {
@@ -429,8 +430,10 @@ function PageContent({
 }
 
 function ShortcutButton({ icon, label, onPress, testID }: { icon: string; label: string; onPress: () => void; testID?: string }) {
+  const shortcutRef = useRef<unknown>(null);
+  useDisableTouchCallout(shortcutRef);
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label}快捷入口`} onPress={onPress} style={shortcutButtonBase} testID={testID}>
+    <Pressable ref={shortcutRef as never} accessibilityRole="button" accessibilityLabel={`${label}快捷入口`} onPress={onPress} style={shortcutButtonBase} testID={testID}>
       <Text style={shortcutButtonIcon}>{icon}</Text>
       <Text style={shortcutButtonText}>{label}</Text>
     </Pressable>

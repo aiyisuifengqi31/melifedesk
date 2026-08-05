@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import type { UiTokens } from "@/shared/ui/primitives";
+import { useDisableTouchCallout } from "@/shared/ui/useDisableTouchCallout";
 import { parseQuickCaptureText, saveQuickCaptureDraft, todayIso, type QuickCaptureDraft, type QuickCaptureKind } from "./quickCapture";
 
 type GlobalQuickCaptureProps = {
@@ -24,6 +25,8 @@ export function GlobalQuickCapture({ onClose, tokens }: GlobalQuickCaptureProps)
   const [draft, setDraft] = useState<QuickCaptureDraft | null>(null);
   const [status, setStatus] = useState("可以说一句，也可以直接打字。");
   const [listening, setListening] = useState(false);
+  const voiceButtonRef = useRef<unknown>(null);
+  useDisableTouchCallout(voiceButtonRef);
 
   const parseText = (value = text) => {
     const clean = value.trim();
@@ -122,7 +125,7 @@ export function GlobalQuickCapture({ onClose, tokens }: GlobalQuickCaptureProps)
             value={text}
           />
           <View style={styles.actionRow}>
-            <Pressable accessibilityRole="button" accessibilityLabel={listening ? "停止语音记录" : "开始语音记录"} onPress={listening ? stopSpeech : startSpeech} style={[styles.secondaryButton, listening ? styles.recordingButton : null]}>
+            <Pressable ref={voiceButtonRef as never} accessibilityRole="button" accessibilityLabel={listening ? "停止语音记录" : "开始语音记录"} onPress={listening ? stopSpeech : startSpeech} style={[styles.secondaryButton, listening ? styles.recordingButton : null]}>
               <Text style={[styles.secondaryButtonText, listening ? styles.recordingText : null]}>{listening ? "停止" : "点击开始说话"}</Text>
             </Pressable>
             <Pressable accessibilityRole="button" accessibilityLabel="整理为确认卡片" onPress={() => parseText()} style={styles.primaryButton} testID="quick-capture-parse">
