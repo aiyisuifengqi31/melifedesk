@@ -28,10 +28,15 @@ if (!existsSync(dist)) {
 const base = (process.env.PAGES_BASE_URL || '').replace(/\/+$/, '');
 const withBase = (p) => (base ? `${base}${p}` : p); // p 以 "/" 开头
 
-const CACHE = 'lifedesk-pwa-v1';
+// 每次构建用唯一 ID 作为 SW cache name，确保新版本部署后旧缓存一定被淘汰
+const BUILD_ID = (process.env.GITHUB_SHA || Date.now().toString(36)).slice(0, 16);
+const CACHE = `lifedesk-pwa-${BUILD_ID}`;
 const THEME = '#fff8ed';
 const NAME = '帆帆和关关 · 双人成长工作台';
 const SHORT = '成长工作台';
+const DESCRIPTION = '帆帆和关关的双人成长工作台：计划、运动、记账、考公、娱乐、恋爱日记。';
+const ORIGIN = 'https://aiyisuifengqi31.github.io';
+const PUBLIC_URL = `${ORIGIN}${withBase('/')}`;
 
 // 1) 拷贝应用图标 -> dist/icon-512.png（复用 Expo 应用图标）
 const iconSrc = join(root, 'assets', 'icon.png');
@@ -62,9 +67,40 @@ if (existsSync(bgSrcDir)) {
   console.warn('[make-pwa] 未找到 assets/backgrounds，跳过背景图');
 }
 
-// 3) 写入 manifest.json
-// GitHub Pages can be inconsistent with framework-generated underscore paths.
-// Serve the Expo runtime from a plain directory and rewrite generated HTML below.
+// 3) 拷贝 iOS 启动屏图片 -> dist/apple-startup/（用 splash.png 而非图标，避免把猫狗图标当启动页）
+const startupSrcDir = join(root, 'assets', 'apple-startup');
+const startupDestDir = join(dist, 'apple-startup');
+const startupImages = [];
+if (existsSync(startupSrcDir)) {
+  if (!existsSync(startupDestDir)) {
+    mkdirSync(startupDestDir, { recursive: true });
+  }
+  const startupDefinitions = [
+    { w: 1290, h: 2796, media: '(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)' },
+    { w: 1179, h: 2556, media: '(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)' },
+    { w: 1284, h: 2778, media: '(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)' },
+    { w: 1170, h: 2532, media: '(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)' },
+    { w: 1125, h: 2436, media: '(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)' },
+    { w: 1242, h: 2208, media: '(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)' },
+    { w: 750, h: 1334, media: '(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)' },
+    { w: 1242, h: 2688, media: '(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3)' },
+  ];
+  for (const def of startupDefinitions) {
+    const file = `apple-startup-${def.w}x${def.h}.png`;
+    const srcPath = join(startupSrcDir, file);
+    if (existsSync(srcPath)) {
+      copyFileSync(srcPath, join(startupDestDir, file));
+      startupImages.push({ ...def, file });
+    } else {
+      console.warn(`[make-pwa] 未找到启动图 ${file}，跳过`);
+    }
+  }
+  console.log(`[make-pwa] 已拷贝 ${startupImages.length} 张 iOS 启动图 -> apple-startup/`);
+} else {
+  console.warn('[make-pwa] 未找到 assets/apple-startup，跳过 iOS 启动图');
+}
+
+// 4) 重命名 Expo 运行时目录 _expo -> expo-static（GitHub Pages 对下划线路径不稳定）
 const expoRuntimeDir = join(dist, '_expo');
 const publishedRuntimeDir = join(dist, 'expo-static');
 if (existsSync(expoRuntimeDir)) {
@@ -75,10 +111,11 @@ if (existsSync(expoRuntimeDir)) {
   console.log('[make-pwa] 已重命名运行时目录 _expo -> expo-static');
 }
 
+// 5) 写入 manifest.json
 const manifest = {
   name: NAME,
   short_name: SHORT,
-  description: '帆帆和关关的双人成长工作台：计划、运动、记账、考公、娱乐、恋爱日记。',
+  description: DESCRIPTION,
   start_url: withBase('/'),
   scope: withBase('/'),
   display: 'standalone',
@@ -93,23 +130,39 @@ const manifest = {
 };
 writeFileSync(join(dist, 'manifest.json'), JSON.stringify(manifest, null, 2));
 
-// 3) 写入 service worker（与子路径无关：运行时从自身 URL 推导 BASE）
+// 6) 写入 service worker
+// - 版本化 CACHE：每次构建唯一，activate 时删除所有旧缓存
+// - 导航请求使用 cache: 'no-store' 绕过 GitHub Pages 的 10 分钟 HTML 缓存
+// - 静态资源（带内容哈希）缓存优先，离线时回退到应用外壳
 const sw = `const CACHE = '${CACHE}';
 const BASE = self.location.pathname.replace(/\\/sw\\.js$/, '') + '/';
 
 self.addEventListener('install', function (event) {
   self.skipWaiting();
-  event.waitUntil(caches.open(CACHE).then(function (c) {
-    return c.add(BASE + 'index.html').catch(function () {});
-  }));
+  event.waitUntil(
+    caches.open(CACHE).then(function (cache) {
+      // 安装时主动拉取最新 HTML 并缓存，避免 GitHub Pages 的 10 分钟缓存导致回退旧版
+      return fetch(BASE + 'index.html', { cache: 'no-store' })
+        .then(function (res) {
+          if (res && res.ok) cache.put(BASE + 'index.html', res.clone());
+        })
+        .catch(function () {});
+    })
+  );
 });
 
 self.addEventListener('activate', function (event) {
-  event.waitUntil(caches.keys().then(function (keys) {
-    return Promise.all(keys.filter(function (k) { return k !== CACHE; }).map(function (k) {
-      return caches.delete(k);
-    }));
-  }).then(function () { return self.clients.claim(); }));
+  event.waitUntil(
+    caches.keys().then(function (keys) {
+      return Promise.all(
+        keys
+          .filter(function (k) { return k !== CACHE; })
+          .map(function (k) { return caches.delete(k); })
+      );
+    }).then(function () {
+      return self.clients.claim();
+    })
+  );
 });
 
 self.addEventListener('fetch', function (event) {
@@ -118,12 +171,21 @@ self.addEventListener('fetch', function (event) {
   var url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // 导航请求：网络优先，离线时回退到缓存的应用外壳
+  // 导航请求：网络优先并绕过 HTTP 缓存，成功后更新缓存；离线回退到缓存外壳
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req).catch(function () {
-        return caches.match(BASE + 'index.html').then(function (r) { return r || caches.match(BASE); });
-      })
+      fetch(req, { cache: 'no-store' })
+        .then(function (res) {
+          if (res && res.ok) {
+            caches.open(CACHE).then(function (cache) {
+              cache.put(BASE + 'index.html', res.clone());
+            });
+          }
+          return res;
+        })
+        .catch(function () {
+          return caches.match(BASE + 'index.html');
+        })
     );
     return;
   }
@@ -133,12 +195,14 @@ self.addEventListener('fetch', function (event) {
     caches.open(CACHE).then(function (cache) {
       return cache.match(req).then(function (cached) {
         if (cached) return cached;
-        return fetch(req).then(function (res) {
-          if (res && res.ok) cache.put(req, res.clone());
-          return res;
-        }).catch(function () {
-          return cached || caches.match(BASE + 'index.html');
-        });
+        return fetch(req)
+          .then(function (res) {
+            if (res && res.ok) cache.put(req, res.clone());
+            return res;
+          })
+          .catch(function () {
+            return caches.match(BASE + 'index.html');
+          });
       });
     })
   );
@@ -146,7 +210,10 @@ self.addEventListener('fetch', function (event) {
 `;
 writeFileSync(join(dist, 'sw.js'), sw);
 
-// 4) 注入到 dist 下所有 .html（让深链接路由也能注册 SW、可安装）
+// 7) robots.txt（降低搜索引擎/浏览器"空白页"风险判断）
+writeFileSync(join(dist, 'robots.txt'), 'User-agent: *\nAllow: /\n');
+
+// 8) 注入到 dist 下所有 .html（让深链接路由也能注册 SW、可安装）
 function walk(dir, acc) {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
@@ -157,31 +224,48 @@ function walk(dir, acc) {
 const htmlFiles = [];
 walk(dist, htmlFiles);
 
-const tags = [
+const metaTags = [
+  `<meta name="description" content="${DESCRIPTION}" />`,
+  `<meta property="og:title" content="${NAME}" />`,
+  `<meta property="og:description" content="${DESCRIPTION}" />`,
+  `<meta property="og:type" content="website" />`,
+  `<meta property="og:url" content="${PUBLIC_URL}" />`,
+  `<meta property="og:image" content="${ORIGIN}${withBase('/icon-512.png')}" />`,
+  `<meta name="twitter:card" content="summary_large_image" />`,
+].join('');
+
+const pwaTags = [
   `<link rel="manifest" href="${withBase('/manifest.json')}" />`,
   `<link rel="apple-touch-icon" href="${withBase('/icon-512.png')}" />`,
+  ...startupImages.map(
+    (img) => `<link rel="apple-touch-startup-image" media="${img.media}" href="${withBase(`/apple-startup/${img.file}`)}" />`
+  ),
   `<meta name="theme-color" content="${THEME}" />`,
   `<meta name="apple-mobile-web-app-capable" content="yes" />`,
   `<meta name="mobile-web-app-capable" content="yes" />`,
   `<meta name="apple-mobile-web-app-status-bar-style" content="default" />`,
 ].join('');
 
-const swScript = `<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('${withBase('/sw.js')}').catch(function(e){console.warn('SW register failed',e);});});}</script>`;
+const swScript = `<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('${withBase('/sw.js')}',{updateViaCache:'none'}).then(function(reg){reg.update();}).catch(function(e){console.warn('SW register failed',e);});});}</script>`;
 
 let injected = 0;
 for (const file of htmlFiles) {
   let html = readFileSync(file, 'utf8');
   html = html.replaceAll(withBase('/_expo/'), withBase('/expo-static/'));
   if (html.includes('serviceWorker.register')) continue; // 已注入，跳过
+  if (!html.includes('<meta name="description"')) {
+    html = html.replace('</head>', `${metaTags}</head>`);
+  }
   if (html.includes('</head>')) {
-    html = html.replace('</head>', `${tags}${swScript}</head>`);
+    html = html.replace('</head>', `${pwaTags}${swScript}</head>`);
   } else if (html.includes('</html>')) {
-    html = html.replace('</html>', `${tags}${swScript}</html>`);
+    html = html.replace('</html>', `${pwaTags}${swScript}</html>`);
   } else {
-    html += tags + swScript;
+    html += pwaTags + swScript;
   }
   writeFileSync(file, html);
   injected++;
 }
-console.log(`[make-pwa] 已注入 ${injected} 个 HTML（manifest / icon / SW 注册）`);
+console.log(`[make-pwa] 已注入 ${injected} 个 HTML（manifest / icon / SW 注册 / 启动图 / SEO）`);
 console.log('[make-pwa] base =', JSON.stringify(base || '/'));
+console.log('[make-pwa] sw cache =', CACHE);
