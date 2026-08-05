@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type NativeSyntheticEvent, type TextInputChangeEventData } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
+import { CollapsibleSectionFooter, sortByNewest, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
 import { ButtonFormField, TextFormField } from "@/shared/ui/FormField";
 import { MobileFormLayout, MobileFormRow } from "@/shared/ui/MobileFormLayout";
@@ -220,6 +221,11 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
   );
   const detailTotal = centsToMoney(detailTransactions.reduce((sum, transaction) => sum + moneyToCents(transaction.amount), 0));
   const canSaveTransaction = Boolean(normalizeMoney(readWebInputValue("finance-amount-input") || amount));
+  const sortedGiftRecords = useMemo(
+    () => sortByNewest(giftRecords, (record) => [record.eventDate, record.createTime]),
+    [giftRecords]
+  );
+  const giftList = useCollapsibleList(sortedGiftRecords);
 
   useEffect(() => {
     if (!shortcutCreate) return;
@@ -661,7 +667,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>份子记录</Text>
+            <Text style={styles.cardTitle}>份子记录（{giftList.total}）</Text>
             {giftRecords.length === 0 ? (
               <View style={styles.emptyBox}>
                 <Text style={styles.emptyIcon}>🧧</Text>
@@ -669,7 +675,18 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
                 <Text style={styles.emptyText}>开始记录第一笔份子</Text>
               </View>
             ) : (
-              giftRecords.map((record) => <GiftItem key={record.id} onDelete={deleteGift} record={record} />)
+              <>
+              {giftList.visibleItems.map((record) => <GiftItem key={record.id} onDelete={deleteGift} record={record} />)}
+              <CollapsibleSectionFooter
+                expanded={giftList.expanded}
+                hiddenCount={giftList.hiddenCount}
+                name="份子记录"
+                onPress={giftList.toggle}
+                testID="finance-gift-show-more"
+                tokens={themeTokens}
+                visible={giftList.canExpand}
+              />
+              </>
             )}
           </View>
         </>
@@ -792,7 +809,12 @@ function FinanceStatementList({
   transactions: FinanceTransaction[];
   type: TransactionType;
 }) {
-  const groups = groupTransactionsByDate(transactions);
+  const sortedTransactions = useMemo(
+    () => sortByNewest(transactions, (item) => [item.localDate, item.createTime]),
+    [transactions]
+  );
+  const statementList = useCollapsibleList(sortedTransactions);
+  const groups = groupTransactionsByDate(statementList.visibleItems);
   const summaryLabel = type === "expense" ? "本月支出" : "本月收入";
 
   return (
@@ -827,7 +849,8 @@ function FinanceStatementList({
           <Text style={styles.emptyText}>{type === "expense" ? "开始记录你的第一笔支出" : "开始记录你的第一笔收入"}</Text>
         </View>
       ) : (
-        groups.map((group) => (
+        <>
+        {groups.map((group) => (
           <View key={group.date} testID={`finance-date-group-${group.date}`} style={styles.statementGroup}>
             <View style={styles.statementGroupHeader}>
               <Text style={styles.statementGroupTitle}>{formatStatementDate(group.date)}</Text>
@@ -845,7 +868,17 @@ function FinanceStatementList({
               ))}
             </View>
           </View>
-        ))
+        ))}
+        <CollapsibleSectionFooter
+          expanded={statementList.expanded}
+          hiddenCount={statementList.hiddenCount}
+          name={type === "expense" ? "支出明细" : "收入明细"}
+          onPress={statementList.toggle}
+          testID={`finance-statement-show-more-${type}`}
+          unit="笔"
+          visible={statementList.canExpand}
+        />
+        </>
       )}
     </View>
   );

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { CollapsibleSectionFooter, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { openLink } from "./entertainmentData";
@@ -220,6 +221,7 @@ export function EntertainmentPanel({ activeTab, onTabChange, showInlineTabs = tr
             }}
             setFilters={setFilters}
             styles={styles}
+            tokens={tokens}
             types={MEDIA_TYPES}
             years={years}
           />
@@ -236,6 +238,7 @@ export function EntertainmentPanel({ activeTab, onTabChange, showInlineTabs = tr
           setMode={setUsefulMode}
           setReminderDraft={setReminderDraft}
           styles={styles}
+          tokens={tokens}
           removeReminder={(id) => persistReminders(reminders.filter((item) => item.id !== id))}
         />
       ) : null}
@@ -331,8 +334,10 @@ function MediaForm({ draft, onChange, onSave, styles }: { draft: MediaItem; onCh
   );
 }
 
-function MediaList({ filteredMedia, filters, genres, mode, onBack, onOpen, onRemove, onStatus, onStep, setFilters, styles, types, years }: { filteredMedia: MediaItem[]; filters: { area: string; genre: string; status: string; type: string; year: string }; genres: string[]; mode: FilmMode; onBack: () => void; onOpen: (id: string) => void; onRemove: (id: string) => void; onStatus: (id: string, status: MediaStatus) => void; onStep: (id: string) => void; setFilters: (filters: { area: string; genre: string; status: string; type: string; year: string }) => void; styles: ReturnType<typeof createStyles>; types: string[]; years: string[] }) {
+function MediaList({ filteredMedia, filters, genres, mode, onBack, onOpen, onRemove, onStatus, onStep, setFilters, styles, tokens, types, years }: { filteredMedia: MediaItem[]; filters: { area: string; genre: string; status: string; type: string; year: string }; genres: string[]; mode: FilmMode; onBack: () => void; onOpen: (id: string) => void; onRemove: (id: string) => void; onStatus: (id: string, status: MediaStatus) => void; onStep: (id: string) => void; setFilters: (filters: { area: string; genre: string; status: string; type: string; year: string }) => void; styles: ReturnType<typeof createStyles>; tokens: UiTokens; types: string[]; years: string[] }) {
   const title = mode === "weekend" ? "周末观影清单" : mode === "progress" ? "我的追剧" : mode === "variety" ? "下饭综艺" : "影视列表";
+  // mediaItems 新增时一律前置，数组顺序本身即「最新在前」，无 createTime 字段可排。
+  const mediaList = useCollapsibleList(filteredMedia);
   return (
     <View style={styles.card} testID="media-list">
       <View style={styles.cardHeader}>
@@ -349,7 +354,7 @@ function MediaList({ filteredMedia, filters, genres, mode, onBack, onOpen, onRem
         </>
       ) : null}
       {filteredMedia.length === 0 ? <Text style={styles.emptyText}>这里还没有条目。先在上方添加真实影视内容，再进行筛选和记录。</Text> : null}
-      {filteredMedia.map((item) => (
+      {mediaList.visibleItems.map((item) => (
         <View key={item.id} style={styles.mediaCard}>
           <Pressable accessibilityRole="button" accessibilityLabel={`打开${item.title}详情`} onPress={() => onOpen(item.id)} style={styles.mediaMain}>
             <Text style={styles.rowTitle}>{item.title}</Text>
@@ -368,18 +373,27 @@ function MediaList({ filteredMedia, filters, genres, mode, onBack, onOpen, onRem
           </View>
         </View>
       ))}
+      <CollapsibleSectionFooter
+        expanded={mediaList.expanded}
+        hiddenCount={mediaList.hiddenCount}
+        name={title}
+        onPress={mediaList.toggle}
+        testID="media-show-more"
+        tokens={tokens}
+        visible={mediaList.canExpand}
+      />
     </View>
   );
 }
 
-function UsefulPanel({ mediaItems, mode, reminderDraft, reminders, removeReminder, saveReminder, setMode, setReminderDraft, styles }: { mediaItems: MediaItem[]; mode: UsefulMode; reminderDraft: { date: string; note: string; title: string }; reminders: ReminderItem[]; removeReminder: (id: string) => void; saveReminder: () => void; setMode: (mode: UsefulMode) => void; setReminderDraft: (draft: { date: string; note: string; title: string }) => void; styles: ReturnType<typeof createStyles> }) {
+function UsefulPanel({ mediaItems, mode, reminderDraft, reminders, removeReminder, saveReminder, setMode, setReminderDraft, styles, tokens }: { mediaItems: MediaItem[]; mode: UsefulMode; reminderDraft: { date: string; note: string; title: string }; reminders: ReminderItem[]; removeReminder: (id: string) => void; saveReminder: () => void; setMode: (mode: UsefulMode) => void; setReminderDraft: (draft: { date: string; note: string; title: string }) => void; styles: ReturnType<typeof createStyles>; tokens: UiTokens }) {
   if (mode !== "home") {
     return (
       <View style={styles.section}>
         <Pressable accessibilityRole="button" accessibilityLabel="返回实用首页" onPress={() => setMode("home")} style={styles.backButton}><Text style={styles.backText}>← 返回实用</Text></Pressable>
         {mode === "holiday" ? <HolidayTool styles={styles} /> : null}
         {mode === "release" ? <ReleaseTool mediaItems={mediaItems} styles={styles} /> : null}
-        {mode === "reminder" ? <ReminderTool draft={reminderDraft} reminders={reminders} removeReminder={removeReminder} saveReminder={saveReminder} setDraft={setReminderDraft} styles={styles} /> : null}
+        {mode === "reminder" ? <ReminderTool draft={reminderDraft} reminders={reminders} removeReminder={removeReminder} saveReminder={saveReminder} setDraft={setReminderDraft} styles={styles} tokens={tokens} /> : null}
         {mode === "links" ? <UsefulLinks styles={styles} /> : null}
       </View>
     );
@@ -413,7 +427,9 @@ function ReleaseTool({ mediaItems, styles }: { mediaItems: MediaItem[]; styles: 
   return <View style={styles.card} testID="release-tool"><Text style={styles.cardTitle}>电影上映日历</Text>{movies.length === 0 ? <Text style={styles.emptyText}>还没有电影条目。先在影视页添加真实电影，再用这里做上映提醒。</Text> : movies.map((item) => <View key={item.id} style={styles.infoCard}><Text style={styles.rowTitle}>{item.title}</Text><Text style={styles.meta}>{item.year} · {item.area} · {item.updateStatus}</Text></View>)}</View>;
 }
 
-function ReminderTool({ draft, reminders, removeReminder, saveReminder, setDraft, styles }: { draft: { date: string; note: string; title: string }; reminders: ReminderItem[]; removeReminder: (id: string) => void; saveReminder: () => void; setDraft: (draft: { date: string; note: string; title: string }) => void; styles: ReturnType<typeof createStyles> }) {
+function ReminderTool({ draft, reminders, removeReminder, saveReminder, setDraft, styles, tokens }: { draft: { date: string; note: string; title: string }; reminders: ReminderItem[]; removeReminder: (id: string) => void; saveReminder: () => void; setDraft: (draft: { date: string; note: string; title: string }) => void; styles: ReturnType<typeof createStyles>; tokens: UiTokens }) {
+  // reminders 新增时前置，数组顺序即「最新在前」。
+  const reminderList = useCollapsibleList(reminders);
   return (
     <View style={styles.card} testID="reminder-tool">
       <Text style={styles.cardTitle}>生活日期提醒</Text>
@@ -422,7 +438,16 @@ function ReminderTool({ draft, reminders, removeReminder, saveReminder, setDraft
       <TextInput placeholder="备注" value={draft.note} onChangeText={(note) => setDraft({ ...draft, note })} style={styles.input} />
       <Pressable accessibilityRole="button" accessibilityLabel="保存生活提醒" onPress={saveReminder} style={styles.primaryButton}><Text style={styles.primaryButtonText}>保存提醒</Text></Pressable>
       {reminders.length === 0 ? <Text style={styles.emptyText}>还没有提醒，可以记录订阅到期、会员续费、证件到期或纪念日。</Text> : null}
-      {reminders.map((item) => <View key={item.id} style={styles.infoCard}><Text style={styles.rowTitle}>{item.title}</Text><Text style={styles.meta}>{item.date}</Text><Text style={styles.summary}>{item.note}</Text><Pressable accessibilityRole="button" accessibilityLabel={`删除提醒${item.title}`} onPress={() => removeReminder(item.id)} style={styles.deleteButton}><Text style={styles.deleteText}>删除</Text></Pressable></View>)}
+      {reminderList.visibleItems.map((item) => <View key={item.id} style={styles.infoCard}><Text style={styles.rowTitle}>{item.title}</Text><Text style={styles.meta}>{item.date}</Text><Text style={styles.summary}>{item.note}</Text><Pressable accessibilityRole="button" accessibilityLabel={`删除提醒${item.title}`} onPress={() => removeReminder(item.id)} style={styles.deleteButton}><Text style={styles.deleteText}>删除</Text></Pressable></View>)}
+      <CollapsibleSectionFooter
+        expanded={reminderList.expanded}
+        hiddenCount={reminderList.hiddenCount}
+        name="生活提醒"
+        onPress={reminderList.toggle}
+        testID="reminder-show-more"
+        tokens={tokens}
+        visible={reminderList.canExpand}
+      />
     </View>
   );
 }

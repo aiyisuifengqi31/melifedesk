@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { CollapsibleSectionFooter, sortByNewest, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
@@ -129,8 +130,16 @@ export function PackagePanel({ shortcutCreate = false, shortcutScan = false, sto
     reader.readAsDataURL(file);
   };
 
-  const unpicked = items.filter((item) => !item.pickedUp);
-  const picked = items.filter((item) => item.pickedUp);
+  const unpicked = useMemo(
+    () => sortByNewest(items.filter((item) => !item.pickedUp), (item) => [item.arrivalDate, item.createTime]),
+    [items]
+  );
+  const picked = useMemo(
+    () => sortByNewest(items.filter((item) => item.pickedUp), (item) => [item.arrivalDate, item.createTime]),
+    [items]
+  );
+  const unpickedList = useCollapsibleList(unpicked);
+  const pickedList = useCollapsibleList(picked);
 
   return (
     <View style={styles.card}>
@@ -184,15 +193,41 @@ export function PackagePanel({ shortcutCreate = false, shortcutScan = false, sto
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.list} contentContainerStyle={styles.listInner}>
         {unpicked.length === 0 && picked.length === 0 ? <Text style={styles.empty}>还没有快递。上传截图就能先记一条。</Text> : null}
-        {unpicked.map((item) => (
+        {unpickedList.visibleItems.map((item) => (
           <PackageCard item={item} key={item.id} onDelete={deleteItem} onPreview={setExpandedImage} onToggle={togglePickedUp} styles={styles} />
         ))}
+        <CollapsibleSectionFooter
+          expanded={unpickedList.expanded}
+          hiddenCount={unpickedList.hiddenCount}
+          name="待取快递"
+          onPress={unpickedList.toggle}
+          testID="package-unpicked-show-more"
+          tokens={themeTokens}
+          unit="个"
+          visible={unpickedList.canExpand}
+        />
         {picked.length > 0 ? (
           <Pressable accessibilityRole="button" accessibilityLabel="展开已取快递" onPress={() => setPickedOpen((value) => !value)} style={styles.pickedToggle}>
             <Text style={styles.pickedToggleText}>已取 {picked.length} 个{pickedOpen ? "收起" : "展开"}</Text>
           </Pressable>
         ) : null}
-        {pickedOpen ? picked.map((item) => <PackageCard item={item} key={item.id} onDelete={deleteItem} onPreview={setExpandedImage} onToggle={togglePickedUp} styles={styles} />) : null}
+        {pickedOpen ? (
+          <>
+            {pickedList.visibleItems.map((item) => (
+              <PackageCard item={item} key={item.id} onDelete={deleteItem} onPreview={setExpandedImage} onToggle={togglePickedUp} styles={styles} />
+            ))}
+            <CollapsibleSectionFooter
+              expanded={pickedList.expanded}
+              hiddenCount={pickedList.hiddenCount}
+              name="已取快递"
+              onPress={pickedList.toggle}
+              testID="package-picked-show-more"
+              tokens={themeTokens}
+              unit="个"
+              visible={pickedList.canExpand}
+            />
+          </>
+        ) : null}
       </ScrollView>
 
       {expandedImage ? (

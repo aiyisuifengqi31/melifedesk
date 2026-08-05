@@ -2,6 +2,7 @@
 import { Pressable, StyleSheet, Text, TextInput, View, type NativeSyntheticEvent, type TextInputChangeEventData } from "react-native";
 
 import { getSupabaseClient } from "@/auth/supabaseClient";
+import { CollapsibleSectionFooter, sortByNewest, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import { addWorkoutPart, createWorkoutSession, softDeleteWorkoutSession } from "@/features/workout/workoutRepository";
 import {
   createWorkoutId,
@@ -62,6 +63,8 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const stats = useMemo(() => buildWorkoutStats(logs), [logs]);
   const chartBars = useMemo(() => buildPeriodBars(logs, chartPeriod), [chartPeriod, logs]);
   const chartTotal = useMemo(() => chartBars.reduce((sum, bar) => sum + bar.minutes, 0), [chartBars]);
+  const sortedLogs = useMemo(() => sortByNewest(logs, (log) => [log.sessionDate, log.createTime]), [logs]);
+  const logList = useCollapsibleList(sortedLogs);
 
   useEffect(() => {
     let cancelled = false;
@@ -257,11 +260,12 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>训练日志</Text>
+        <Text style={styles.cardTitle}>训练日志（{logList.total}）</Text>
         {logs.length === 0 ? (
           <Text style={styles.empty}>还没有训练记录，保存一条后会出现在这里。</Text>
         ) : (
-          logs.map((log) => (
+          <>
+          {logList.visibleItems.map((log) => (
             <View key={log.id} style={styles.logItem}>
               <View style={styles.logBadge}>
                 <Text style={styles.logBadgeText}>{log.parts[0] ?? "训"}</Text>
@@ -275,7 +279,16 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
                 <Text style={styles.deleteText}>删除</Text>
               </Pressable>
             </View>
-          ))
+          ))}
+          <CollapsibleSectionFooter
+            expanded={logList.expanded}
+            hiddenCount={logList.hiddenCount}
+            name="训练记录"
+            onPress={logList.toggle}
+            testID="workout-log-show-more"
+            visible={logList.canExpand}
+          />
+          </>
         )}
       </View>
 

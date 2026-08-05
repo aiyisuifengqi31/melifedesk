@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { CollapsibleSectionFooter, sortByNewest, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import type { UiTokens } from "@/shared/ui/primitives";
 import {
   createNoteId,
@@ -30,7 +31,11 @@ export function NotesPanel({ onClose, shortcutCreate = false, storage, themeToke
   const [newCategory, setNewCategory] = useState<NoteCategory>("未分类");
   const [feedback, setFeedback] = useState("记录一闪而过的念头、待办事项或购物清单。");
 
-  const filteredNotes = category === "全部" ? notes : notes.filter((n) => n.category === category);
+  const filteredNotes = useMemo(() => {
+    const scoped = category === "全部" ? notes : notes.filter((n) => n.category === category);
+    return sortByNewest(scoped, (note) => note.createTime);
+  }, [category, notes]);
+  const noteList = useCollapsibleList(filteredNotes);
 
   useEffect(() => {
     if (!shortcutCreate) return;
@@ -134,8 +139,9 @@ export function NotesPanel({ onClose, shortcutCreate = false, storage, themeToke
           <Text style={styles.emptyText}>写下第一条备忘吧</Text>
         </View>
       ) : (
+        <>
         <View style={styles.notesGrid}>
-          {filteredNotes.map((note) => (
+          {noteList.visibleItems.map((note) => (
             <View key={note.id} style={styles.noteCard}>
               <View style={styles.noteHeader}>
                 <Text style={styles.noteCategory}>{note.category}</Text>
@@ -149,6 +155,16 @@ export function NotesPanel({ onClose, shortcutCreate = false, storage, themeToke
             </View>
           ))}
         </View>
+        <CollapsibleSectionFooter
+          expanded={noteList.expanded}
+          hiddenCount={noteList.hiddenCount}
+          name="备忘"
+          onPress={noteList.toggle}
+          testID="notes-show-more"
+          tokens={themeTokens}
+          visible={noteList.canExpand}
+        />
+        </>
       )}
     </View>
   );

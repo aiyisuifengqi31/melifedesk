@@ -6,6 +6,7 @@ import { hydrateNotesFromCloud, loadNotes } from "@/features/home/notesStorage";
 import { hydratePackagesFromCloud, loadPackages, type PackageItem } from "@/features/plan/packageStorage";
 import { getDefaultTodoStorage, hydrateTodosFromCloud, loadLocalTodos, saveLocalTodos, sortTodos, type TodoStorage, type TodoTask } from "@/features/plan/todoStorage";
 import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
+import { CollapsibleSectionFooter, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { MealSpinner } from "./MealSpinner";
 import { NotesPanel } from "./NotesPanel";
@@ -97,7 +98,8 @@ export function HomePanel({ onOpenFinance, onOpenPackages, shortcutNonce, shortc
   const completedCount = todos.filter((todo) => todo.completed).length;
   const pendingCount = todos.length - completedCount;
   const pendingPackages = packages.filter((item) => !item.pickedUp).length;
-  const visibleTodos = todos.slice(0, 3);
+  const sortedHomeTodos = useMemo(() => sortTodos(todos), [todos]);
+  const todoList = useCollapsibleList(sortedHomeTodos);
   const todayExpense = useMemo(() => {
     const today = todayIso();
     return centsToMoney(
@@ -173,7 +175,7 @@ export function HomePanel({ onOpenFinance, onOpenPackages, shortcutNonce, shortc
           </Pressable>
         ) : (
           <View style={styles.todoPreviewList}>
-            {visibleTodos.map((todo) => (
+            {todoList.visibleItems.map((todo) => (
               <View key={todo.id} style={styles.todoRow}>
                 <Pressable accessibilityRole="checkbox" accessibilityLabel={`${todo.completed ? "恢复" : "完成"}首页待办：${todo.title}`} accessibilityState={{ checked: todo.completed }} onPress={() => toggleHomeTodo(todo.id)} style={styles.todoCheckWrap}>
                   <View style={[styles.todoCheck, todo.completed ? styles.todoCheckActive : null]}>{todo.completed ? <Text style={styles.todoCheckMark}>✓</Text> : null}</View>
@@ -184,11 +186,7 @@ export function HomePanel({ onOpenFinance, onOpenPackages, shortcutNonce, shortc
                 <Text style={[styles.todoPriorityText, todo.completed ? styles.todoPriorityTextDone : null]}>{todoPriorityLabels[todo.priority]}</Text>
               </View>
             ))}
-            {todos.length > 3 ? (
-              <Pressable accessibilityRole="button" accessibilityLabel="查看全部每日待办" onPress={() => setViewState("todos")} style={styles.inlineMore}>
-                <Text style={styles.todoTagText}>查看全部 {todos.length} 条</Text>
-              </Pressable>
-            ) : null}
+            <CollapsibleSectionFooter testID="home-todo-show-more" name="待办" expanded={todoList.expanded} hiddenCount={todoList.hiddenCount} onPress={todoList.toggle} tokens={themeTokens} visible={todoList.canExpand} />
           </View>
         )}
       </View>
@@ -262,13 +260,6 @@ function createStyles(tokens: UiTokens) {
       alignItems: "center",
       flexDirection: "row",
       justifyContent: "space-between"
-    },
-    inlineMore: {
-      alignSelf: "flex-start",
-      backgroundColor: tokens.accentSoft,
-      borderRadius: 999,
-      paddingHorizontal: 10,
-      paddingVertical: 5
     },
     mealEntry: {
       alignItems: "center",
@@ -390,11 +381,6 @@ function createStyles(tokens: UiTokens) {
       minHeight: 42,
       paddingHorizontal: 10,
       paddingVertical: 7
-    },
-    todoTagText: {
-      color: tokens.accent,
-      fontSize: 12,
-      fontWeight: "900"
     },
     todoTextButton: {
       flex: 1,

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { CollapsibleSectionFooter, sortByNewest, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import type { UiTokens } from "@/shared/ui/primitives";
 import {
   createTodoId,
@@ -121,8 +122,13 @@ export function TodoPanel({ onClose, shortcutCreate = false, storage, themeToken
     setEditingTitle("");
   };
 
+  // 未完成待办保留「截止时间升序」——最紧急的先做，比"最新在前"更实用。
   const pendingTasks = tasks.filter((task) => !task.completed);
-  const completedTasks = tasks.filter((task) => task.completed);
+  // 已完成待办是流水记录，按最新完成在前。
+  const completedTasks = useMemo(
+    () => sortByNewest(tasks.filter((task) => task.completed), (task) => task.createTime),
+    [tasks]
+  );
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.page}>
@@ -182,6 +188,7 @@ export function TodoPanel({ onClose, shortcutCreate = false, storage, themeToken
         styles={styles}
         tasks={pendingTasks}
         title="未完成待办"
+        tokens={themeTokens}
       />
 
       <TaskSection
@@ -196,6 +203,7 @@ export function TodoPanel({ onClose, shortcutCreate = false, storage, themeToken
         styles={styles}
         tasks={completedTasks}
         title={`已完成待办 ${completedTasks.length}`}
+        tokens={themeTokens}
       />
     </ScrollView>
   );
@@ -212,7 +220,8 @@ function TaskSection({
   onToggle,
   styles,
   tasks,
-  title
+  title,
+  tokens
 }: {
   editingId: string | null;
   editingTitle: string;
@@ -225,12 +234,14 @@ function TaskSection({
   styles: ReturnType<typeof createStyles>;
   tasks: TodoTask[];
   title: string;
+  tokens: UiTokens;
 }) {
+  const taskList = useCollapsibleList(tasks);
   return (
     <View style={styles.sectionCard}>
       <Text style={styles.sectionTitle}>{title}</Text>
       {tasks.length === 0 ? <Text style={styles.emptyText}>{emptyText}</Text> : null}
-      {tasks.map((task) => (
+      {taskList.visibleItems.map((task) => (
         <TaskRow
           editing={editingId === task.id}
           editingTitle={editingTitle}
@@ -244,6 +255,15 @@ function TaskSection({
           task={task}
         />
       ))}
+      <CollapsibleSectionFooter
+        expanded={taskList.expanded}
+        hiddenCount={taskList.hiddenCount}
+        name={title}
+        onPress={taskList.toggle}
+        testID="todo-show-more"
+        tokens={tokens}
+        visible={taskList.canExpand}
+      />
     </View>
   );
 }

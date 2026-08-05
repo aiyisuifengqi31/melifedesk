@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { CollapsibleSectionFooter, sortByNewest, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
 import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
@@ -281,6 +282,14 @@ export function LovePanel({
 
   const groupedPhotos = useMemo(() => buildPhotoGroups(diaries, gifts, anniversaries), [diaries, gifts, anniversaries]);
 
+  const sortedDiaries = useMemo(() => sortByNewest(diaries, (entry) => [entry.date, entry.createTime]), [diaries]);
+  const sortedGifts = useMemo(() => sortByNewest(gifts, (entry) => [entry.date, entry.createTime]), [gifts]);
+  const sortedAnniversaries = useMemo(() => sortByNewest(anniversaries, (entry) => entry.date), [anniversaries]);
+  const diaryList = useCollapsibleList(sortedDiaries);
+  const giftList = useCollapsibleList(sortedGifts);
+  const anniversaryList = useCollapsibleList(sortedAnniversaries);
+  const photoList = useCollapsibleList(groupedPhotos);
+
   const navigateToPhotoSource = () => {
     if (!selectedPhotoSource) return;
     const { type } = selectedPhotoSource;
@@ -390,8 +399,8 @@ export function LovePanel({
             </View>
           ) : (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>日记列表</Text>
-              {diaries.map((entry) => (
+              <Text style={styles.cardTitle}>日记列表（{diaryList.total}）</Text>
+              {diaryList.visibleItems.map((entry) => (
                 <View key={entry.id} style={styles.diaryCard}>
                   <View style={styles.diaryMetaRow}>
                     <Text style={styles.diaryDate}>{entry.date}</Text>
@@ -417,6 +426,15 @@ export function LovePanel({
                   <Text style={styles.diaryContent}>{entry.content}</Text>
                 </View>
               ))}
+              <CollapsibleSectionFooter
+                expanded={diaryList.expanded}
+                hiddenCount={diaryList.hiddenCount}
+                name="日记"
+                onPress={diaryList.toggle}
+                testID="love-diary-show-more"
+                tokens={themeTokens}
+                visible={diaryList.canExpand}
+              />
             </View>
           )}
         </>
@@ -477,7 +495,8 @@ export function LovePanel({
               <Text style={styles.emptyText}>记录你们互赠的礼物</Text>
             </View>
           ) : (
-            gifts.map((entry) => (
+            <>
+            {giftList.visibleItems.map((entry) => (
               <View key={entry.id} style={styles.giftCard}>
                 <View style={styles.diaryMetaRow}>
                   <Text style={styles.diaryDate}>{entry.date}</Text>
@@ -498,7 +517,17 @@ export function LovePanel({
                   </View>
                 </View>
               </View>
-            ))
+            ))}
+            <CollapsibleSectionFooter
+              expanded={giftList.expanded}
+              hiddenCount={giftList.hiddenCount}
+              name="礼物记录"
+              onPress={giftList.toggle}
+              testID="love-gift-show-more"
+              tokens={themeTokens}
+              visible={giftList.canExpand}
+            />
+            </>
           )}
         </>
       ) : null}
@@ -556,7 +585,8 @@ export function LovePanel({
               <Text style={styles.emptyText}>添加你们的特殊日子</Text>
             </View>
           ) : (
-            anniversaries.map((entry) => (
+            <>
+            {anniversaryList.visibleItems.map((entry) => (
               <View key={entry.id} style={styles.diaryCard}>
                 <View style={styles.diaryMetaRow}>
                   <Text style={styles.diaryDate}>{entry.date}</Text>
@@ -575,7 +605,17 @@ export function LovePanel({
                 ) : null}
                 <Text style={styles.emptyText}>{entry.repeatYearly ? "每年重复" : "不重复"}</Text>
               </View>
-            ))
+            ))}
+            <CollapsibleSectionFooter
+              expanded={anniversaryList.expanded}
+              hiddenCount={anniversaryList.hiddenCount}
+              name="纪念日"
+              onPress={anniversaryList.toggle}
+              testID="love-anniversary-show-more"
+              tokens={themeTokens}
+              visible={anniversaryList.canExpand}
+            />
+            </>
           )}
         </>
       ) : null}
@@ -588,7 +628,8 @@ export function LovePanel({
             <Text style={styles.emptyText}>日记、礼物和纪念日里的照片会在这里按月份聚合展示。</Text>
           </View>
         ) : (
-          groupedPhotos.map((group) => (
+          <>
+          {photoList.visibleItems.map((group) => (
             <View key={group.key} style={styles.card}>
               <Text style={styles.cardTitle}>{group.year} 年 {group.month} 月</Text>
               <View style={styles.photoGrid}>
@@ -604,7 +645,18 @@ export function LovePanel({
                 ))}
               </View>
             </View>
-          ))
+          ))}
+          <CollapsibleSectionFooter
+            expanded={photoList.expanded}
+            hiddenCount={photoList.hiddenCount}
+            name="照片墙月份"
+            onPress={photoList.toggle}
+            testID="love-photo-show-more"
+            tokens={themeTokens}
+            unit="个月"
+            visible={photoList.canExpand}
+          />
+          </>
         )
       ) : null}
 
