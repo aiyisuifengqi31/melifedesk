@@ -271,7 +271,6 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={quickMenuOpen ? "关闭快捷入口" : "打开快捷入口"}
-              onLongPress={() => setQuickMenuOpen(true)}
               onPress={() => setQuickMenuOpen((value) => !value)}
               style={styles.quickFab}
               testID="quick-fab"
