@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, ImageBackground, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ImageStyle } from "react-native";
-import Svg, { Circle, Path } from "react-native-svg";
+import Svg, { Circle, Path, Rect } from "react-native-svg";
 
 import { saveUserSettings } from "@/auth/authRepository";
 import { getSupabaseClient } from "@/auth/supabaseClient";
@@ -50,16 +50,18 @@ type ShortcutRequest = {
 };
 
 const app = getPublicAppConfig();
-const MORE_ROUTE_KEYS: RouteKey[] = ["workout", "fun"];
-const PRIMARY_NAV_ITEMS = NAV_ITEMS.filter((item) => !MORE_ROUTE_KEYS.includes(item.key));
-const MORE_NAV_ITEMS = NAV_ITEMS.filter((item) => MORE_ROUTE_KEYS.includes(item.key));
+const PRIMARY_ROUTE_KEYS: RouteKey[] = ["home", "plan", "finance", "exam"];
+const MORE_ROUTE_KEYS: RouteKey[] = ["love", "workout", "fun"];
+const navItemByKey = (key: RouteKey) => NAV_ITEMS.find((item) => item.key === key);
+const PRIMARY_NAV_ITEMS = PRIMARY_ROUTE_KEYS.map(navItemByKey).filter((item): item is NavItem => Boolean(item));
+const MORE_NAV_ITEMS = MORE_ROUTE_KEYS.map(navItemByKey).filter((item): item is NavItem => Boolean(item));
 
 export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }: AppShellProps) {
   const dimensions = useWindowDimensions();
   const inferredViewport = viewport ?? (dimensions.width < 720 ? "mobile" : "desktop");
   const [currentRoute, setCurrentRoute] = useState(route ?? initialRoute);
   const [collapsed, setCollapsed] = useState(false);
-  const [manualMoreOpen, setManualMoreOpen] = useState(false);
+  const [manualMoreOpen, setManualMoreOpen] = useState<boolean | null>(null);
   const [entertainmentTab, setEntertainmentTab] = useState<EntTab>("hot");
   const [examTab, setExamTab] = useState<ExamTab>("essay");
   const [financeTab, setFinanceTab] = useState<FinanceTab>("stats");
@@ -108,12 +110,12 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const activeRoute = route ?? currentRoute;
   const activeKey = routeToKey(activeRoute);
   const moreRouteActive = MORE_ROUTE_KEYS.includes(activeKey);
-  const moreNavOpen = moreRouteActive || manualMoreOpen;
+  const moreNavOpen = manualMoreOpen ?? moreRouteActive;
   const theme = getTheme(themeId);
   const tokens = theme.tokens[mode];
   const isMobile = inferredViewport === "mobile";
   const sidebarWidth = isMobile ? 68 : collapsed ? 72 : 224;
-  const navOffset = Math.min(42, Math.max(20, Math.round(dimensions.height * 0.035)));
+  const navOffset = Math.min(56, Math.max(48, Math.round(dimensions.height * 0.055)));
 
   const viewportHeight = isMobile && Platform.OS === "web" ? ("100dvh" as const) : Math.max(dimensions.height, 640);
   const hasSecondaryTabs = activeKey === "finance" || activeKey === "love" || activeKey === "exam" || activeKey === "fun";
@@ -122,7 +124,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
 
   useEffect(() => {
     if (route && !moreRouteActive) {
-      setManualMoreOpen(false);
+      setManualMoreOpen(null);
     }
   }, [moreRouteActive, route]);
 
@@ -170,7 +172,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
     setQuickMenuOpen(false);
     setShortcutRequest(null);
     const nextKey = routeToKey(href);
-    setManualMoreOpen(MORE_ROUTE_KEYS.includes(nextKey));
+    setManualMoreOpen(null);
     if (onNavigate) {
       onNavigate(href);
       return;
@@ -306,7 +308,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
                 onPress={() => handleNavigate(item.href)}
                 style={[styles.navItem, selected ? styles.navItemSelected : styles.navItemIdle]}
               >
-                <ThemedNavIcon routeKey={item.key} selected={selected} theme={theme} />
+                <ThemedNavIcon routeKey={item.key} selected={selected} size={24} theme={theme} />
                 {collapsed && !isMobile ? null : <Text style={[styles.navLabel, selected ? styles.navLabelSelected : null]}>{item.label}</Text>}
               </Pressable>
             );
@@ -315,7 +317,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="更多"
-            onPress={() => setManualMoreOpen((value) => !value)}
+            onPress={() => setManualMoreOpen((value) => !(value ?? moreRouteActive))}
             style={[styles.navItem, styles.navItemIdle, moreRouteActive ? styles.navItemMoreHint : null]}
             testID="sidebar-more-button"
           >
@@ -341,7 +343,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
                     style={[styles.navSubItem, selected ? styles.navSubItemSelected : null]}
                     testID={`sidebar-subitem-${item.key}`}
                   >
-                    <ThemedNavIcon routeKey={item.key} selected={selected} size={22} theme={theme} />
+                    <ThemedNavIcon routeKey={item.key} selected={selected} size={20} theme={theme} />
                     {collapsed && !isMobile ? null : <Text style={[styles.navSubLabel, selected ? styles.navSubLabelSelected : null]}>{item.label}</Text>}
                   </Pressable>
                 );
@@ -369,7 +371,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
               style={styles.quickFab}
               testID="quick-fab"
             >
-              <Text style={styles.quickFabText}>+</Text>
+              <PlusIcon color="#ffffff" />
             </Pressable>
           </View>
           <Pressable
@@ -379,6 +381,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
             onPress={() => setSettingsOpen((value) => !value)}
             style={styles.settingsFab}
           >
+            <SettingsIcon color={tokens.accent} />
             <Text style={styles.settingsFabText}>设置</Text>
           </Pressable>
         </View>
@@ -480,9 +483,34 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
 
 function MoreNavIcon({ color }: { color: string }) {
   return (
-    <Svg accessibilityLabel="more navigation icon" height={28} testID="nav-icon-more" viewBox="0 0 28 28" width={28}>
-      <Circle cx={14} cy={14} fill="none" r={10.5} stroke={color} strokeLinecap="round" strokeWidth={2.2} />
-      <Path d="M10 11.2h8M10 14h8M10 16.8h5" fill="none" stroke={color} strokeLinecap="round" strokeWidth={2.2} />
+    <Svg accessibilityLabel="more navigation icon" height={24} testID="nav-icon-more" viewBox="0 0 24 24" width={24}>
+      <Rect fill="none" height={6} rx={1.8} stroke={color} strokeWidth={1.9} width={6} x={4} y={4} />
+      <Rect fill="none" height={6} rx={1.8} stroke={color} strokeWidth={1.9} width={6} x={14} y={4} />
+      <Rect fill="none" height={6} rx={1.8} stroke={color} strokeWidth={1.9} width={6} x={4} y={14} />
+      <Rect fill="none" height={6} rx={1.8} stroke={color} strokeWidth={1.9} width={6} x={14} y={14} />
+    </Svg>
+  );
+}
+
+function PlusIcon({ color }: { color: string }) {
+  return (
+    <Svg accessibilityLabel="quick add icon" height={24} testID="quick-fab-icon" viewBox="0 0 24 24" width={24}>
+      <Path d="M12 5v14M5 12h14" fill="none" stroke={color} strokeLinecap="round" strokeWidth={2.4} />
+    </Svg>
+  );
+}
+
+function SettingsIcon({ color }: { color: string }) {
+  return (
+    <Svg accessibilityLabel="settings icon" height={18} testID="settings-fab-icon" viewBox="0 0 24 24" width={18}>
+      <Circle cx={12} cy={12} fill="none" r={3.2} stroke={color} strokeWidth={2} />
+      <Path
+        d="M19.4 13.5a7.9 7.9 0 0 0 0-3l2-1.5-2-3.5-2.4 1a8 8 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A8 8 0 0 0 7 6.5l-2.4-1-2 3.5 2 1.5a7.9 7.9 0 0 0 0 3l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a8 8 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5Z"
+        fill="none"
+        stroke={color}
+        strokeLinejoin="round"
+        strokeWidth={1.8}
+      />
     </Svg>
   );
 }
@@ -724,6 +752,7 @@ function createStyles(
       width: "100%"
     },
     navList: {
+      alignItems: "center",
       gap: 8,
       paddingBottom: 10
     },
@@ -733,7 +762,8 @@ function createStyles(
       justifyContent: "center",
       minHeight: isMobile ? 56 : 52,
       paddingHorizontal: 4,
-      paddingVertical: 6
+      paddingVertical: 6,
+      width: compactSidebar ? 54 : "80%"
     },
     navItemSelected: {
       backgroundColor: tokens.accent,
@@ -747,7 +777,7 @@ function createStyles(
       backgroundColor: "transparent"
     },
     navItemMoreHint: {
-      backgroundColor: tokens.accentSoft,
+      backgroundColor: "#f2fbf4",
       borderColor: tokens.border,
       borderWidth: 1
     },
@@ -782,9 +812,10 @@ function createStyles(
       color: tokens.accent
     },
     morePanel: {
-      gap: 6,
-      paddingLeft: compactSidebar ? 0 : 10,
-      paddingTop: 2
+      alignItems: "center",
+      gap: 5,
+      paddingTop: 3,
+      width: "100%"
     },
     navSubItem: {
       alignItems: "center",
@@ -792,9 +823,10 @@ function createStyles(
       borderRadius: 14,
       borderWidth: 1,
       justifyContent: "center",
-      minHeight: 40,
+      minHeight: 44,
       paddingHorizontal: 4,
-      paddingVertical: 5
+      paddingVertical: 5,
+      width: compactSidebar ? 48 : "74%"
     },
     navSubItemSelected: {
       backgroundColor: "#e9f7ee",
@@ -910,9 +942,11 @@ function createStyles(
       alignItems: "center",
       backgroundColor: tokens.accentSoft,
       borderRadius: 999,
+      gap: 2,
       minHeight: 38,
       justifyContent: "center",
       paddingHorizontal: compactSidebar ? 8 : 14,
+      paddingVertical: 5,
       width: compactSidebar ? 48 : "100%"
     },
     settingsFabText: {

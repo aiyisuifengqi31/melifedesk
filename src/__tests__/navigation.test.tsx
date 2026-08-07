@@ -6,46 +6,51 @@ import { NAV_ITEMS } from "@/navigation/items";
 const labelOf = (key: (typeof NAV_ITEMS)[number]["key"]) => NAV_ITEMS.find((item) => item.key === key)?.label ?? "";
 
 describe("primary navigation", () => {
-  it("renders the primary navigation names and keeps more collapsed by default", () => {
+  it("renders only the requested primary navigation and keeps more collapsed by default", () => {
     render(<AppShell initialRoute="/plan" />);
 
-    for (const item of NAV_ITEMS.filter((navItem) => navItem.key !== "workout" && navItem.key !== "fun")) {
+    for (const item of NAV_ITEMS.filter((navItem) => !["love", "workout", "fun"].includes(navItem.key))) {
       expect(screen.getAllByText(item.label).length).toBeGreaterThan(0);
     }
-    expect(screen.getByRole("button", { name: "更多" })).toBeOnTheScreen();
+    expect(screen.queryByText(labelOf("love"))).toBeNull();
+    expect(screen.getByTestId("sidebar-more-button")).toBeOnTheScreen();
+    expect(screen.queryByTestId("sidebar-subitem-love")).toBeNull();
     expect(screen.queryByTestId("sidebar-subitem-workout")).toBeNull();
     expect(screen.queryByTestId("sidebar-subitem-fun")).toBeNull();
   });
 
-  it("switches routes from the inline more submenu", async () => {
+  it("switches routes from the inline more submenu", () => {
     render(<AppShell initialRoute="/plan" />);
 
-    fireEvent.press(screen.getByRole("button", { name: "更多" }));
+    fireEvent.press(screen.getByTestId("sidebar-more-button"));
+    expect(screen.getByTestId("sidebar-subitem-love")).toBeOnTheScreen();
     fireEvent.press(screen.getByTestId("sidebar-subitem-workout"));
 
-    expect(await screen.findByRole("button", { name: "今天训练了" })).toBeOnTheScreen();
+    expect(screen.getByTestId("nav-icon-workout")).toHaveProp("accessibilityLabel", "default workout selected icon");
   });
 
-  it("keeps the middle navigation offset and the footer stable when more expands", () => {
+  it("moves the middle navigation lower while keeping the footer stable when more expands", () => {
     render(<AppShell initialRoute="/home" viewport="mobile" />);
 
-    expect(screen.getByTestId("sidebar-nav-scroll")).toHaveStyle({ marginTop: 42 });
+    expect(screen.getByTestId("sidebar-nav-scroll")).toHaveStyle({ marginTop: 56 });
     expect(screen.queryByTestId("sidebar-more-panel")).toBeNull();
     expect(screen.getByTestId("sidebar-footer")).toBeOnTheScreen();
 
-    fireEvent.press(screen.getByRole("button", { name: "更多" }));
+    fireEvent.press(screen.getByTestId("sidebar-more-button"));
 
     expect(screen.getByTestId("sidebar-more-panel")).toBeOnTheScreen();
-    expect(screen.getByTestId("sidebar-subitem-workout")).toHaveStyle({ minHeight: 40 });
-    expect(screen.getByTestId("sidebar-subitem-fun")).toHaveStyle({ minHeight: 40 });
+    expect(screen.getByTestId("sidebar-subitem-love")).toHaveStyle({ minHeight: 44 });
+    expect(screen.getByTestId("sidebar-subitem-workout")).toHaveStyle({ minHeight: 44 });
+    expect(screen.getByTestId("sidebar-subitem-fun")).toHaveStyle({ minHeight: 44 });
     expect(screen.getByTestId("sidebar-footer")).toBeOnTheScreen();
   });
 
-  it("auto-expands more for workout and fun routes and collapses after a primary navigation press", () => {
-    render(<AppShell initialRoute="/fun" viewport="mobile" />);
+  it("auto-expands more for love, workout, and fun routes and collapses after a primary navigation press", () => {
+    render(<AppShell initialRoute="/love" viewport="mobile" />);
 
     expect(screen.getByTestId("sidebar-more-panel")).toBeOnTheScreen();
-    expect(screen.getByTestId("sidebar-subitem-fun")).toHaveStyle({ backgroundColor: "#e9f7ee" });
+    expect(screen.getByTestId("sidebar-subitem-love")).toHaveStyle({ backgroundColor: "#e9f7ee" });
+    expect(screen.getByTestId("sidebar-more-button")).toHaveStyle({ backgroundColor: "#f2fbf4" });
 
     fireEvent.press(screen.getByRole("button", { name: labelOf("finance") }));
 
