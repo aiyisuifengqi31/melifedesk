@@ -2,7 +2,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react-nativ
 
 import { AppShell } from "@/components/AppShell";
 import { FinancePanel } from "@/features/finance/FinancePanel";
-import { loadFinanceTransactions, saveFinanceTransactions, type FinanceTransaction } from "@/features/finance/financeStorage";
+import { loadFinanceTransactions, loadGiftRecords, loadSavingEntries, saveFinanceTransactions, type FinanceTransaction } from "@/features/finance/financeStorage";
+import { QuickAccountingSheet } from "@/features/finance/QuickAccountingSheet";
+import type { UiTokens } from "@/shared/ui/primitives";
 
 const transactionKey = "fanfan-guanguan.finance.transactions.v1";
 
@@ -16,6 +18,32 @@ function makeStorage() {
       data.set(key, value);
     })
   };
+}
+
+const testTokens: UiTokens = {
+  accent: "#2f9e44",
+  accentSoft: "#e8f6ec",
+  background: "#f6fbf7",
+  border: "#dfe8df",
+  danger: "#ef4444",
+  success: "#16a34a",
+  surface: "#ffffff",
+  surfaceMuted: "#f5f8f6",
+  text: "#17231b",
+  textMuted: "#6f7d73"
+};
+
+function renderQuickSheet(storage = makeStorage(), onSaved = jest.fn()) {
+  render(
+    <QuickAccountingSheet
+      onClose={jest.fn()}
+      onSaved={onSaved}
+      storage={storage}
+      tokens={testTokens}
+      visible
+    />
+  );
+  return { onSaved, storage };
 }
 
 describe("finance storage", () => {
@@ -64,7 +92,7 @@ describe("FinancePanel interactions", () => {
     render(<AppShell initialRoute="/home" viewport="mobile" />);
 
     fireEvent.press(screen.getByRole("button", { name: "快速记账：记一笔" }));
-    fireEvent.press(screen.getByRole("button", { name: "选择分类：买菜" }));
+    fireEvent.press(screen.getByRole("button", { name: "选择分类：餐饮" }));
     fireEvent.press(screen.getByRole("button", { name: "输入金额 2" }));
     fireEvent.press(screen.getByRole("button", { name: "输入金额 6" }));
     fireEvent.press(screen.getByRole("button", { name: "完成记账" }));
@@ -154,20 +182,134 @@ describe("FinancePanel interactions", () => {
     fireEvent.press(screen.getByRole("button", { name: "快速记账：记一笔" }));
 
     expect(screen.queryByText(/输入金额，选择分类就可以记一笔/)).toBeNull();
-    expect(screen.getByRole("button", { name: "选择分类：买菜" })).toHaveStyle({ flexBasis: "22%" });
+    for (const category of ["餐饮", "购物", "出行", "随份子", "医疗", "情侣存款", "娱乐", "宠物", "礼物", "美容", "汽车", "储蓄"]) {
+      expect(screen.getByRole("button", { name: `选择分类：${category}` })).toHaveStyle({ flexBasis: "22%" });
+      expect(screen.getByTestId(`quick-category-icon-${category}`)).toBeOnTheScreen();
+      expect(screen.queryByText(category.slice(0, 1))).toBeNull();
+    }
+    expect(screen.queryByRole("button", { name: "选择分类：更多" })).toBeNull();
   });
 
   it("uses a compact keypad amount step instead of the old finance page form", () => {
     render(<AppShell initialRoute="/home" viewport="mobile" />);
 
     fireEvent.press(screen.getByRole("button", { name: "快速记账：记一笔" }));
-    fireEvent.press(screen.getByRole("button", { name: "选择分类：买菜" }));
+    fireEvent.press(screen.getByRole("button", { name: "选择分类：餐饮" }));
 
     expect(screen.queryByTestId("finance-quick-form")).toBeNull();
     expect(screen.getByText("¥0.00")).toBeOnTheScreen();
     expect(screen.getByPlaceholderText("备注（可选）")).toBeOnTheScreen();
     expect(screen.getByRole("button", { name: "输入金额 1" })).toHaveStyle({ flexBasis: "31%" });
     expect(screen.getByRole("button", { name: "完成记账" })).toHaveProp("accessibilityState", { disabled: true });
+  });
+
+  it("lets quick accounting pick yesterday and keeps it out of today's expense", () => {
+    const storage = makeStorage();
+    const onSaved = jest.fn();
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    const yesterdayIso = yesterday.toISOString().slice(0, 10);
+
+    renderQuickSheet(storage, onSaved);
+
+    fireEvent.press(screen.getByRole("button", { name: "选择分类：餐饮" }));
+    fireEvent.press(screen.getByRole("button", { name: "选择记账日期：今天" }));
+    const yesterdayButtons = screen.getAllByRole("button", { name: `选择日期：${yesterdayIso}` });
+    fireEvent.press(yesterdayButtons[yesterdayButtons.length - 1]);
+    expect(screen.queryByText("选择记账日期")).toBeNull();
+    expect(screen.getByRole("button", { name: "选择记账日期：昨天" })).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole("button", { name: "输入金额 2" }));
+    fireEvent.press(screen.getByRole("button", { name: "输入金额 0" }));
+    fireEvent.press(screen.getByRole("button", { name: "完成记账" }));
+
+    expect(loadFinanceTransactions(storage)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          amount: "20.00",
+          categoryName: "餐饮",
+          localDate: yesterdayIso,
+          transactionType: "expense"
+        })
+      ])
+    );
+    expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ localDate: yesterdayIso }));
+  });
+
+  it("closes the quick accounting calendar without changing date when tapping outside", () => {
+    renderQuickSheet();
+
+    fireEvent.press(screen.getByRole("button", { name: "选择分类：餐饮" }));
+    fireEvent.press(screen.getByRole("button", { name: "选择记账日期：今天" }));
+    expect(screen.getByText("选择记账日期")).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole("button", { name: "关闭日期选择器" }));
+
+    expect(screen.queryByText("选择记账日期")).toBeNull();
+    expect(screen.getByRole("button", { name: "选择记账日期：今天" })).toBeOnTheScreen();
+  });
+
+  it("records quick saving once as both saving entry and expense transaction", () => {
+    const storage = makeStorage();
+    const onSaved = jest.fn();
+    renderQuickSheet(storage, onSaved);
+
+    fireEvent.press(screen.getByRole("button", { name: "选择分类：储蓄" }));
+    fireEvent.press(screen.getByRole("button", { name: "输入金额 5" }));
+    fireEvent.press(screen.getByRole("button", { name: "输入金额 0" }));
+    fireEvent.press(screen.getByRole("button", { name: "输入金额 0" }));
+    fireEvent.changeText(screen.getByPlaceholderText("备注（可选）"), "本月存款");
+    fireEvent.press(screen.getByRole("button", { name: "完成记账" }));
+
+    const transactions = loadFinanceTransactions(storage);
+    const savings = loadSavingEntries(storage);
+    expect(transactions).toHaveLength(1);
+    expect(savings).toHaveLength(1);
+    expect(transactions[0]).toEqual(expect.objectContaining({ amount: "500.00", categoryName: "储蓄", transactionType: "expense" }));
+    expect(savings[0]).toEqual(expect.objectContaining({ amount: "500.00", note: "本月存款", type: "deposit", financeTransactionId: transactions[0].id }));
+    expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ categoryName: "储蓄" }));
+  });
+
+  it("records quick gift money once as both gift record and expense transaction", () => {
+    const storage = makeStorage();
+    renderQuickSheet(storage);
+
+    fireEvent.press(screen.getByRole("button", { name: "选择分类：随份子" }));
+    fireEvent.changeText(screen.getByPlaceholderText("姓名（建议填写）"), "张三");
+    fireEvent.changeText(screen.getByPlaceholderText("备注（可选，例如：结婚、满月、生日）"), "结婚");
+    fireEvent.press(screen.getByRole("button", { name: "输入金额 5" }));
+    fireEvent.press(screen.getByRole("button", { name: "输入金额 0" }));
+    fireEvent.press(screen.getByRole("button", { name: "输入金额 0" }));
+    fireEvent.press(screen.getByRole("button", { name: "完成记账" }));
+
+    const transactions = loadFinanceTransactions(storage);
+    const gifts = loadGiftRecords(storage);
+    expect(transactions).toHaveLength(1);
+    expect(gifts).toHaveLength(1);
+    expect(transactions[0]).toEqual(expect.objectContaining({ amount: "500.00", categoryName: "随份子", note: "张三 · 结婚", transactionType: "expense" }));
+    expect(gifts[0]).toEqual(expect.objectContaining({ amount: "500.00", contactName: "张三", direction: "sent", eventType: "结婚", financeTransactionId: transactions[0].id }));
+  });
+
+  it("shows income categories with real icons and saves income transactions", () => {
+    const storage = makeStorage();
+    renderQuickSheet(storage);
+
+    fireEvent.press(screen.getByRole("button", { name: "收入" }));
+    for (const category of ["工资", "奖金", "兼职", "报销", "红包", "理财收益", "退款", "其他"]) {
+      expect(screen.getByRole("button", { name: `选择分类：${category}` })).toHaveStyle({ flexBasis: "22%" });
+      expect(screen.getByTestId(`quick-category-icon-${category}`)).toBeOnTheScreen();
+    }
+    fireEvent.press(screen.getByRole("button", { name: "选择分类：工资" }));
+    fireEvent.press(screen.getByRole("button", { name: "输入金额 2" }));
+    fireEvent.press(screen.getByRole("button", { name: "输入金额 7" }));
+    fireEvent.press(screen.getByRole("button", { name: "输入金额 0" }));
+    fireEvent.press(screen.getByRole("button", { name: "输入金额 0" }));
+    fireEvent.press(screen.getByRole("button", { name: "完成记账" }));
+
+    expect(loadFinanceTransactions(storage)).toEqual([
+      expect.objectContaining({ amount: "2700.00", categoryName: "工资", transactionType: "income" })
+    ]);
   });
 
   it("shows a single monthly summary balance card instead of separate metric cards", () => {

@@ -24,6 +24,8 @@ export function DatePickerPopup({
   title = "选择日期",
   visible
 }: DatePickerPopupProps) {
+  if (!visible) return null;
+
   const initial = parseIsoDate(selectedDate || todayIso());
   const [viewYear, setViewYear] = useState(initial.getFullYear());
   const [viewMonth, setViewMonth] = useState(initial.getMonth());
@@ -90,7 +92,11 @@ export function DatePickerPopup({
                     key={day.date}
                     accessibilityRole="button"
                     accessibilityLabel={`选择日期：${day.date}`}
-                    onPress={() => day.inMonth && setPickedDate(day.date)}
+                    onPress={() => {
+                      if (!day.inMonth) return;
+                      setPickedDate(day.date);
+                      onConfirm(day.date);
+                    }}
                     style={[styles.dayCell, selected ? styles.dayCellSelected : null]}
                   >
                     <Text style={[

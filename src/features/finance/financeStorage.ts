@@ -5,16 +5,19 @@ export type FinanceTransaction = {
   amount: string;
   categoryName: string;
   createTime: string;
+  giftRecordId?: string | null;
   id: string;
   localDate: string;
   note: string;
   remoteId?: string | null;
+  savingEntryId?: string | null;
   transactionType: TransactionType;
 };
 
 export type SavingEntry = {
   amount: string;
   createTime: string;
+  financeTransactionId?: string | null;
   id: string;
   localDate: string;
   note: string;
@@ -37,6 +40,7 @@ export type GiftRecord = {
   direction: GiftDirection;
   eventDate: string;
   eventType: string;
+  financeTransactionId?: string | null;
   id: string;
   needReturn: boolean;
   note: string;

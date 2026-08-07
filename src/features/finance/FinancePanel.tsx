@@ -196,7 +196,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
         transactions: transactions.map((transaction) => ({
           amount: transaction.amount,
           categoryName: transaction.categoryName,
-          giftRecordId: null,
+          giftRecordId: transaction.giftRecordId ?? null,
           id: transaction.id,
           localDate: transaction.localDate,
           transactionType: transaction.transactionType
@@ -291,6 +291,17 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
   };
 
   const deleteTransaction = (transactionId: string) => {
+    const target = transactions.find((transaction) => transaction.id === transactionId);
+    if (target?.savingEntryId || target?.categoryName === "储蓄") {
+      const nextSavings = savingEntries.filter((entry) => entry.id !== target.savingEntryId && entry.financeTransactionId !== transactionId);
+      setSavingEntries(nextSavings);
+      saveSavingEntries(nextSavings, financeStorage);
+    }
+    if (target?.giftRecordId || target?.categoryName === "随份子") {
+      const nextGifts = giftRecords.filter((record) => record.id !== target.giftRecordId && record.financeTransactionId !== transactionId);
+      setGiftRecords(nextGifts);
+      saveGiftRecords(nextGifts, financeStorage);
+    }
     setTransactions((current) => {
       localDirtyRef.current = true;
       const sorted = sortTransactions(current.filter((transaction) => transaction.id !== transactionId));
@@ -308,10 +319,14 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
       return;
     }
 
+    const createTime = new Date().toISOString();
+    const entryId = createFinanceId("saving");
+    const financeTransactionId = savingType === "deposit" ? createFinanceId("finance") : null;
     const entry: SavingEntry = {
       amount: cleanAmount,
-      createTime: new Date().toISOString(),
-      id: createFinanceId("saving"),
+      createTime,
+      financeTransactionId,
+      id: entryId,
       localDate: savingDate,
       note: savingNote.trim(),
       type: savingType
@@ -320,6 +335,21 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
     setSavingEntries(nextEntries);
     localDirtyRef.current = true;
     saveSavingEntries(nextEntries, financeStorage);
+    if (financeTransactionId) {
+      const transaction: FinanceTransaction = {
+        amount: cleanAmount,
+        categoryName: "储蓄",
+        createTime,
+        id: financeTransactionId,
+        localDate: savingDate,
+        note: savingNote.trim(),
+        savingEntryId: entryId,
+        transactionType: "expense"
+      };
+      const nextTransactions = sortTransactions([transaction, ...transactions]);
+      setTransactions(nextTransactions);
+      saveFinanceTransactions(nextTransactions, financeStorage);
+    }
     setSavingAmount("");
     setSavingNote("");
     setFeedback("储蓄记录已添加。");
@@ -392,14 +422,18 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
       return;
     }
 
+    const createTime = new Date().toISOString();
+    const giftId = createFinanceId("gift");
+    const financeTransactionId = giftSync && giftDirection === "sent" ? createFinanceId("finance") : null;
     const record: GiftRecord = {
       amount,
       contactName: contact,
-      createTime: new Date().toISOString(),
+      createTime,
       direction: giftDirection,
       eventDate: giftDate,
       eventType: giftEventType,
-      id: createFinanceId("gift"),
+      financeTransactionId,
+      id: giftId,
       needReturn: giftNeedReturn,
       note,
       place,
@@ -411,12 +445,13 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
     localDirtyRef.current = true;
     saveGiftRecords(nextRecords, financeStorage);
 
-    if (giftSync && giftDirection === "sent") {
+    if (financeTransactionId) {
       const tx: FinanceTransaction = {
         amount,
         categoryName: "随份子",
-        createTime: new Date().toISOString(),
-        id: createFinanceId("finance"),
+        createTime,
+        giftRecordId: giftId,
+        id: financeTransactionId,
         localDate: giftDate,
         note: `${giftEventType} · ${contact}${place ? ` · ${place}` : ""}`,
         transactionType: "expense"
@@ -436,10 +471,16 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
   };
 
   const deleteGift = (giftId: string) => {
+    const target = giftRecords.find((record) => record.id === giftId);
     const nextRecords = giftRecords.filter((record) => record.id !== giftId);
     setGiftRecords(nextRecords);
     localDirtyRef.current = true;
     saveGiftRecords(nextRecords, financeStorage);
+    if (target?.financeTransactionId) {
+      const nextTransactions = sortTransactions(transactions.filter((transaction) => transaction.id !== target.financeTransactionId));
+      setTransactions(nextTransactions);
+      saveFinanceTransactions(nextTransactions, financeStorage);
+    }
     setFeedback("份子记录已删除。");
   };
 

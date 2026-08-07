@@ -1,18 +1,26 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import Svg, { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
 
 import type { TransactionType } from "@/features/finance/financeService";
 import {
   createFinanceId,
   getDefaultFinanceStorage,
-  loadCustomCategories,
   loadFinanceTransactions,
+  loadGiftRecords,
+  loadSavingEntries,
   saveFinanceTransactions,
+  saveGiftRecords,
+  saveSavingEntries,
+  sortGiftRecords,
   sortTransactions,
   type FinanceStorage,
-  type FinanceTransaction
+  type FinanceTransaction,
+  type GiftRecord,
+  type SavingEntry
 } from "@/features/finance/financeStorage";
 import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
+import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
 import type { UiTokens } from "@/shared/ui/primitives";
 
 type QuickAccountingSheetProps = {
@@ -27,25 +35,8 @@ type QuickAccountingSheetProps = {
 type Step = "category" | "amount";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
-const expenseCategories = ["买菜", "加油", "餐饮", "出行", "随份子", "购物", "医疗", "更多"];
-const incomeCategories = ["生活费", "工资", "奖学金", "兼职", "红包", "退款", "其他"];
-const categoryIcons: Record<string, string> = {
-  买菜: "菜",
-  加油: "油",
-  餐饮: "餐",
-  出行: "车",
-  随份子: "礼",
-  购物: "购",
-  医疗: "医",
-  更多: "...",
-  生活费: "家",
-  工资: "薪",
-  奖学金: "奖",
-  兼职: "职",
-  红包: "包",
-  退款: "退",
-  其他: "其"
-};
+const expenseCategories = ["餐饮", "购物", "出行", "随份子", "医疗", "情侣存款", "娱乐", "宠物", "礼物", "美容", "汽车", "储蓄"];
+const incomeCategories = ["工资", "奖金", "兼职", "报销", "红包", "理财收益", "退款", "其他"];
 
 export function QuickAccountingSheet({ initialType = "expense", onClose, onSaved, storage, tokens, visible }: QuickAccountingSheetProps) {
   const financeStorage = useMemo(() => storage ?? getDefaultFinanceStorage(), [storage]);
@@ -53,34 +44,33 @@ export function QuickAccountingSheet({ initialType = "expense", onClose, onSaved
   const [transactionType, setTransactionType] = useState<TransactionType>(initialType);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [amount, setAmount] = useState("");
-  const [date] = useState(todayIso());
+  const [date, setDate] = useState(todayIso());
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [note, setNote] = useState("");
+  const [giftName, setGiftName] = useState("");
   const styles = useMemo(() => createStyles(tokens), [tokens]);
 
-  const categories = useMemo(() => {
-    const base = transactionType === "expense" ? expenseCategories : incomeCategories;
-    const custom = loadCustomCategories(financeStorage).filter((category) => category.transactionType === transactionType).map((category) => category.name);
-    return [...base, ...custom];
-  }, [financeStorage, transactionType]);
+  useEffect(() => {
+    if (!visible) return;
+    setStep("category");
+    setTransactionType(initialType);
+    setSelectedCategory("");
+    setAmount("");
+    setDate(todayIso());
+    setDatePickerOpen(false);
+    setNote("");
+    setGiftName("");
+  }, [initialType, visible]);
 
-  const recentCategories = useMemo(() => {
-    const seen = new Set<string>();
-    return loadFinanceTransactions(financeStorage)
-      .filter((transaction) => transaction.transactionType === transactionType)
-      .map((transaction) => transaction.categoryName)
-      .filter((category) => {
-        if (seen.has(category)) return false;
-        seen.add(category);
-        return true;
-      })
-      .slice(0, 4);
-  }, [financeStorage, transactionType]);
+  const categories = transactionType === "expense" ? expenseCategories : incomeCategories;
 
   if (!visible) return null;
 
   const chooseCategory = (category: string) => {
     setSelectedCategory(category);
     setAmount("");
+    setNote("");
+    setGiftName("");
     setStep("amount");
   };
 
@@ -94,32 +84,80 @@ export function QuickAccountingSheet({ initialType = "expense", onClose, onSaved
 
   const cleanAmount = normalizeMoney(amount);
   const canSave = Boolean(cleanAmount);
+  const isGiftExpense = transactionType === "expense" && selectedCategory === "随份子";
+  const isSavingExpense = transactionType === "expense" && selectedCategory === "储蓄";
 
   const save = () => {
     if (!cleanAmount || !selectedCategory) return;
+
+    const createTime = new Date().toISOString();
+    const transactionId = createFinanceId("finance");
     const transaction: FinanceTransaction = {
       amount: cleanAmount,
       categoryName: selectedCategory,
-      createTime: new Date().toISOString(),
-      id: createFinanceId("finance"),
+      createTime,
+      id: transactionId,
       localDate: date,
-      note: note.trim(),
+      note: buildTransactionNote({ giftName, isGiftExpense, note }),
       transactionType
     };
+
+    if (isSavingExpense) {
+      const savingId = createFinanceId("saving");
+      transaction.savingEntryId = savingId;
+      const savingEntry: SavingEntry = {
+        amount: cleanAmount,
+        createTime,
+        financeTransactionId: transactionId,
+        id: savingId,
+        localDate: date,
+        note: note.trim(),
+        type: "deposit"
+      };
+      saveSavingEntries([savingEntry, ...loadSavingEntries(financeStorage)], financeStorage);
+    }
+
+    if (isGiftExpense) {
+      const giftId = createFinanceId("gift");
+      transaction.giftRecordId = giftId;
+      const giftRecord: GiftRecord = {
+        amount: cleanAmount,
+        contactName: giftName.trim(),
+        createTime,
+        direction: "sent",
+        eventDate: date,
+        eventType: note.trim() || "其他",
+        financeTransactionId: transactionId,
+        id: giftId,
+        needReturn: false,
+        note: note.trim(),
+        place: "",
+        syncFinance: true
+      };
+      saveGiftRecords(sortGiftRecords([giftRecord, ...loadGiftRecords(financeStorage)]), financeStorage);
+    }
+
     const next = sortTransactions([transaction, ...loadFinanceTransactions(financeStorage)]);
     saveFinanceTransactions(next, financeStorage);
     dispatchFinanceRefresh();
     onSaved(transaction);
+    resetAndClose();
+  };
+
+  const resetAndClose = () => {
     onClose();
     setStep("category");
     setSelectedCategory("");
     setAmount("");
+    setDate(todayIso());
+    setDatePickerOpen(false);
     setNote("");
+    setGiftName("");
   };
 
   return (
     <View testID="quick-accounting-sheet" style={styles.overlay}>
-      <Pressable accessibilityRole="button" accessibilityLabel="关闭快速记账遮罩" onPress={onClose} style={styles.dismissLayer} />
+      <Pressable accessibilityRole="button" accessibilityLabel="关闭快速记账遮罩" onPress={resetAndClose} style={styles.dismissLayer} />
       <View style={styles.sheet}>
         <View style={styles.handle} />
         {step === "category" ? (
@@ -129,30 +167,18 @@ export function QuickAccountingSheet({ initialType = "expense", onClose, onSaved
                 <TypeButton active={transactionType === "expense"} label="支出" onPress={() => setTransactionType("expense")} styles={styles} />
                 <TypeButton active={transactionType === "income"} label="收入" onPress={() => setTransactionType("income")} styles={styles} />
               </View>
-              <Pressable accessibilityRole="button" accessibilityLabel="关闭快速记账" onPress={onClose} style={styles.closeButton}>
+              <Pressable accessibilityRole="button" accessibilityLabel="关闭快速记账" onPress={resetAndClose} style={styles.closeButton}>
                 <Text style={styles.closeText}>关闭</Text>
               </Pressable>
             </View>
             <Text style={styles.title}>选择分类</Text>
-            {recentCategories.length > 0 ? (
-              <>
-                <Text style={styles.sectionLabel}>最近使用</Text>
-                <View style={styles.recentRow}>
-                  {recentCategories.map((category) => (
-                    <Pressable key={category} accessibilityRole="button" accessibilityLabel={`选择最近分类：${category}`} onPress={() => chooseCategory(category)} style={styles.recentChip}>
-                      <Text style={styles.recentText}>{category}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </>
-            ) : null}
             <View style={styles.categoryGrid}>
               {categories.map((category) => (
                 <Pressable key={`${transactionType}-${category}`} accessibilityRole="button" accessibilityLabel={`选择分类：${category}`} onPress={() => chooseCategory(category)} style={styles.categoryButton}>
-                  <View style={styles.categoryIconCircle}>
-                    <Text style={styles.categoryIconText}>{categoryIcons[category] ?? category.slice(0, 1)}</Text>
+                  <View testID={`quick-category-icon-${category}`} style={styles.categoryIconCircle}>
+                    <CategoryLineIcon color={tokens.accent} name={category} />
                   </View>
-                  <Text style={styles.categoryName} numberOfLines={1}>{category}</Text>
+                  <Text style={styles.categoryName} numberOfLines={2}>{category}</Text>
                 </Pressable>
               ))}
             </View>
@@ -161,13 +187,23 @@ export function QuickAccountingSheet({ initialType = "expense", onClose, onSaved
           <View style={styles.sheetContent}>
             <View style={styles.amountHeader}>
               <Pressable accessibilityRole="button" accessibilityLabel="返回分类选择" onPress={() => setStep("category")} style={styles.backButton}>
-                <Text style={styles.backText}>←</Text>
+                <Text style={styles.backText}>‹</Text>
               </Pressable>
               <Text style={styles.amountTitle}>{selectedCategory}</Text>
-              <Text style={styles.datePill}>今天</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel={`选择记账日期：${formatDateLabel(date)}`} onPress={() => setDatePickerOpen((open) => !open)} style={styles.datePill}>
+                <Text style={styles.datePillText}>{formatDateLabel(date)}</Text>
+              </Pressable>
             </View>
             <Text style={styles.amountValue}>¥{amount || "0.00"}</Text>
-            <TextInput onChangeText={setNote} placeholder="备注（可选）" style={styles.noteInput} value={note} />
+            {isGiftExpense ? (
+              <TextInput onChangeText={setGiftName} placeholder="姓名（建议填写）" style={styles.noteInput} value={giftName} />
+            ) : null}
+            <TextInput
+              onChangeText={setNote}
+              placeholder={isGiftExpense ? "备注（可选，例如：结婚、满月、生日）" : "备注（可选）"}
+              style={styles.noteInput}
+              value={note}
+            />
             <View style={styles.keypad}>
               {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0"].map((key) => (
                 <Pressable key={key} accessibilityRole="button" accessibilityLabel={`输入金额 ${key}`} onPress={() => appendAmount(key)} style={styles.keyButton}>
@@ -181,6 +217,16 @@ export function QuickAccountingSheet({ initialType = "expense", onClose, onSaved
             <Pressable accessibilityRole="button" accessibilityLabel="完成记账" accessibilityState={{ disabled: !canSave }} disabled={!canSave} onPress={save} style={[styles.doneButton, !canSave ? styles.doneButtonDisabled : null, transactionType === "income" ? styles.doneButtonIncome : null]}>
               <Text style={styles.doneText}>完成</Text>
             </Pressable>
+            <DatePickerPopup
+              onCancel={() => setDatePickerOpen(false)}
+              onConfirm={(nextDate) => {
+                setDate(nextDate);
+                setDatePickerOpen(false);
+              }}
+              selectedDate={date}
+              title="选择记账日期"
+              visible={datePickerOpen}
+            />
           </View>
         )}
       </View>
@@ -196,6 +242,21 @@ function TypeButton({ active, label, onPress, styles }: { active: boolean; label
   );
 }
 
+function CategoryLineIcon({ color, name }: { color: string; name: string }) {
+  const common = { fill: "none", stroke: color, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, strokeWidth: 2 };
+  if (name === "餐饮") return <Svg height={24} viewBox="0 0 24 24" width={24}><Path {...common} d="M7 3v8" /><Path {...common} d="M10 3v8" /><Path {...common} d="M8.5 11v10" /><Path {...common} d="M17 3v18" /><Path {...common} d="M14 3c3 2 3 6 0 8" /></Svg>;
+  if (name === "购物") return <Svg height={24} viewBox="0 0 24 24" width={24}><Path {...common} d="M6 8h12l-1 12H7L6 8Z" /><Path {...common} d="M9 8a3 3 0 0 1 6 0" /></Svg>;
+  if (name === "出行" || name === "汽车") return <Svg height={24} viewBox="0 0 24 24" width={24}><Path {...common} d="M5 12l2-5h10l2 5" /><Rect {...common} height={6} rx={2} width={16} x={4} y={11} /><Circle cx={8} cy={18} fill={color} r={1.4} /><Circle cx={16} cy={18} fill={color} r={1.4} /></Svg>;
+  if (name === "随份子" || name === "礼物" || name === "红包") return <Svg height={24} viewBox="0 0 24 24" width={24}><Rect {...common} height={13} rx={2} width={16} x={4} y={8} /><Path {...common} d="M12 8v13M4 13h16M8 8c-2-2-1-5 2-4 1 .5 2 2 2 4M16 8c2-2 1-5-2-4-1 .5-2 2-2 4" /></Svg>;
+  if (name === "医疗") return <Svg height={24} viewBox="0 0 24 24" width={24}><Path {...common} d="M12 5v14M5 12h14" /><Rect {...common} height={18} rx={4} width={18} x={3} y={3} /></Svg>;
+  if (name === "情侣存款" || name === "储蓄" || name === "理财收益") return <Svg height={24} viewBox="0 0 24 24" width={24}><Path {...common} d="M5 9h14v10H5z" /><Path {...common} d="M8 9c1-3 3-5 4-5s3 2 4 5" /><Line {...common} x1={12} x2={12} y1={12} y2={17} /></Svg>;
+  if (name === "娱乐") return <Svg height={24} viewBox="0 0 24 24" width={24}><Path {...common} d="M8 7h8l2 12H6L8 7Z" /><Circle cx={9} cy={13} fill={color} r={1.2} /><Circle cx={15} cy={13} fill={color} r={1.2} /><Path {...common} d="M10 17h4" /></Svg>;
+  if (name === "宠物") return <Svg height={24} viewBox="0 0 24 24" width={24}><Circle cx={12} cy={15} fill="none" r={4} stroke={color} strokeWidth={2} /><Circle cx={7} cy={10} fill={color} r={1.6} /><Circle cx={11} cy={8} fill={color} r={1.6} /><Circle cx={15} cy={8} fill={color} r={1.6} /><Circle cx={17} cy={11} fill={color} r={1.6} /></Svg>;
+  if (name === "美容") return <Svg height={24} viewBox="0 0 24 24" width={24}><Path {...common} d="M12 3c4 4 4 8 0 12-4-4-4-8 0-12Z" /><Path {...common} d="M5 21c2-4 5-6 7-6s5 2 7 6" /></Svg>;
+  if (name === "工资" || name === "奖金" || name === "兼职" || name === "报销" || name === "退款") return <Svg height={24} viewBox="0 0 24 24" width={24}><Rect {...common} height={14} rx={2} width={18} x={3} y={5} /><Circle cx={12} cy={12} fill="none" r={3} stroke={color} strokeWidth={2} /><Line {...common} x1={6} x2={8} y1={9} y2={9} /><Line {...common} x1={16} x2={18} y1={15} y2={15} /></Svg>;
+  return <Svg height={24} viewBox="0 0 24 24" width={24}><Circle cx={12} cy={12} fill="none" r={8} stroke={color} strokeWidth={2} /><Polyline {...common} points="9,12 12,15 16,9" /></Svg>;
+}
+
 function normalizeAmountInput(value: string) {
   const cleaned = value.replace(/[^\d.]/g, "");
   const parts = cleaned.split(".");
@@ -209,6 +270,34 @@ function normalizeMoney(value: string) {
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount <= 0) return "";
   return amount.toFixed(2);
+}
+
+function buildTransactionNote({ giftName, isGiftExpense, note }: { giftName: string; isGiftExpense: boolean; note: string }) {
+  const cleanName = giftName.trim();
+  const cleanNote = note.trim();
+  if (!isGiftExpense) return cleanNote;
+  return [cleanName, cleanNote].filter(Boolean).join(" · ");
+}
+
+function formatDateLabel(date: string) {
+  if (date === todayIso()) return "今天";
+  if (date === shiftIso(-1)) return "昨天";
+  if (date === shiftIso(-2)) return "前天";
+  const parsed = parseIso(date);
+  const currentYear = new Date().getFullYear();
+  if (parsed.getFullYear() === currentYear) return `${parsed.getMonth() + 1}月${parsed.getDate()}日`;
+  return `${parsed.getFullYear()}年${parsed.getMonth() + 1}月${parsed.getDate()}日`;
+}
+
+function shiftIso(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function parseIso(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
 }
 
 function dispatchFinanceRefresh() {
@@ -244,8 +333,9 @@ function createStyles(tokens: UiTokens) {
     },
     backText: {
       color: tokens.text,
-      fontSize: 22,
-      fontWeight: "900"
+      fontSize: 28,
+      fontWeight: "900",
+      lineHeight: 28
     },
     categoryButton: {
       alignItems: "center",
@@ -267,16 +357,14 @@ function createStyles(tokens: UiTokens) {
       justifyContent: "center",
       width: 44
     },
-    categoryIconText: {
-      color: tokens.accent,
-      fontSize: 13,
-      fontWeight: "900"
-    },
     categoryName: {
       color: tokens.text,
       fontSize: 12,
       fontWeight: "800",
-      maxWidth: "100%"
+      lineHeight: 15,
+      maxWidth: "100%",
+      minHeight: 30,
+      textAlign: "center"
     },
     closeButton: {
       paddingHorizontal: 8,
@@ -288,13 +376,18 @@ function createStyles(tokens: UiTokens) {
       fontWeight: "900"
     },
     datePill: {
+      alignItems: "center",
       backgroundColor: tokens.accentSoft,
       borderRadius: 999,
-      color: tokens.accent,
-      fontSize: 12,
-      fontWeight: "900",
+      justifyContent: "center",
+      minWidth: 62,
       paddingHorizontal: 10,
       paddingVertical: 6
+    },
+    datePillText: {
+      color: tokens.accent,
+      fontSize: 12,
+      fontWeight: "900"
     },
     dismissLayer: {
       bottom: 0,
@@ -307,8 +400,8 @@ function createStyles(tokens: UiTokens) {
       alignItems: "center",
       backgroundColor: tokens.accent,
       borderRadius: 14,
-      minHeight: 52,
-      justifyContent: "center"
+      justifyContent: "center",
+      minHeight: 52
     },
     doneButtonDisabled: {
       backgroundColor: "#cbd5e1"
@@ -335,8 +428,8 @@ function createStyles(tokens: UiTokens) {
       borderRadius: 12,
       flexBasis: "31%",
       flexGrow: 1,
-      minHeight: 42,
-      justifyContent: "center"
+      justifyContent: "center",
+      minHeight: 42
     },
     keyText: {
       color: tokens.text,
@@ -367,27 +460,6 @@ function createStyles(tokens: UiTokens) {
       top: 0,
       zIndex: 120
     },
-    recentChip: {
-      backgroundColor: tokens.accentSoft,
-      borderRadius: 999,
-      paddingHorizontal: 11,
-      paddingVertical: 7
-    },
-    recentRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8
-    },
-    recentText: {
-      color: tokens.accent,
-      fontSize: 12,
-      fontWeight: "900"
-    },
-    sectionLabel: {
-      color: tokens.textMuted,
-      fontSize: 12,
-      fontWeight: "900"
-    },
     sheet: {
       backgroundColor: tokens.surface,
       borderTopLeftRadius: 24,
@@ -395,7 +467,7 @@ function createStyles(tokens: UiTokens) {
       bottom: 0,
       elevation: 12,
       left: 76,
-      maxHeight: "75%",
+      maxHeight: "78%",
       position: "absolute",
       right: 10,
       shadowColor: "#000000",

@@ -16,7 +16,17 @@ import { DailyPlanPanel } from "@/features/plan/DailyPlanPanel";
 import { GlobalQuickCapture } from "@/features/quick-capture/GlobalQuickCapture";
 import { WorkoutPanel } from "@/features/workout/WorkoutPanel";
 import { QuickAccountingSheet } from "@/features/finance/QuickAccountingSheet";
-import { getDefaultFinanceStorage, loadFinanceTransactions, saveFinanceTransactions, sortTransactions, type FinanceTransaction } from "@/features/finance/financeStorage";
+import {
+  getDefaultFinanceStorage,
+  loadFinanceTransactions,
+  loadGiftRecords,
+  loadSavingEntries,
+  saveFinanceTransactions,
+  saveGiftRecords,
+  saveSavingEntries,
+  sortTransactions,
+  type FinanceTransaction
+} from "@/features/finance/financeStorage";
 import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
 import { NAV_ITEMS, type NavItem, routeToKey } from "@/navigation/items";
 import { getTheme } from "@/theme/registry";
@@ -172,6 +182,18 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const undoQuickAccounting = () => {
     if (!quickAccountingToast) return;
     const storage = getDefaultFinanceStorage();
+    if (quickAccountingToast.savingEntryId || quickAccountingToast.categoryName === "储蓄") {
+      saveSavingEntries(
+        loadSavingEntries(storage).filter((entry) => entry.id !== quickAccountingToast.savingEntryId && entry.financeTransactionId !== quickAccountingToast.id),
+        storage
+      );
+    }
+    if (quickAccountingToast.giftRecordId || quickAccountingToast.categoryName === "随份子") {
+      saveGiftRecords(
+        loadGiftRecords(storage).filter((record) => record.id !== quickAccountingToast.giftRecordId && record.financeTransactionId !== quickAccountingToast.id),
+        storage
+      );
+    }
     const next = sortTransactions(loadFinanceTransactions(storage).filter((transaction) => transaction.id !== quickAccountingToast.id));
     saveFinanceTransactions(next, storage);
     if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
