@@ -12,7 +12,6 @@ import {
   saveLocalWorkouts,
   sortWorkoutLogs,
   type WorkoutLog,
-  type WorkoutStatus,
   type WorkoutStorage
 } from "@/features/workout/workoutStorage";
 
@@ -53,7 +52,6 @@ const todayIso = () => toLocalIso(new Date());
 export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const workoutStorage = useMemo(() => storage ?? getDefaultWorkoutStorage(), [storage]);
   const [logs, setLogs] = useState<WorkoutLog[]>(() => sortWorkoutLogs(loadLocalWorkouts(workoutStorage)));
-  const [status, setStatus] = useState<WorkoutStatus>("trained");
   const [selectedParts, setSelectedParts] = useState<string[]>(["背"]);
   const [duration, setDuration] = useState("10");
   const [feedback, setFeedback] = useState("选择训练部位并填写时长后保存记录。");
@@ -65,6 +63,11 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const chartTotal = useMemo(() => chartBars.reduce((sum, bar) => sum + bar.minutes, 0), [chartBars]);
   const sortedLogs = useMemo(() => sortByNewest(logs, (log) => [log.sessionDate, log.createTime]), [logs]);
   const logList = useCollapsibleList(sortedLogs);
+  const todayKey = todayIso();
+  const todayTrainedLog = useMemo(
+    () => logs.find((log) => log.sessionDate === todayKey && log.status === "trained"),
+    [logs, todayKey]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -86,43 +89,41 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   };
 
   const togglePart = (part: string) => {
-    setStatus("trained");
     setSelectedParts((current) => {
       return current.includes(part) ? current.filter((item) => item !== part) : [...current, part];
     });
   };
 
   const saveWorkout = async () => {
-    const parts = status === "rest" ? ["休息"] : selectedParts.filter((part) => part !== "休息");
+    const parts = selectedParts;
     const durationMinutes = toNonNegativeInt(readWebInputValue("workout-duration-input") || duration);
 
-    if (status === "trained" && parts.length === 0) {
+    if (parts.length === 0) {
       setFeedback("请至少选择一个训练部位。");
       return;
     }
 
-    if (status === "trained" && durationMinutes <= 0) {
+    if (durationMinutes <= 0) {
       setFeedback("请填写大于 0 的训练时长。");
       return;
     }
 
     const log: WorkoutLog = {
       createTime: new Date().toISOString(),
-      durationMinutes: status === "rest" ? 0 : durationMinutes,
+      durationMinutes,
       id: createWorkoutId(),
       intensity: "moderate",
       kcal: 0,
       kcalSource: "manual",
       parts,
-      restType: status === "rest" ? "full" : undefined,
       sessionDate: todayIso(),
-      status,
-      title: status === "rest" ? "休息" : parts.join("、")
+      status: "trained",
+      title: parts.join("、")
     };
 
     const nextLogs = [log, ...logs];
     persistLogs(nextLogs);
-    setFeedback(status === "rest" ? "今天已记录为休息。" : "训练记录已保存。");
+    setFeedback("训练记录已保存。");
 
     const client = getSupabaseClient();
     if (!client) {
@@ -166,44 +167,33 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   return (
     <View style={styles.stack}>
       <View style={styles.card}>
-        <View style={styles.segmentRow}>
-          <Pressable accessibilityRole="button" accessibilityLabel="今天训练了" onPress={() => setStatus("trained")} style={[styles.segment, status === "trained" ? styles.segmentActive : null]}>
-            <Text style={[styles.segmentText, status === "trained" ? styles.segmentTextActive : null]}>训练</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="今天休息" onPress={() => {
-            setStatus("rest");
-            setSelectedParts([]);
-          }} style={[styles.segment, status === "rest" ? styles.segmentActive : null]}>
-            <Text style={[styles.segmentText, status === "rest" ? styles.segmentTextActive : null]}>休息</Text>
-          </Pressable>
+        <View style={styles.todayStatusRow}>
+          <View style={[styles.todayStatusDot, todayTrainedLog ? styles.todayStatusDotTrained : styles.todayStatusDotRest]} />
+          <Text style={styles.todayStatusText}>
+            {todayTrainedLog ? `今天已训练 ${todayTrainedLog.durationMinutes} 分钟` : "今天休息 · 未记录训练"}
+          </Text>
         </View>
 
-        {status === "trained" ? (
-          <>
-            <Text style={styles.sectionLabel}>训练部位</Text>
-            <View style={styles.partGrid}>
-              {WORKOUT_PARTS.map((part) => {
-                const selected = selectedParts.includes(part.name);
-                return (
-                  <Pressable key={part.name} accessibilityRole="button" accessibilityLabel={`选择${part.name}`} onPress={() => togglePart(part.name)} style={[styles.partButton, selected ? styles.partButtonActive : null]}>
-                    <Text style={styles.partIcon}>{part.icon}</Text>
-                    <Text style={[styles.partText, selected ? styles.partTextActive : null]}>{part.name}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+        <Text style={styles.sectionLabel}>训练部位</Text>
+        <View style={styles.partGrid}>
+          {WORKOUT_PARTS.map((part) => {
+            const selected = selectedParts.includes(part.name);
+            return (
+              <Pressable key={part.name} accessibilityRole="button" accessibilityLabel={`选择${part.name}`} onPress={() => togglePart(part.name)} style={[styles.partButton, selected ? styles.partButtonActive : null]}>
+                <Text style={styles.partIcon}>{part.icon}</Text>
+                <Text style={[styles.partText, selected ? styles.partTextActive : null]}>{part.name}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
-            <View style={styles.durationRow}>
-              <Text style={styles.sectionLabel}>训练时间</Text>
-              <View style={styles.durationInputWrap}>
-                <TextInput {...durationInputWebProps} keyboardType="numeric" nativeID="workout-duration-input" onChange={makeTextInputChangeHandler(setDuration)} onChangeText={setDuration} placeholder="45" style={[styles.input, styles.durationInput]} value={duration} />
-                <Text style={styles.durationUnit}>分钟</Text>
-              </View>
-            </View>
-          </>
-        ) : (
-          <Text style={styles.restHint}>今天记录为休息，不记录训练部位与时长。</Text>
-        )}
+        <View style={styles.durationRow}>
+          <Text style={styles.sectionLabel}>训练时间</Text>
+          <View style={styles.durationInputWrap}>
+            <TextInput {...durationInputWebProps} keyboardType="numeric" nativeID="workout-duration-input" onChange={makeTextInputChangeHandler(setDuration)} onChangeText={setDuration} placeholder="45" style={[styles.input, styles.durationInput]} value={duration} />
+            <Text style={styles.durationUnit}>分钟</Text>
+          </View>
+        </View>
 
         <Pressable accessibilityRole="button" accessibilityLabel="保存记录" nativeID="workout-save-button" onPress={saveWorkout} style={styles.saveButton}>
           <Text style={styles.saveText}>保存记录</Text>
@@ -824,31 +814,32 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "900"
   },
-  segment: {
+  todayStatusRow: {
     alignItems: "center",
-    backgroundColor: "#f8fafc",
-    borderColor: "#e3e8ef",
+    backgroundColor: "#f7faf7",
+    borderColor: "#e3ebe3",
     borderRadius: 12,
     borderWidth: 1,
-    flex: 1,
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 12,
     paddingVertical: 10
   },
-  segmentActive: {
-    backgroundColor: "#7cb87c",
-    borderColor: "#7cb87c"
+  todayStatusDot: {
+    borderRadius: 999,
+    height: 10,
+    width: 10
   },
-  segmentRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8
+  todayStatusDotTrained: {
+    backgroundColor: "#7cb87c"
   },
-  segmentText: {
-    color: "#697386",
+  todayStatusDotRest: {
+    backgroundColor: "#c9b27c"
+  },
+  todayStatusText: {
+    color: "#334155",
     fontSize: 14,
-    fontWeight: "900"
-  },
-  segmentTextActive: {
-    color: "#ffffff"
+    fontWeight: "800"
   },
   durationRow: {
     alignItems: "center",
@@ -868,11 +859,6 @@ const styles = StyleSheet.create({
     color: "#697386",
     fontSize: 14,
     fontWeight: "800"
-  },
-  restHint: {
-    color: "#697386",
-    fontSize: 13,
-    fontWeight: "700"
   },
   statLine: {
     color: "#111827",
