@@ -79,10 +79,11 @@ describe("FinancePanel interactions", () => {
     expect(screen.queryByTestId("secondary-tab-record")).toBeNull();
   });
 
-  it("clicking today's expense opens the same quick accounting sheet", () => {
+  it("shows today's expense on the quick accounting card and opens the same sheet", () => {
     render(<AppShell initialRoute="/home" viewport="mobile" />);
 
-    fireEvent.press(screen.getByRole("button", { name: "打开今日支出" }));
+    expect(screen.getAllByText("今日支出").length).toBeGreaterThan(0);
+    fireEvent.press(screen.getByRole("button", { name: "快速记账：记一笔" }));
 
     expect(screen.getByTestId("quick-accounting-sheet")).toBeOnTheScreen();
     expect(screen.getByText("选择分类")).toBeOnTheScreen();

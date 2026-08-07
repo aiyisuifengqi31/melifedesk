@@ -155,8 +155,6 @@ export function HomePanel({ onOpenFinance, onOpenQuickAccounting, onOpenPackages
             <OverviewItem label="今日待办" onPress={() => setViewState("todos")} styles={styles} value={`${completedCount}/${todos.length}`} />
             <View style={styles.summaryDivider} />
             <OverviewItem label="待取快递" onPress={() => onOpenPackages?.()} styles={styles} value={String(pendingPackages)} />
-            <View style={styles.summaryDivider} />
-            <OverviewItem label="今日支出" onPress={() => onOpenQuickAccounting?.()} styles={styles} value={`¥${todayExpense}`} />
           </View>
           <Text style={styles.summaryLine} numberOfLines={1}>{summaryLine}</Text>
         </View>
