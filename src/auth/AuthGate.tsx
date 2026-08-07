@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState, type PropsWithChildren } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { getPublicAppConfig } from "@/config/app";
-import { syncActiveUser } from "./localScope";
+import { readActiveUser, syncActiveUser } from "./localScope";
 import { getSupabaseClient } from "./supabaseClient";
 
 type GateState = "loading" | "signedIn" | "signedOut";
 
 const app = getPublicAppConfig();
+const STARTUP_SESSION_GRACE_MS = 1200;
 
 /**
  * 登录守卫：
@@ -30,11 +31,21 @@ export function AuthGate({ children }: PropsWithChildren) {
     }
 
     let alive = true;
+    let settled = false;
+
+    const startupFallback = setTimeout(() => {
+      if (!alive || settled) {
+        return;
+      }
+      setState(readActiveUser() ? "signedIn" : "signedOut");
+    }, STARTUP_SESSION_GRACE_MS);
 
     void client.auth.getSession().then(({ data }) => {
       if (!alive) {
         return;
       }
+      settled = true;
+      clearTimeout(startupFallback);
       const userId = data.session?.user?.id ?? null;
       syncActiveUser(userId);
       setState(userId ? "signedIn" : "signedOut");
@@ -48,6 +59,7 @@ export function AuthGate({ children }: PropsWithChildren) {
 
     return () => {
       alive = false;
+      clearTimeout(startupFallback);
       listener.subscription.unsubscribe();
     };
   }, [client]);

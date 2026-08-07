@@ -115,7 +115,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const tokens = theme.tokens[mode];
   const isMobile = inferredViewport === "mobile";
   const sidebarWidth = isMobile ? 68 : collapsed ? 72 : 224;
-  const navOffset = Math.min(56, Math.max(48, Math.round(dimensions.height * 0.055)));
+  const navOffset = Math.min(72, Math.max(64, Math.round(dimensions.height * 0.08)));
 
   const viewportHeight = isMobile && Platform.OS === "web" ? ("100dvh" as const) : Math.max(dimensions.height, 640);
   const hasSecondaryTabs = activeKey === "finance" || activeKey === "love" || activeKey === "exam" || activeKey === "fun";
