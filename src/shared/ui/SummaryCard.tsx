@@ -42,9 +42,8 @@ export function BalanceSummaryCard({ expense, income, testID = "finance-balance-
   };
   const incomeCents = toCents(income);
   const expenseCents = toCents(expense);
-  const totalCents = incomeCents + expenseCents;
-  const expenseRatio = totalCents > 0 ? expenseCents / totalCents : 0;
-  const incomeRatio = totalCents > 0 ? incomeCents / totalCents : 0;
+  const expenseRatio = incomeCents > 0 ? Math.min(expenseCents / incomeCents, 1) : 0;
+  const balanceRatio = 1 - expenseRatio;
 
   return (
     <View testID={testID} style={styles.balanceCard}>
@@ -56,10 +55,10 @@ export function BalanceSummaryCard({ expense, income, testID = "finance-balance-
         <Text style={styles.sideText}>收入 {income}</Text>
         <Text style={styles.sideText}>支出 {expense}</Text>
         <View style={styles.ratioTrack}>
-          {totalCents > 0 ? (
+          {incomeCents > 0 ? (
             <>
               <View style={[styles.ratioExpense, { flexGrow: expenseRatio }]} />
-              <View style={[styles.ratioIncome, { flexGrow: incomeRatio }]} />
+              <View style={[styles.ratioBalance, { flexGrow: balanceRatio }]} />
             </>
           ) : (
             <View style={styles.ratioEmpty} />
@@ -137,10 +136,10 @@ function createStyles(tokens: UiTokens) {
       maxWidth: "100%"
     },
     ratioExpense: {
-      backgroundColor: "#ef7a59"
-    },
-    ratioIncome: {
       backgroundColor: "#1fa8e2"
+    },
+    ratioBalance: {
+      backgroundColor: "#ffffff"
     },
     ratioEmpty: {
       backgroundColor: "#e3e8ef",
