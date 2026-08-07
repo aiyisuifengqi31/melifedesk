@@ -32,7 +32,7 @@ describe("primary navigation", () => {
   it("moves the middle navigation lower while keeping the footer stable when more expands", () => {
     render(<AppShell initialRoute="/home" viewport="mobile" />);
 
-    expect(screen.getByTestId("sidebar-nav-scroll")).toHaveStyle({ marginTop: 72 });
+    expect(screen.getByTestId("sidebar-nav-scroll")).toHaveStyle({ marginTop: 136 });
     expect(screen.queryByTestId("sidebar-more-panel")).toBeNull();
     expect(screen.getByTestId("sidebar-footer")).toBeOnTheScreen();
 

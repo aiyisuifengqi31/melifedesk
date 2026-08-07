@@ -7,6 +7,7 @@ import { HomePanel } from "@/features/home/HomePanel";
 import { saveFinanceTransactions } from "@/features/finance/financeStorage";
 import { savePackages, type PackageItem } from "@/features/plan/packageStorage";
 import { DailyPlanPanel } from "@/features/plan/DailyPlanPanel";
+import { saveReminders, type ReminderItem } from "@/features/plan/reminderStorage";
 import { TodoPanel } from "@/features/plan/TodoPanel";
 import { loadLocalTodos, saveLocalTodos, type TodoTask } from "@/features/plan/todoStorage";
 
@@ -73,6 +74,60 @@ describe("DailyPlanPanel todo split", () => {
 
     expect(screen.queryByText("今日待办")).toBeNull();
     expect(screen.queryByText("已完成 0")).toBeNull();
+  });
+});
+
+describe("Daily plan calendar workspace", () => {
+  it("starts with life calendar, updates the selected day schedule, and persists schedule actions", async () => {
+    const storage = makeStorage();
+    const today = new Date().toISOString().slice(0, 10);
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const todo: TodoTask = {
+      completed: false,
+      createTime: `${today}T07:00:00.000Z`,
+      deadline: `${today}T10:00:00.000Z`,
+      id: "todo-plan-1",
+      priority: "normal",
+      remindAt: `${today}T09:00:00.000Z`,
+      title: "today schedule task"
+    };
+    const packageItem: PackageItem = {
+      arrivalDate: tomorrow,
+      company: "SF",
+      createTime: `${today}T08:00:00.000Z`,
+      id: "pkg-plan-1",
+      image: null,
+      orderNumber: "",
+      pickedUp: false,
+      pickupCode: "A12-3",
+      pickupLocation: "Gate"
+    };
+    const reminder: ReminderItem = {
+      createTime: `${today}T08:10:00.000Z`,
+      date: today,
+      id: "reminder-plan-1",
+      time: "20:00",
+      title: "call partner"
+    };
+    saveLocalTodos([todo], storage);
+    savePackages([packageItem], storage);
+    saveReminders([reminder], storage);
+
+    render(<DailyPlanPanel storage={storage} themeTokens={testTokens} />);
+
+    expect(screen.queryByText("当前城市天气")).toBeNull();
+    expect(screen.getByTestId("life-calendar")).toBeOnTheScreen();
+    expect(screen.getByTestId(`calendar-marker-todo-${today}`)).toBeOnTheScreen();
+    expect(screen.getByTestId(`calendar-marker-reminder-${today}`)).toBeOnTheScreen();
+    expect(screen.getByText("today schedule task")).toBeOnTheScreen();
+    expect(screen.getByText("call partner")).toBeOnTheScreen();
+    expect(screen.getByTestId("upcoming-three-days")).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByTestId(`schedule-todo-toggle-${todo.id}`));
+    await waitFor(() => expect(loadLocalTodos(storage)[0]?.completed).toBe(true));
+
+    fireEvent.press(screen.getByTestId(`calendar-day-${tomorrow}`));
+    expect(screen.getAllByText("A12-3").length).toBeGreaterThan(0);
   });
 });
 

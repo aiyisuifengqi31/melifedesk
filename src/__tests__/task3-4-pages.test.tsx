@@ -53,4 +53,35 @@ describe("Task 3 and Task 4 pages", () => {
       pickupLocation: ""
     })).toBe(true);
   });
+
+  it("keeps package actions tucked behind a menu and opens pickup code in a large overlay", () => {
+    const storage = {
+      getItem: jest.fn((key: string) => key.includes("packages") ? JSON.stringify([
+        {
+          arrivalDate: "2026-08-02",
+          company: "SF",
+          createTime: "2026-08-02T08:00:00.000Z",
+          id: "pkg-compact-1",
+          image: null,
+          orderNumber: "",
+          pickedUp: false,
+          pickupCode: "A12-3",
+          pickupLocation: "Gate"
+        }
+      ]) : null),
+      removeItem: jest.fn(),
+      setItem: jest.fn()
+    };
+
+    render(<PackagePanel storage={storage} themeTokens={testTokens} />);
+
+    expect(screen.getByTestId("package-code-pkg-compact-1")).toBeOnTheScreen();
+    expect(screen.queryByTestId("package-delete-pkg-compact-1")).toBeNull();
+
+    fireEvent.press(screen.getByTestId("package-more-pkg-compact-1"));
+    expect(screen.getByTestId("package-delete-pkg-compact-1")).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByTestId("package-code-pkg-compact-1"));
+    expect(screen.getByTestId("package-code-modal")).toBeOnTheScreen();
+  });
 });
