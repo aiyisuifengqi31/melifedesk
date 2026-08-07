@@ -680,7 +680,6 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
 
       {tab === "stats" ? (
         <>
-          <IncomeExpenseRatio expense={`¥${summary.monthExpense}`} income={`¥${summary.monthIncome}`} />
           <View style={styles.card}>
             <Text style={styles.cardTitle}>本月分类占比</Text>
             {summary.categoryShares.length === 0 ? <Text style={styles.emptyText}>暂无支出分类数据。</Text> : summary.categoryShares.map((share, index) => {
@@ -1490,33 +1489,6 @@ function CategoryPieChart({ shares }: { shares: ReturnType<typeof buildFinanceSu
   );
 }
 
-function IncomeExpenseRatio({ expense, income }: { expense: string; income: string }) {
-  const expenseCents = Math.max(0, moneyToCents(expense.replace("¥", "")));
-  const incomeCents = Math.max(0, moneyToCents(income.replace("¥", "")));
-  const total = expenseCents + incomeCents;
-  const expenseRatio = total > 0 ? expenseCents / total : 0;
-  const incomeRatio = total > 0 ? incomeCents / total : 0;
-  return (
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>收支比例</Text>
-      <View style={styles.ratioBar}>
-        <View style={[styles.ratioFillExpense, { flexGrow: expenseRatio || 0.0001 }]} />
-        <View style={[styles.ratioFillIncome, { flexGrow: incomeRatio || 0.0001 }]} />
-      </View>
-      <View style={styles.ratioLegend}>
-        <View style={styles.ratioLegendItem}>
-          <View style={[styles.ratioDot, { backgroundColor: "#ef7a59" }]} />
-          <Text style={styles.ratioLegendText}>支出 ¥{(expenseCents / 100).toFixed(2)}（{Math.round(expenseRatio * 100)}%）</Text>
-        </View>
-        <View style={styles.ratioLegendItem}>
-          <View style={[styles.ratioDot, { backgroundColor: "#1fa8e2" }]} />
-          <Text style={styles.ratioLegendText}>收入 ¥{(incomeCents / 100).toFixed(2)}（{Math.round(incomeRatio * 100)}%）</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
 function sumSavingEntries(entries: SavingEntry[]) {
   return centsToMoney(entries.reduce((sum, entry) => sum + (entry.type === "deposit" ? moneyToCents(entry.amount) : -moneyToCents(entry.amount)), 0));
 }
@@ -1984,45 +1956,6 @@ const styles = StyleSheet.create({
     minWidth: 0,
     paddingHorizontal: 12,
     paddingVertical: 10
-  },
-  ratioBar: {
-    backgroundColor: "#f8fafc",
-    borderColor: "#e3e8ef",
-    borderRadius: 10,
-    borderWidth: 1,
-    flexDirection: "row",
-    height: 26,
-    overflow: "hidden",
-    width: "100%"
-  },
-  ratioFillExpense: {
-    backgroundColor: "#ef7a59",
-    height: "100%"
-  },
-  ratioFillIncome: {
-    backgroundColor: "#1fa8e2",
-    height: "100%"
-  },
-  ratioLegend: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 14,
-    marginTop: 10
-  },
-  ratioLegendItem: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 6
-  },
-  ratioLegendText: {
-    color: "#111827",
-    fontSize: 14,
-    fontWeight: "800"
-  },
-  ratioDot: {
-    borderRadius: 999,
-    height: 12,
-    width: 12
   },
   listTitle: {
     color: "#697386",

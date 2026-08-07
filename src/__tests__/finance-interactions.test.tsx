@@ -119,7 +119,7 @@ describe("FinancePanel interactions", () => {
 
     expect(screen.queryByTestId("secondary-tab-record")).toBeNull();
     expect(screen.getByTestId("secondary-tab-stats")).toBeOnTheScreen();
-    expect(screen.getByText("收支比例")).toBeOnTheScreen();
+    expect(screen.queryByText("收支比例")).toBeNull();
     expect(screen.getByTestId("finance-statement-list")).toBeOnTheScreen();
   });
 

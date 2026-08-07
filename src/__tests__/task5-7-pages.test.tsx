@@ -17,7 +17,7 @@ describe("Task 5 and Task 7 pages", () => {
     expect(screen.queryByText("预算剩余")).toBeNull();
     expect(screen.queryByText("本月支出")).toBeNull();
     expect(screen.queryByText("本月收入")).toBeNull();
-    expect(screen.getByText("收支比例")).toBeOnTheScreen();
+    expect(screen.queryByText("收支比例")).toBeNull();
     expect(screen.getByTestId("finance-statement-list")).toBeOnTheScreen();
     expect(screen.queryByPlaceholderText("0.00")).toBeNull();
   });
