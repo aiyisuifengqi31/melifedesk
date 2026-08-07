@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react-nativ
 
 import { AppShell } from "@/components/AppShell";
 import { FinancePanel } from "@/features/finance/FinancePanel";
-import { loadFinanceTransactions, loadGiftRecords, loadSavingEntries, saveFinanceTransactions, type FinanceTransaction } from "@/features/finance/financeStorage";
+import { loadFinanceTransactions, loadGiftRecords, loadSavingEntries, saveFinanceTransactions, saveSavingEntries, type FinanceTransaction } from "@/features/finance/financeStorage";
 import { QuickAccountingSheet } from "@/features/finance/QuickAccountingSheet";
 import type { UiTokens } from "@/shared/ui/primitives";
 
@@ -371,5 +371,86 @@ describe("FinancePanel interactions", () => {
 
     await waitFor(() => expect(screen.queryByText("-¥25.50")).toBeNull());
     expect(screen.getAllByText("¥0.00").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("redesigns saving as overview, segmented deposit form, compact details, and trend", () => {
+    const storage = makeStorage();
+    const today = new Date().toISOString().slice(0, 10);
+    saveSavingEntries(
+      [
+        { amount: "500.00", createTime: `${today}T10:00:00.000Z`, financeTransactionId: "finance-saving-1", id: "saving-1", localDate: today, note: "工资到账先存一点", type: "deposit" },
+        { amount: "200.00", createTime: `${today}T09:00:00.000Z`, financeTransactionId: "finance-saving-2", id: "saving-2", localDate: today, note: "临时取用", type: "withdraw" }
+      ],
+      storage
+    );
+    saveFinanceTransactions(
+      [
+        { amount: "500.00", categoryName: "储蓄", createTime: `${today}T10:00:00.000Z`, id: "finance-saving-1", localDate: today, note: "工资到账先存一点", savingEntryId: "saving-1", transactionType: "expense" },
+        { amount: "200.00", categoryName: "储蓄取出", createTime: `${today}T09:00:00.000Z`, id: "finance-saving-2", localDate: today, note: "临时取用", savingEntryId: "saving-2", transactionType: "income" }
+      ],
+      storage
+    );
+
+    render(<FinancePanel activeTab="saving" storage={storage} />);
+
+    expect(screen.queryByTestId("finance-balance-summary")).toBeNull();
+    expect(screen.getByTestId("saving-overview-card")).toBeOnTheScreen();
+    expect(screen.getByText("当前储蓄")).toBeOnTheScreen();
+    expect(screen.getAllByText("¥300.00").length).toBeGreaterThan(0);
+    expect(screen.getByText("本月存入")).toBeOnTheScreen();
+    expect(screen.getByText("本月取出")).toBeOnTheScreen();
+    expect(screen.getByText("本月净存")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "存入" })).toHaveStyle({ flex: 1 });
+    expect(screen.getByRole("button", { name: "取出" })).toHaveStyle({ flex: 1 });
+    expect(screen.getByTestId("saving-detail-list-deposit")).toBeOnTheScreen();
+    expect(screen.getByText("存入明细")).toBeOnTheScreen();
+    expect(screen.getByTestId("saving-entry-row-saving-1")).toHaveStyle({ minHeight: 56 });
+    expect(screen.getByText("+¥500.00")).toBeOnTheScreen();
+    expect(screen.getByTestId("saving-trend-card")).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole("button", { name: "取出" }));
+
+    expect(screen.getByTestId("saving-detail-list-withdraw")).toBeOnTheScreen();
+    expect(screen.getByText("取出明细")).toBeOnTheScreen();
+    expect(screen.getByText("-¥200.00")).toBeOnTheScreen();
+    expect(screen.queryByText("+¥500.00")).toBeNull();
+  });
+
+  it("keeps saving deposit and withdrawal linked to one finance transaction and supports delete", () => {
+    const storage = makeStorage();
+    render(<FinancePanel activeTab="saving" storage={storage} />);
+
+    fireEvent.changeText(screen.getByPlaceholderText("¥0.00"), "300");
+    fireEvent.changeText(screen.getByPlaceholderText("添加备注（可选）"), "本月存款");
+    fireEvent.press(screen.getByRole("button", { name: "确认存入" }));
+
+    let savings = loadSavingEntries(storage);
+    let transactions = loadFinanceTransactions(storage);
+    expect(savings).toHaveLength(1);
+    expect(transactions).toHaveLength(1);
+    expect(savings[0]).toEqual(expect.objectContaining({ amount: "300.00", type: "deposit", financeTransactionId: transactions[0].id }));
+    expect(transactions[0]).toEqual(expect.objectContaining({ amount: "300.00", categoryName: "储蓄", savingEntryId: savings[0].id, transactionType: "expense" }));
+    expect(screen.getByText("已存入 ¥300.00")).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole("button", { name: "取出" }));
+    fireEvent.changeText(screen.getByPlaceholderText("¥0.00"), "200");
+    fireEvent.changeText(screen.getByPlaceholderText("添加备注（可选）"), "临时取用");
+    fireEvent.press(screen.getByRole("button", { name: "确认取出" }));
+
+    savings = loadSavingEntries(storage);
+    transactions = loadFinanceTransactions(storage);
+    expect(savings).toHaveLength(2);
+    expect(transactions).toHaveLength(2);
+    expect(transactions[0]).toEqual(expect.objectContaining({ amount: "200.00", categoryName: "储蓄取出", savingEntryId: savings[0].id, transactionType: "income" }));
+    expect(screen.getAllByText("¥100.00").length).toBeGreaterThan(0);
+
+    fireEvent.press(screen.getByTestId(`saving-entry-menu-${savings[0].id}`));
+    fireEvent.press(screen.getByRole("button", { name: "删除储蓄记录" }));
+    expect(screen.getByText("确定删除这条储蓄记录吗？")).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("button", { name: "确认删除储蓄记录" }));
+
+    expect(loadSavingEntries(storage)).toHaveLength(1);
+    expect(loadFinanceTransactions(storage)).toHaveLength(1);
+    expect(screen.getAllByText("¥300.00").length).toBeGreaterThan(0);
   });
 });

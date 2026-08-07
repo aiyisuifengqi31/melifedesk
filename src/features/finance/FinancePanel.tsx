@@ -107,6 +107,7 @@ const transactionTypeOptions: Array<{ label: string; value: TransactionType }> =
 const amountInputWebProps = { id: "finance-amount-input" } as object;
 const noteInputWebProps = { id: "finance-note-input" } as object;
 const savingAmountInputWebProps = { id: "finance-saving-amount-input" } as object;
+const savingNoteInputWebProps = { id: "finance-saving-note-input" } as object;
 const categoryInputWebProps = { id: "finance-category-input" } as object;
 
 export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, shortcutNonce, showInlineTabs = true, storage, themeTokens = financeTokens }: FinancePanelProps) {
@@ -131,6 +132,9 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
   const [savingAmount, setSavingAmount] = useState("");
   const [savingDate, setSavingDate] = useState(todayIso());
   const [savingNote, setSavingNote] = useState("");
+  const [savingDetailExpanded, setSavingDetailExpanded] = useState(false);
+  const [savingMenuId, setSavingMenuId] = useState<string | null>(null);
+  const [savingDeleteId, setSavingDeleteId] = useState<string | null>(null);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categoryType, setCategoryType] = useState<TransactionType>("expense");
   const [feedback, setFeedback] = useState("");
@@ -207,6 +211,14 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
   const monthExpenseCount = transactions.filter((transaction) => transaction.localDate.startsWith(todayIso().slice(0, 7)) && transaction.transactionType === "expense").length;
   const monthIncomeCount = transactions.filter((transaction) => transaction.localDate.startsWith(todayIso().slice(0, 7)) && transaction.transactionType === "income").length;
   const savingTotal = useMemo(() => sumSavingEntries(savingEntries), [savingEntries]);
+  const savingStats = useMemo(() => getSavingStats(savingEntries, todayIso()), [savingEntries]);
+  const savingVisibleEntries = useMemo(
+    () => savingEntries.filter((entry) => entry.type === savingType),
+    [savingEntries, savingType]
+  );
+  const savingPreviewEntries = savingDetailExpanded ? savingVisibleEntries : savingVisibleEntries.slice(0, 5);
+  const savingPreviewTotal = centsToMoney(savingVisibleEntries.filter((entry) => entry.localDate.startsWith(todayIso().slice(0, 7))).reduce((sum, entry) => sum + moneyToCents(entry.amount), 0));
+  const savingTrend = useMemo(() => getSavingTrend(savingEntries), [savingEntries]);
   const detailCategories = useMemo(() => {
     const names = transactions.filter((transaction) => transaction.transactionType === detailType).map((transaction) => transaction.categoryName);
     return ["全部", ...Array.from(new Set(names))];
@@ -355,6 +367,67 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
     setFeedback("储蓄记录已添加。");
   };
 
+  const saveSavingRecord = () => {
+    const cleanAmount = normalizeMoney(readWebInputValue("finance-saving-amount-input") || savingAmount);
+    if (!cleanAmount) {
+      setFeedback("请先输入储蓄金额。");
+      return;
+    }
+
+    const createTime = new Date().toISOString();
+    const entryId = createFinanceId("saving");
+    const financeTransactionId = createFinanceId("finance");
+    const cleanNote = (readWebInputValue("finance-saving-note-input") || savingNote).trim();
+    const entry: SavingEntry = {
+      amount: cleanAmount,
+      createTime,
+      financeTransactionId,
+      id: entryId,
+      localDate: savingDate,
+      note: cleanNote,
+      type: savingType
+    };
+    const nextEntries = [entry, ...savingEntries];
+    setSavingEntries(nextEntries);
+    localDirtyRef.current = true;
+    saveSavingEntries(nextEntries, financeStorage);
+
+    const transaction: FinanceTransaction = {
+      amount: cleanAmount,
+      categoryName: savingType === "deposit" ? "储蓄" : "储蓄取出",
+      createTime,
+      id: financeTransactionId,
+      localDate: savingDate,
+      note: cleanNote,
+      savingEntryId: entryId,
+      transactionType: savingType === "deposit" ? "expense" : "income"
+    };
+    const nextTransactions = sortTransactions([transaction, ...transactions]);
+    setTransactions(nextTransactions);
+    saveFinanceTransactions(nextTransactions, financeStorage);
+    setSavingAmount("");
+    setSavingNote("");
+    setSavingDate(todayIso());
+    setSavingDetailExpanded(false);
+    setFeedback(`${savingType === "deposit" ? "已存入" : "已取出"} ¥${cleanAmount}`);
+  };
+
+  const deleteSaving = (entryId: string) => {
+    const target = savingEntries.find((entry) => entry.id === entryId);
+    const nextEntries = savingEntries.filter((entry) => entry.id !== entryId);
+    setSavingEntries(nextEntries);
+    localDirtyRef.current = true;
+    saveSavingEntries(nextEntries, financeStorage);
+    if (target?.financeTransactionId) {
+      const nextTransactions = sortTransactions(transactions.filter((transaction) => transaction.id !== target.financeTransactionId && transaction.savingEntryId !== entryId));
+      setTransactions(nextTransactions);
+      saveFinanceTransactions(nextTransactions, financeStorage);
+    }
+    setSavingMenuId(null);
+    setSavingDeleteId(null);
+    setFeedback("储蓄记录已删除。");
+  };
+
   const addCategory = () => {
     const name = (readWebInputValue("finance-category-input") || newCategoryName).trim();
     if (!name) {
@@ -486,7 +559,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
 
   return (
     <View style={styles.stack}>
-      <View style={styles.overviewCard}>
+      {tab !== "saving" ? <View style={styles.overviewCard}>
         <View style={styles.overviewHeader}>
           <Text style={styles.overviewTitle}>本月总结</Text>
           <Text style={styles.overviewSubTitle}>收入与支出概览</Text>
@@ -496,7 +569,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
             <BalanceSummaryCard expense={`¥${summary.monthExpense}`} income={`¥${summary.monthIncome}`} title="本月总结" tokens={themeTokens} value={`¥${summary.monthBalance}`} />
           </View>
         </View>
-      </View>
+      </View> : null}
 
       {tab === "record" ? (
         <>
@@ -765,6 +838,45 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
       ) : null}
 
       {tab === "saving" ? (
+        <SavingWorkspace
+          amount={savingAmount}
+          currentTotal={savingTotal}
+          date={savingDate}
+          datePickerOpen={savingDatePickerOpen}
+          detailExpanded={savingDetailExpanded}
+          entries={savingPreviewEntries}
+          entryTotal={savingPreviewTotal}
+          feedback={feedback}
+          note={savingNote}
+          onChangeAmount={setSavingAmount}
+          onChangeNote={setSavingNote}
+          onCloseDatePicker={() => setSavingDatePickerOpen(false)}
+          onConfirmDate={(date) => {
+            setSavingDate(date);
+            setSavingDatePickerOpen(false);
+          }}
+          onDelete={deleteSaving}
+          onDeleteCancel={() => setSavingDeleteId(null)}
+          onDeleteRequest={setSavingDeleteId}
+          onMenuToggle={(id) => setSavingMenuId((current) => (current === id ? null : id))}
+          onOpenDatePicker={() => setSavingDatePickerOpen((value) => !value)}
+          onSave={saveSavingRecord}
+          onToggleExpanded={() => setSavingDetailExpanded((value) => !value)}
+          onTypeChange={(type) => {
+            setSavingType(type);
+            setSavingMenuId(null);
+            setSavingDeleteId(null);
+          }}
+          openMenuId={savingMenuId}
+          pendingDeleteId={savingDeleteId}
+          stats={savingStats}
+          totalEntries={savingVisibleEntries.length}
+          trend={savingTrend}
+          type={savingType}
+        />
+      ) : null}
+
+      {false && tab === "saving" ? (
         <>
           <View style={styles.savingHero}>
             <Text style={styles.metricTitle}>储蓄总额</Text>
@@ -840,6 +952,280 @@ function TabButton({ active, label, onPress }: { active: boolean; label: string;
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={[styles.tab, active ? styles.tabActive : null]}>
       <Text style={[styles.tabText, active ? styles.tabTextActive : null]}>{label}</Text>
     </Pressable>
+  );
+}
+
+type SavingStats = {
+  monthDeposit: string;
+  monthNet: string;
+  monthWithdraw: string;
+};
+
+type SavingTrendPoint = {
+  label: string;
+  value: string;
+};
+
+function SavingWorkspace({
+  amount,
+  currentTotal,
+  date,
+  datePickerOpen,
+  detailExpanded,
+  entries,
+  entryTotal,
+  feedback,
+  note,
+  onChangeAmount,
+  onChangeNote,
+  onCloseDatePicker,
+  onConfirmDate,
+  onDelete,
+  onDeleteCancel,
+  onDeleteRequest,
+  onMenuToggle,
+  onOpenDatePicker,
+  onSave,
+  onToggleExpanded,
+  onTypeChange,
+  openMenuId,
+  pendingDeleteId,
+  stats,
+  totalEntries,
+  trend,
+  type
+}: {
+  amount: string;
+  currentTotal: string;
+  date: string;
+  datePickerOpen: boolean;
+  detailExpanded: boolean;
+  entries: SavingEntry[];
+  entryTotal: string;
+  feedback: string;
+  note: string;
+  onChangeAmount: (value: string) => void;
+  onChangeNote: (value: string) => void;
+  onCloseDatePicker: () => void;
+  onConfirmDate: (date: string) => void;
+  onDelete: (entryId: string) => void;
+  onDeleteCancel: () => void;
+  onDeleteRequest: (entryId: string | null) => void;
+  onMenuToggle: (entryId: string) => void;
+  onOpenDatePicker: () => void;
+  onSave: () => void;
+  onToggleExpanded: () => void;
+  onTypeChange: (type: "deposit" | "withdraw") => void;
+  openMenuId: string | null;
+  pendingDeleteId: string | null;
+  stats: SavingStats;
+  totalEntries: number;
+  trend: SavingTrendPoint[];
+  type: "deposit" | "withdraw";
+}) {
+  const isDeposit = type === "deposit";
+  const visibleTypeName = isDeposit ? "存入" : "取出";
+
+  return (
+    <>
+      <Text style={styles.savingPageTitle}>储蓄</Text>
+      <View testID="saving-overview-card" style={styles.savingOverviewCard}>
+        <Text style={styles.savingOverviewLabel}>当前储蓄</Text>
+        <Text style={styles.savingOverviewAmount}>¥{currentTotal}</Text>
+        <View style={styles.savingMiniGrid}>
+          <SavingMiniMetric label="本月存入" value={`¥${stats.monthDeposit}`} />
+          <SavingMiniMetric label="本月取出" value={`¥${stats.monthWithdraw}`} />
+          <SavingMiniMetric label="本月净存" value={`¥${stats.monthNet}`} />
+        </View>
+      </View>
+
+      <View style={styles.savingSegmentRow}>
+        <Pressable accessibilityRole="button" accessibilityLabel="存入" onPress={() => onTypeChange("deposit")} style={[styles.savingSegment, isDeposit ? styles.savingSegmentActive : null]}>
+          <Text style={[styles.savingSegmentText, isDeposit ? styles.savingSegmentTextActive : null]}>存入</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="取出" onPress={() => onTypeChange("withdraw")} style={[styles.savingSegment, !isDeposit ? styles.savingSegmentActive : null]}>
+          <Text style={[styles.savingSegmentText, !isDeposit ? styles.savingSegmentTextActive : null]}>取出</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>快速{visibleTypeName}</Text>
+        <Text style={styles.fieldLabel}>金额</Text>
+        <TextInput
+          {...savingAmountInputWebProps}
+          keyboardType="decimal-pad"
+          nativeID="finance-saving-amount-input"
+          onChange={makeTextInputChangeHandler(onChangeAmount)}
+          onChangeText={onChangeAmount}
+          placeholder="¥0.00"
+          style={[styles.input, styles.savingAmountInput]}
+          value={amount}
+        />
+        <Text style={styles.fieldLabel}>日期</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="选择储蓄日期" onPress={onOpenDatePicker} style={styles.dateField}>
+          <Text style={styles.dateValue}>{dateLabel(date)}</Text>
+          <Text style={styles.dateChevron}>⌄</Text>
+        </Pressable>
+        <DatePickerPopup onCancel={onCloseDatePicker} onConfirm={onConfirmDate} selectedDate={date} title="选择储蓄日期" visible={datePickerOpen} />
+        <Text style={styles.fieldLabel}>备注</Text>
+        <TextInput
+          {...savingNoteInputWebProps}
+          nativeID="finance-saving-note-input"
+          onChange={makeTextInputChangeHandler(onChangeNote)}
+          onChangeText={onChangeNote}
+          placeholder="添加备注（可选）"
+          style={styles.input}
+          value={note}
+        />
+        <Pressable accessibilityRole="button" accessibilityLabel={`确认${visibleTypeName}`} onPress={onSave} style={styles.primaryButton}>
+          <Text style={styles.primaryText}>确认{visibleTypeName}</Text>
+        </Pressable>
+        {feedback ? <Text nativeID="finance-saving-feedback" style={styles.feedback}>{feedback}</Text> : null}
+      </View>
+
+      <SavingDetailList
+        entries={entries}
+        entryTotal={entryTotal}
+        expanded={detailExpanded}
+        onDelete={onDelete}
+        onDeleteCancel={onDeleteCancel}
+        onDeleteRequest={onDeleteRequest}
+        onMenuToggle={onMenuToggle}
+        onToggleExpanded={onToggleExpanded}
+        openMenuId={openMenuId}
+        pendingDeleteId={pendingDeleteId}
+        totalEntries={totalEntries}
+        type={type}
+      />
+
+      <View testID="saving-trend-card" style={styles.card}>
+        <Text style={styles.cardTitle}>近几个月储蓄趋势</Text>
+        {trend.length === 0 ? (
+          <Text style={styles.emptyText}>有存取记录后，这里会显示每月净存变化。</Text>
+        ) : (
+          <View style={styles.savingTrendBars}>
+            {trend.map((point) => {
+              const cents = moneyToCents(point.value);
+              const barHeight = Math.max(10, Math.min(92, Math.abs(cents) / 10));
+              return (
+                <View key={point.label} style={styles.savingTrendItem}>
+                  <View style={styles.savingTrendTrack}>
+                    <View style={[styles.savingTrendBar, cents >= 0 ? styles.savingTrendBarPositive : styles.savingTrendBarNegative, { height: barHeight }]} />
+                  </View>
+                  <Text style={styles.savingTrendValue}>{cents >= 0 ? "+" : "-"}¥{centsToMoney(Math.abs(cents))}</Text>
+                  <Text style={styles.savingTrendLabel}>{point.label}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </View>
+    </>
+  );
+}
+
+function SavingMiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.savingMiniMetric}>
+      <Text style={styles.savingMiniLabel}>{label}</Text>
+      <Text style={styles.savingMiniValue}>{value}</Text>
+    </View>
+  );
+}
+
+function SavingDetailList({
+  entries,
+  entryTotal,
+  expanded,
+  onDelete,
+  onDeleteCancel,
+  onDeleteRequest,
+  onMenuToggle,
+  onToggleExpanded,
+  openMenuId,
+  pendingDeleteId,
+  totalEntries,
+  type
+}: {
+  entries: SavingEntry[];
+  entryTotal: string;
+  expanded: boolean;
+  onDelete: (entryId: string) => void;
+  onDeleteCancel: () => void;
+  onDeleteRequest: (entryId: string | null) => void;
+  onMenuToggle: (entryId: string) => void;
+  onToggleExpanded: () => void;
+  openMenuId: string | null;
+  pendingDeleteId: string | null;
+  totalEntries: number;
+  type: "deposit" | "withdraw";
+}) {
+  const isDeposit = type === "deposit";
+  const title = isDeposit ? "存入明细" : "取出明细";
+  const groups = groupSavingEntries(entries);
+
+  return (
+    <View testID={`saving-detail-list-${type}`} style={styles.savingDetailCard}>
+      <View style={styles.savingDetailHeader}>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <Text style={styles.savingDetailTotal}>本月 ¥{entryTotal}</Text>
+      </View>
+      {groups.length === 0 ? (
+        <Text style={styles.emptyText}>还没有{isDeposit ? "存入" : "取出"}记录。</Text>
+      ) : groups.map((group) => (
+        <View key={group.date} style={styles.savingDateGroup}>
+          <View style={styles.savingDateHeader}>
+            <Text style={styles.savingDateTitle}>{formatSavingGroupDate(group.date)}</Text>
+          </View>
+          {group.entries.map((entry) => (
+            <View key={entry.id} testID={`saving-entry-row-${entry.id}`} style={styles.savingEntryRow}>
+              <View style={[styles.savingEntryIcon, isDeposit ? styles.savingEntryIconDeposit : styles.savingEntryIconWithdraw]}>
+                <Text style={styles.savingEntryIconText}>{isDeposit ? "+" : "-"}</Text>
+              </View>
+              <View style={styles.savingEntryMain}>
+                <Text style={styles.savingEntryTitle}>{isDeposit ? "存入" : "取出"}</Text>
+                {entry.note ? <Text style={styles.savingEntryNote}>{entry.note}</Text> : null}
+              </View>
+              <View style={styles.savingEntrySide}>
+                <Text style={[styles.savingEntryAmount, isDeposit ? styles.savingAmountDeposit : styles.savingAmountWithdraw]}>{isDeposit ? "+" : "-"}¥{entry.amount}</Text>
+                <Text style={styles.savingEntryTime}>{formatTime(entry.createTime)}</Text>
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel="储蓄记录更多操作" onPress={() => onMenuToggle(entry.id)} style={styles.savingMoreButton} testID={`saving-entry-menu-${entry.id}`}>
+                <Text style={styles.savingMoreText}>···</Text>
+              </Pressable>
+              {openMenuId === entry.id ? (
+                <View style={styles.savingActionMenu}>
+                  <Pressable accessibilityRole="button" accessibilityLabel="编辑储蓄记录" style={styles.savingActionItem}>
+                    <Text style={styles.savingActionText}>编辑</Text>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel="删除储蓄记录" onPress={() => onDeleteRequest(entry.id)} style={styles.savingActionItem}>
+                    <Text style={[styles.savingActionText, styles.savingActionDanger]}>删除</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+              {pendingDeleteId === entry.id ? (
+                <View style={styles.savingConfirmBox}>
+                  <Text style={styles.savingConfirmText}>确定删除这条储蓄记录吗？</Text>
+                  <View style={styles.savingConfirmActions}>
+                    <Pressable accessibilityRole="button" accessibilityLabel="取消删除储蓄记录" onPress={onDeleteCancel} style={styles.savingConfirmCancel}>
+                      <Text style={styles.savingConfirmCancelText}>取消</Text>
+                    </Pressable>
+                    <Pressable accessibilityRole="button" accessibilityLabel="确认删除储蓄记录" onPress={() => onDelete(entry.id)} style={styles.savingConfirmDelete}>
+                      <Text style={styles.savingConfirmDeleteText}>删除</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ))}
+        </View>
+      ))}
+      {totalEntries > 5 ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={`查看全部${isDeposit ? "存入" : "取出"}记录`} onPress={onToggleExpanded} style={styles.savingShowAll}>
+          <Text style={styles.savingShowAllText}>{expanded ? "收起记录" : `查看全部${isDeposit ? "存入" : "取出"}记录 >`}</Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -1133,6 +1519,63 @@ function IncomeExpenseRatio({ expense, income }: { expense: string; income: stri
 
 function sumSavingEntries(entries: SavingEntry[]) {
   return centsToMoney(entries.reduce((sum, entry) => sum + (entry.type === "deposit" ? moneyToCents(entry.amount) : -moneyToCents(entry.amount)), 0));
+}
+
+function getSavingStats(entries: SavingEntry[], now: string): SavingStats {
+  const month = now.slice(0, 7);
+  let depositCents = 0;
+  let withdrawCents = 0;
+  for (const entry of entries) {
+    if (!entry.localDate.startsWith(month)) continue;
+    if (entry.type === "deposit") depositCents += moneyToCents(entry.amount);
+    else withdrawCents += moneyToCents(entry.amount);
+  }
+  return {
+    monthDeposit: centsToMoney(depositCents),
+    monthNet: centsToMoney(depositCents - withdrawCents),
+    monthWithdraw: centsToMoney(withdrawCents)
+  };
+}
+
+function getSavingTrend(entries: SavingEntry[]): SavingTrendPoint[] {
+  const byMonth = new Map<string, number>();
+  for (const entry of entries) {
+    const month = entry.localDate.slice(0, 7);
+    const signed = entry.type === "deposit" ? moneyToCents(entry.amount) : -moneyToCents(entry.amount);
+    byMonth.set(month, (byMonth.get(month) ?? 0) + signed);
+  }
+  return Array.from(byMonth.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .slice(-6)
+    .map(([month, cents]) => ({ label: `${Number(month.slice(5, 7))}月`, value: centsToMoney(cents) }));
+}
+
+function groupSavingEntries(entries: SavingEntry[]) {
+  const groups = new Map<string, SavingEntry[]>();
+  for (const entry of entries) {
+    const current = groups.get(entry.localDate) ?? [];
+    current.push(entry);
+    groups.set(entry.localDate, current);
+  }
+  return Array.from(groups.entries()).map(([date, groupEntries]) => ({ date, entries: groupEntries }));
+}
+
+function formatSavingGroupDate(date: string) {
+  const today = todayIso();
+  if (date === today) return `今天 ${dateLabel(date)}`;
+  if (date === shiftDate(new Date(), -1).toISOString().slice(0, 10)) return `昨天 ${dateLabel(date)}`;
+  return dateLabel(date);
+}
+
+function dateLabel(date: string) {
+  const [, month, day] = date.split("-");
+  return `${Number(month)}月${Number(day)}日`;
+}
+
+function formatTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function normalizeMoney(value: string) {
@@ -1771,11 +2214,321 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 16
   },
+  savingPageTitle: {
+    color: "#111827",
+    fontSize: 24,
+    fontWeight: "900"
+  },
+  savingOverviewCard: {
+    backgroundColor: "#ffffff",
+    borderColor: "#dbeadf",
+    borderRadius: 18,
+    borderWidth: 1,
+    elevation: 2,
+    gap: 12,
+    padding: 16,
+    shadowColor: "#7cb87c",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14
+  },
+  savingOverviewLabel: {
+    color: "#697386",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  savingOverviewAmount: {
+    color: "#138a49",
+    fontSize: 34,
+    fontWeight: "900",
+    letterSpacing: 0
+  },
+  savingMiniGrid: {
+    borderTopColor: "#edf3ee",
+    borderTopWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    paddingTop: 12
+  },
+  savingMiniMetric: {
+    flex: 1,
+    minWidth: 0
+  },
+  savingMiniLabel: {
+    color: "#697386",
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "center"
+  },
+  savingMiniValue: {
+    color: "#111827",
+    fontSize: 13,
+    fontWeight: "900",
+    marginTop: 4,
+    textAlign: "center"
+  },
+  savingSegmentRow: {
+    backgroundColor: "#eef7f0",
+    borderColor: "#d6eadb",
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    padding: 5
+  },
+  savingSegment: {
+    alignItems: "center",
+    borderRadius: 12,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 42
+  },
+  savingSegmentActive: {
+    backgroundColor: "#1f9d55"
+  },
+  savingSegmentText: {
+    color: "#5f6f65",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  savingSegmentTextActive: {
+    color: "#ffffff"
+  },
+  savingAmountInput: {
+    fontSize: 18,
+    fontWeight: "900"
+  },
   savingValue: {
     color: "#1fa8e2",
     fontSize: 32,
     fontWeight: "900",
     marginTop: 8
+  },
+  savingDetailCard: {
+    backgroundColor: "#ffffff",
+    borderColor: "#e3e8ef",
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 10,
+    padding: 14
+  },
+  savingDetailHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  savingDetailTotal: {
+    color: "#697386",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  savingDateGroup: {
+    gap: 6
+  },
+  savingDateHeader: {
+    borderTopColor: "#eef2f7",
+    borderTopWidth: 1,
+    paddingTop: 8
+  },
+  savingDateTitle: {
+    color: "#697386",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  savingEntryRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 9,
+    minHeight: 56,
+    paddingVertical: 6,
+    position: "relative"
+  },
+  savingEntryIcon: {
+    alignItems: "center",
+    borderRadius: 999,
+    height: 34,
+    justifyContent: "center",
+    width: 34
+  },
+  savingEntryIconDeposit: {
+    backgroundColor: "#dcfce7"
+  },
+  savingEntryIconWithdraw: {
+    backgroundColor: "#fff7ed"
+  },
+  savingEntryIconText: {
+    color: "#138a49",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  savingEntryMain: {
+    flex: 1,
+    minWidth: 0
+  },
+  savingEntryTitle: {
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  savingEntryNote: {
+    color: "#8a94a6",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 3
+  },
+  savingEntrySide: {
+    alignItems: "flex-end",
+    minWidth: 78
+  },
+  savingEntryAmount: {
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  savingAmountDeposit: {
+    color: "#16a34a"
+  },
+  savingAmountWithdraw: {
+    color: "#ef7a59"
+  },
+  savingEntryTime: {
+    color: "#9aa4b2",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 3
+  },
+  savingMoreButton: {
+    alignItems: "center",
+    borderRadius: 999,
+    height: 36,
+    justifyContent: "center",
+    width: 34
+  },
+  savingMoreText: {
+    color: "#697386",
+    fontSize: 16,
+    fontWeight: "900",
+    lineHeight: 16
+  },
+  savingActionMenu: {
+    backgroundColor: "#ffffff",
+    borderColor: "#e3e8ef",
+    borderRadius: 12,
+    borderWidth: 1,
+    elevation: 4,
+    position: "absolute",
+    right: 0,
+    top: 42,
+    zIndex: 20
+  },
+  savingActionItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 9
+  },
+  savingActionText: {
+    color: "#111827",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  savingActionDanger: {
+    color: "#ef4444"
+  },
+  savingConfirmBox: {
+    backgroundColor: "#fff7f7",
+    borderColor: "#fecaca",
+    borderRadius: 12,
+    borderWidth: 1,
+    bottom: 0,
+    gap: 8,
+    left: 42,
+    padding: 10,
+    position: "absolute",
+    right: 0,
+    zIndex: 30
+  },
+  savingConfirmText: {
+    color: "#991b1b",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  savingConfirmActions: {
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "flex-end"
+  },
+  savingConfirmCancel: {
+    backgroundColor: "#ffffff",
+    borderColor: "#fecaca",
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6
+  },
+  savingConfirmCancelText: {
+    color: "#991b1b",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  savingConfirmDelete: {
+    backgroundColor: "#ef4444",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6
+  },
+  savingConfirmDeleteText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  savingShowAll: {
+    alignItems: "center",
+    borderTopColor: "#eef2f7",
+    borderTopWidth: 1,
+    paddingTop: 10
+  },
+  savingShowAllText: {
+    color: "#16834a",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  savingTrendBars: {
+    alignItems: "flex-end",
+    flexDirection: "row",
+    gap: 8,
+    height: 170,
+    justifyContent: "space-between"
+  },
+  savingTrendItem: {
+    alignItems: "center",
+    flex: 1,
+    gap: 5,
+    minWidth: 0
+  },
+  savingTrendTrack: {
+    alignItems: "center",
+    height: 100,
+    justifyContent: "flex-end",
+    width: "100%"
+  },
+  savingTrendBar: {
+    borderRadius: 999,
+    maxWidth: 24,
+    width: "70%"
+  },
+  savingTrendBarPositive: {
+    backgroundColor: "#22c55e"
+  },
+  savingTrendBarNegative: {
+    backgroundColor: "#fb7185"
+  },
+  savingTrendValue: {
+    color: "#697386",
+    fontSize: 10,
+    fontWeight: "800"
+  },
+  savingTrendLabel: {
+    color: "#111827",
+    fontSize: 11,
+    fontWeight: "900"
   },
   segment: {
     backgroundColor: "#f8fafc",

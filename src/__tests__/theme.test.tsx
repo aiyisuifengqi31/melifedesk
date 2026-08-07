@@ -28,6 +28,7 @@ describe("theme system", () => {
     render(<AppShell initialRoute="/plan" />);
 
     expect(screen.getByTestId("nav-icon-plan")).toHaveProp("accessibilityLabel", "default plan selected icon");
+    fireEvent.press(screen.getByRole("button", { name: "更多" }));
     expect(screen.getByTestId("nav-icon-workout")).toHaveProp("accessibilityLabel", "default workout unselected icon");
 
     fireEvent.press(screen.getByRole("button", { name: "设置" }));
