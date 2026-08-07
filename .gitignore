@@ -11,6 +11,7 @@ test-results/
 .DS_Store
 .worktrees/
 worktrees/
+.superpowers/
 
 # Local debug / scratch files (never commit)
 debug_q_text.txt
