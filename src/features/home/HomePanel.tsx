@@ -16,6 +16,7 @@ const MEAL_PRESET_COUNT = 8;
 
 type HomePanelProps = {
   onOpenFinance?: () => void;
+  onOpenQuickAccounting?: () => void;
   onOpenPackages?: () => void;
   shortcutNonce?: number;
   shortcutView?: "notes" | "todos";
@@ -58,7 +59,7 @@ function centsToMoney(cents: number) {
   return `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}`;
 }
 
-export function HomePanel({ onOpenFinance, onOpenPackages, shortcutNonce, shortcutView, storage, themeTokens }: HomePanelProps) {
+export function HomePanel({ onOpenFinance, onOpenQuickAccounting, onOpenPackages, shortcutNonce, shortcutView, storage, themeTokens }: HomePanelProps) {
   const todoStorage = useMemo(() => storage ?? getDefaultTodoStorage(), [storage]);
   const [todos, setTodos] = useState<TodoTask[]>(() => loadLocalTodos(todoStorage));
   const [notes, setNotes] = useState(() => loadNotes());
@@ -155,10 +156,29 @@ export function HomePanel({ onOpenFinance, onOpenPackages, shortcutNonce, shortc
             <View style={styles.summaryDivider} />
             <OverviewItem label="待取快递" onPress={() => onOpenPackages?.()} styles={styles} value={String(pendingPackages)} />
             <View style={styles.summaryDivider} />
-            <OverviewItem label="今日支出" onPress={() => onOpenFinance?.()} styles={styles} value={`¥${todayExpense}`} />
+            <OverviewItem label="今日支出" onPress={() => onOpenQuickAccounting?.()} styles={styles} value={`¥${todayExpense}`} />
           </View>
           <Text style={styles.summaryLine} numberOfLines={1}>{summaryLine}</Text>
         </View>
+      </View>
+
+      <View testID="home-quick-accounting-card" style={styles.widget}>
+        <View style={styles.quickAccountingHeader}>
+          <View>
+            <Text style={styles.widgetTitle}>快速记账</Text>
+            <Text style={styles.notesPlaceholder}>不进入记账页，直接记录一笔</Text>
+          </View>
+          <View style={styles.quickAccountingAmount}>
+            <Text style={styles.summaryLabel}>今日支出</Text>
+            <Text style={styles.quickAccountingValue}>¥{todayExpense}</Text>
+          </View>
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="快速记账：记一笔" onPress={() => onOpenQuickAccounting?.()} style={styles.quickAccountingButton}>
+          <Text style={styles.quickAccountingButtonText}>＋ 记一笔</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="查看账单" onPress={() => onOpenFinance?.()} style={styles.financeLink}>
+          <Text style={styles.widgetMoreText}>查看账单 →</Text>
+        </Pressable>
       </View>
 
       <View testID="home-todo-widget" style={styles.widget}>
@@ -289,6 +309,36 @@ function createStyles(tokens: UiTokens) {
     quickLink: {
       color: tokens.accent,
       fontSize: 13,
+      fontWeight: "900"
+    },
+    financeLink: {
+      alignSelf: "flex-end"
+    },
+    quickAccountingAmount: {
+      alignItems: "flex-end",
+      flexShrink: 0
+    },
+    quickAccountingButton: {
+      alignItems: "center",
+      backgroundColor: tokens.accent,
+      borderRadius: 12,
+      justifyContent: "center",
+      minHeight: 42
+    },
+    quickAccountingButtonText: {
+      color: "#ffffff",
+      fontSize: 15,
+      fontWeight: "900"
+    },
+    quickAccountingHeader: {
+      alignItems: "flex-start",
+      flexDirection: "row",
+      gap: 12,
+      justifyContent: "space-between"
+    },
+    quickAccountingValue: {
+      color: tokens.text,
+      fontSize: 15,
       fontWeight: "900"
     },
     summaryCard: {

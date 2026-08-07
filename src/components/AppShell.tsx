@@ -15,6 +15,9 @@ import { LovePanel, loveTabs, type LoveTab } from "@/features/love/LovePanel";
 import { DailyPlanPanel } from "@/features/plan/DailyPlanPanel";
 import { GlobalQuickCapture } from "@/features/quick-capture/GlobalQuickCapture";
 import { WorkoutPanel } from "@/features/workout/WorkoutPanel";
+import { QuickAccountingSheet } from "@/features/finance/QuickAccountingSheet";
+import { getDefaultFinanceStorage, loadFinanceTransactions, saveFinanceTransactions, sortTransactions, type FinanceTransaction } from "@/features/finance/financeStorage";
+import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
 import { NAV_ITEMS, type NavItem, routeToKey } from "@/navigation/items";
 import { getTheme } from "@/theme/registry";
 import type { ColorMode, ThemeId } from "@/theme/types";
@@ -44,11 +47,13 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const [collapsed, setCollapsed] = useState(false);
   const [entertainmentTab, setEntertainmentTab] = useState<EntTab>("hot");
   const [examTab, setExamTab] = useState<ExamTab>("essay");
-  const [financeTab, setFinanceTab] = useState<FinanceTab>("record");
+  const [financeTab, setFinanceTab] = useState<FinanceTab>("stats");
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [loveTab, setLoveTab] = useState<LoveTab>("diary");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
+  const [quickAccountingOpen, setQuickAccountingOpen] = useState(false);
+  const [quickAccountingToast, setQuickAccountingToast] = useState<FinanceTransaction | null>(null);
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const [shortcutRequest, setShortcutRequest] = useState<ShortcutRequest | null>(null);
   const [themeId, setThemeId] = useState<ThemeId>(() => readStoredThemeId(typeof window === "undefined" ? undefined : window.localStorage) ?? "default");
@@ -153,7 +158,8 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
     setQuickCaptureOpen(false);
     setSettingsOpen(false);
     if (kind === "finance") {
-      setFinanceTab("record");
+      setQuickAccountingOpen(true);
+      return;
     }
     setShortcutRequest((previous) => ({ kind, nonce: (previous?.nonce ?? 0) + 1 }));
     if (onNavigate) {
@@ -161,6 +167,17 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
       return;
     }
     setCurrentRoute(href);
+  };
+
+  const undoQuickAccounting = () => {
+    if (!quickAccountingToast) return;
+    const storage = getDefaultFinanceStorage();
+    const next = sortTransactions(loadFinanceTransactions(storage).filter((transaction) => transaction.id !== quickAccountingToast.id));
+    saveFinanceTransactions(next, storage);
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+      window.dispatchEvent(new Event(QUICK_CAPTURE_DATA_EVENT));
+    }
+    setQuickAccountingToast(null);
   };
 
   const openQuickCapture = () => {
@@ -310,6 +327,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
               onExamTabChange={setExamTab}
               onFinanceTabChange={setFinanceTab}
               onLoveTabChange={setLoveTab}
+              onOpenQuickAccounting={() => setQuickAccountingOpen(true)}
               onOpenPackages={() => openShortcut("packages")}
               shortcutRequest={shortcutRequest}
               styles={styles}
@@ -331,6 +349,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
             onExamTabChange={setExamTab}
             onFinanceTabChange={setFinanceTab}
             onLoveTabChange={setLoveTab}
+            onOpenQuickAccounting={() => setQuickAccountingOpen(true)}
             onOpenPackages={() => openShortcut("packages")}
             shortcutRequest={shortcutRequest}
             styles={styles}
@@ -346,6 +365,24 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
       {activeKey === "fun" ? <FixedBottomTabs activeValue={entertainmentTab} hidden={keyboardOpen || quickCaptureOpen} items={entertainmentTabs} onChange={setEntertainmentTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
 
       {quickCaptureOpen ? <GlobalQuickCapture onClose={() => setQuickCaptureOpen(false)} tokens={tokens} /> : null}
+
+      <QuickAccountingSheet
+        onClose={() => setQuickAccountingOpen(false)}
+        onSaved={(transaction) => setQuickAccountingToast(transaction)}
+        tokens={tokens}
+        visible={quickAccountingOpen}
+      />
+
+      {quickAccountingToast ? (
+        <View style={styles.quickAccountingToast}>
+          <Text style={styles.quickAccountingToastText}>
+            已记录 {quickAccountingToast.categoryName} {quickAccountingToast.transactionType === "expense" ? "-" : "+"}¥{quickAccountingToast.amount}
+          </Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="撤销刚刚的记账" onPress={undoQuickAccounting} style={styles.quickAccountingUndo}>
+            <Text style={styles.quickAccountingUndoText}>撤销</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {settingsOpen ? (
         <SettingsPanel
@@ -376,6 +413,7 @@ function PageContent({
   onExamTabChange,
   onFinanceTabChange,
   onLoveTabChange,
+  onOpenQuickAccounting,
   onOpenPackages,
   shortcutRequest,
   styles,
@@ -392,6 +430,7 @@ function PageContent({
   onExamTabChange: (tab: ExamTab) => void;
   onFinanceTabChange: (tab: FinanceTab) => void;
   onLoveTabChange: (tab: LoveTab) => void;
+  onOpenQuickAccounting: () => void;
   onOpenPackages: () => void;
   shortcutRequest: ShortcutRequest | null;
   styles: ReturnType<typeof createStyles>;
@@ -403,6 +442,7 @@ function PageContent({
       {activeKey === "home" ? (
         <HomePanel
           onOpenFinance={() => handleNavigate("/finance")}
+          onOpenQuickAccounting={onOpenQuickAccounting}
           onOpenPackages={onOpenPackages}
           shortcutNonce={shortcutRequest?.nonce}
           shortcutView={shortcutRequest?.kind === "notes" || shortcutRequest?.kind === "todos" ? shortcutRequest.kind : undefined}
@@ -673,6 +713,43 @@ function createStyles(tokens: ReturnType<typeof getTheme>["tokens"][ColorMode], 
       shadowRadius: 18,
       width: compactSidebar ? 178 : 196,
       zIndex: 90
+    },
+    quickAccountingToast: {
+      alignItems: "center",
+      backgroundColor: "rgba(255, 255, 255, 0.96)",
+      borderColor: tokens.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      bottom: hasSecondaryTabs ? 84 : 22,
+      flexDirection: "row",
+      gap: 10,
+      left: sidebarWidth + contentPadding,
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+      position: "absolute",
+      right: contentPadding,
+      shadowColor: "#000000",
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.12,
+      shadowRadius: 14,
+      zIndex: 150
+    },
+    quickAccountingToastText: {
+      color: tokens.text,
+      flex: 1,
+      fontSize: 13,
+      fontWeight: "900"
+    },
+    quickAccountingUndo: {
+      backgroundColor: tokens.accentSoft,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 5
+    },
+    quickAccountingUndoText: {
+      color: tokens.accent,
+      fontSize: 12,
+      fontWeight: "900"
     },
     settingsFab: {
       alignItems: "center",

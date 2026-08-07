@@ -49,7 +49,6 @@ type FinancePanelProps = {
 export type FinanceTab = "record" | "stats" | "gifts" | "saving" | "category";
 
 export const financeTabs: FixedBottomTabItem<FinanceTab>[] = [
-  { label: "记录", value: "record" },
   { label: "统计", value: "stats" },
   { label: "份子", value: "gifts" },
   { label: "储蓄", value: "saving" },
@@ -112,7 +111,7 @@ const categoryInputWebProps = { id: "finance-category-input" } as object;
 
 export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, shortcutNonce, showInlineTabs = true, storage, themeTokens = financeTokens }: FinancePanelProps) {
   const financeStorage = useMemo(() => storage ?? getDefaultFinanceStorage(), [storage]);
-  const [localTab, setLocalTab] = useState<FinanceTab>("record");
+  const [localTab, setLocalTab] = useState<FinanceTab>("stats");
   const tab = activeTab ?? localTab;
   const setTab = onTabChange ?? setLocalTab;
   const [detailType, setDetailType] = useState<TransactionType>("expense");
@@ -229,7 +228,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
 
   useEffect(() => {
     if (!shortcutCreate) return;
-    setTab("record");
+    setTab("stats");
     setTransactionType("expense");
     setSelectedCategory(expenseCategories[0]);
 
@@ -586,6 +585,38 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
               );
             })}
             {summary.categoryShares.length > 0 ? <CategoryPieChart shares={summary.categoryShares} /> : null}
+          </View>
+          <View style={styles.card}>
+            <View style={styles.detailTabs}>
+              <Pressable accessibilityRole="button" accessibilityLabel="支出明细" onPress={() => {
+                setDetailType("expense");
+                setDetailCategory("全部");
+                setOpenActionId(null);
+              }} style={[styles.detailTab, detailType === "expense" ? styles.detailTabActive : null]}>
+                <Text style={[styles.detailTabText, detailType === "expense" ? styles.detailTabTextActive : null]}>支出明细</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="收入明细" onPress={() => {
+                setDetailType("income");
+                setDetailCategory("全部");
+                setOpenActionId(null);
+              }} style={[styles.detailTab, detailType === "income" ? styles.detailTabActive : null]}>
+                <Text style={[styles.detailTabText, detailType === "income" ? styles.detailTabTextActive : null]}>收入明细</Text>
+              </Pressable>
+            </View>
+            <FinanceStatementList
+              activeActionId={openActionId}
+              categories={detailCategories}
+              month={detailMonth}
+              months={detailMonths}
+              onCategoryChange={setDetailCategory}
+              onDelete={deleteTransaction}
+              onMonthChange={setDetailMonth}
+              onToggleActions={(id) => setOpenActionId((current) => (current === id ? null : id))}
+              selectedCategory={detailCategory}
+              total={detailTotal}
+              transactions={detailTransactions}
+              type={detailType}
+            />
           </View>
         </>
       ) : null}

@@ -158,7 +158,7 @@ describe("Todo route interactions", () => {
     expect(screen.queryByText("生活控制中心")).toBeNull();
     expect(screen.getByText("1/2")).toBeOnTheScreen();
     expect(screen.getByText("待取快递")).toBeOnTheScreen();
-    expect(screen.getByText("¥52.00")).toBeOnTheScreen();
+    expect(screen.getAllByText("¥52.00").length).toBeGreaterThan(0);
     expect(screen.queryByText("金币")).toBeNull();
     expect(screen.getByTestId("home-todo-widget")).not.toHaveStyle({ height: 210 });
     expect(screen.getByTestId("home-notes-quick-entry")).toBeOnTheScreen();

@@ -6,17 +6,20 @@ describe("Task 5 and Task 7 pages", () => {
   it("renders the finance workspace controls", () => {
     render(<FinancePanel />);
 
-    for (const label of ["记录", "统计", "份子", "储蓄", "分类", "今日支出", "本月总结", "支出明细", "收入明细"]) {
+    for (const label of ["统计", "份子", "储蓄", "分类", "本月总结", "支出明细", "收入明细"]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
-    expect(screen.getAllByText("本月总结").length).toBeGreaterThan(0);
     expect(screen.getByTestId("finance-metric-本月总结")).toHaveStyle({ flexBasis: "100%" });
     expect(screen.getByTestId("finance-floating-tabs")).toBeOnTheScreen();
+    expect(screen.queryByText("记录")).toBeNull();
+    expect(screen.queryByText("今日支出")).toBeNull();
     expect(screen.queryByText("今日收入")).toBeNull();
     expect(screen.queryByText("预算剩余")).toBeNull();
-    expect(screen.getByPlaceholderText("0.00")).toBeOnTheScreen();
-    expect(screen.getByRole("button", { name: "选择分类：餐饮" })).toBeOnTheScreen();
-    expect(screen.getByRole("button", { name: "快速记账" })).toBeOnTheScreen();
+    expect(screen.queryByText("本月支出")).toBeNull();
+    expect(screen.queryByText("本月收入")).toBeNull();
+    expect(screen.getByText("收支比例")).toBeOnTheScreen();
+    expect(screen.getByTestId("finance-statement-list")).toBeOnTheScreen();
+    expect(screen.queryByPlaceholderText("0.00")).toBeNull();
   });
 
   it("renders the gift (份子) workspace controls", () => {

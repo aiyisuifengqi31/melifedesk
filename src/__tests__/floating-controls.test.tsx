@@ -12,7 +12,7 @@ describe("floating page controls", () => {
       position: "absolute",
       right: 16
     });
-    expect(screen.getByTestId("secondary-tab-record")).toHaveStyle({ flex: 1 });
+    expect(screen.getByTestId("secondary-tab-stats")).toHaveStyle({ flex: 1 });
   });
 
   it("aligns secondary tabs to the desktop content area instead of covering the sidebar", () => {
@@ -103,8 +103,8 @@ describe("floating page controls", () => {
     fireEvent.press(screen.getByTestId("quick-shortcut-finance"));
 
     expect(screen.queryByTestId("quick-shortcut-menu")).toBeNull();
-    expect(screen.getByTestId("finance-amount-input").props.autoFocus).toBe(true);
-    expect(screen.getByTestId("secondary-tab-record")).toHaveStyle({ flex: 1 });
+    expect(screen.getByTestId("quick-accounting-sheet")).toBeOnTheScreen();
+    expect(screen.queryByTestId("finance-amount-input")).toBeNull();
   });
 
   it("opens global voice capture from the first quick action", () => {

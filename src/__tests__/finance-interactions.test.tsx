@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
+import { AppShell } from "@/components/AppShell";
 import { FinancePanel } from "@/features/finance/FinancePanel";
 import { loadFinanceTransactions, saveFinanceTransactions, type FinanceTransaction } from "@/features/finance/financeStorage";
 
@@ -38,7 +39,62 @@ describe("finance storage", () => {
 });
 
 describe("FinancePanel interactions", () => {
-  it("groups income and expense details by date in a compact statement list", async () => {
+  it("opens quick accounting from the homepage without navigating to finance", () => {
+    render(<AppShell initialRoute="/home" viewport="mobile" />);
+
+    fireEvent.press(screen.getByRole("button", { name: "快速记账：记一笔" }));
+
+    expect(screen.getByTestId("quick-accounting-sheet")).toBeOnTheScreen();
+    expect(screen.getByText("选择分类")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "支出" })).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "收入" })).toBeOnTheScreen();
+    expect(screen.queryByTestId("secondary-tab-record")).toBeNull();
+  });
+
+  it("clicking today's expense opens the same quick accounting sheet", () => {
+    render(<AppShell initialRoute="/home" viewport="mobile" />);
+
+    fireEvent.press(screen.getByRole("button", { name: "打开今日支出" }));
+
+    expect(screen.getByTestId("quick-accounting-sheet")).toBeOnTheScreen();
+    expect(screen.getByText("选择分类")).toBeOnTheScreen();
+  });
+
+  it("records an expense from quick accounting and updates home today expense immediately", () => {
+    render(<AppShell initialRoute="/home" viewport="mobile" />);
+
+    fireEvent.press(screen.getByRole("button", { name: "快速记账：记一笔" }));
+    fireEvent.press(screen.getByRole("button", { name: "选择分类：买菜" }));
+    fireEvent.press(screen.getByRole("button", { name: "输入金额 2" }));
+    fireEvent.press(screen.getByRole("button", { name: "输入金额 6" }));
+    fireEvent.press(screen.getByRole("button", { name: "完成记账" }));
+
+    expect(screen.queryByTestId("quick-accounting-sheet")).toBeNull();
+    expect(screen.getByText(/已记录/)).toBeOnTheScreen();
+    expect(screen.getByText(/26\.00/)).toBeOnTheScreen();
+  });
+
+  it("opens the same quick accounting sheet from the sidebar finance shortcut", () => {
+    render(<AppShell initialRoute="/home" viewport="mobile" />);
+
+    fireEvent.press(screen.getByTestId("quick-fab"));
+    fireEvent.press(screen.getByTestId("quick-shortcut-finance"));
+
+    expect(screen.queryByTestId("quick-shortcut-menu")).toBeNull();
+    expect(screen.getByTestId("quick-accounting-sheet")).toBeOnTheScreen();
+    expect(screen.queryByTestId("finance-amount-input")).toBeNull();
+  });
+
+  it("removes the record tab and defaults finance to stats", () => {
+    render(<AppShell initialRoute="/finance" viewport="mobile" />);
+
+    expect(screen.queryByTestId("secondary-tab-record")).toBeNull();
+    expect(screen.getByTestId("secondary-tab-stats")).toBeOnTheScreen();
+    expect(screen.getByText("收支比例")).toBeOnTheScreen();
+    expect(screen.getByTestId("finance-statement-list")).toBeOnTheScreen();
+  });
+
+  it("groups income and expense details by date in a compact statement list", () => {
     const storage = makeStorage();
     const today = new Date().toISOString().slice(0, 10);
     saveFinanceTransactions(
@@ -92,23 +148,33 @@ describe("FinancePanel interactions", () => {
     expect(screen.getByText("+¥300.00")).toBeOnTheScreen();
   });
 
-  it("uses four-column category buttons and does not show the old input hint", () => {
-    render(<FinancePanel storage={makeStorage()} />);
+  it("uses four-column category buttons inside the quick accounting sheet", () => {
+    render(<AppShell initialRoute="/home" viewport="mobile" />);
 
-    expect(screen.queryByText(/输入金额/)).toBeNull();
-    expect(screen.getByRole("button", { name: "选择分类：餐饮" })).toHaveStyle({
-      flexBasis: "22%",
-      flexDirection: "row"
-    });
-    expect(screen.getByText("快速记一笔")).toBeOnTheScreen();
-    expect(screen.getByTestId("finance-summary-panel")).toHaveStyle({ gap: 8 });
+    fireEvent.press(screen.getByRole("button", { name: "快速记账：记一笔" }));
+
+    expect(screen.queryByText(/输入金额，选择分类就可以记一笔/)).toBeNull();
+    expect(screen.getByRole("button", { name: "选择分类：买菜" })).toHaveStyle({ flexBasis: "22%" });
+  });
+
+  it("uses a compact keypad amount step instead of the old finance page form", () => {
+    render(<AppShell initialRoute="/home" viewport="mobile" />);
+
+    fireEvent.press(screen.getByRole("button", { name: "快速记账：记一笔" }));
+    fireEvent.press(screen.getByRole("button", { name: "选择分类：买菜" }));
+
+    expect(screen.queryByTestId("finance-quick-form")).toBeNull();
+    expect(screen.getByText("¥0.00")).toBeOnTheScreen();
+    expect(screen.getByPlaceholderText("备注（可选）")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "输入金额 1" })).toHaveStyle({ flexBasis: "31%" });
+    expect(screen.getByRole("button", { name: "完成记账" })).toHaveProp("accessibilityState", { disabled: true });
   });
 
   it("shows a single monthly summary balance card instead of separate metric cards", () => {
     render(<FinancePanel storage={makeStorage()} />);
 
-    expect(screen.getAllByText("今日支出").length).toBeGreaterThan(0);
     expect(screen.getAllByText("本月总结").length).toBeGreaterThan(0);
+    expect(screen.queryByText("今日支出")).toBeNull();
     expect(screen.queryByText("今日收入")).toBeNull();
     expect(screen.getByTestId("finance-metric-本月总结")).toHaveStyle({ flexBasis: "100%" });
     expect(screen.getByTestId("finance-balance-summary")).toHaveStyle({ flexDirection: "row" });
@@ -116,17 +182,6 @@ describe("FinancePanel interactions", () => {
     expect(screen.getAllByText(/支出 ¥0\.00/).length).toBeGreaterThan(0);
     expect(screen.queryByText("本月支出")).toBeNull();
     expect(screen.queryByText("本月收入")).toBeNull();
-  });
-
-  it("uses the compact mobile quick record form layout", () => {
-    render(<FinancePanel storage={makeStorage()} />);
-
-    expect(screen.getByTestId("finance-quick-form")).toHaveStyle({ gap: 16 });
-    expect(screen.getByTestId("finance-money-date-row")).toHaveStyle({ flexDirection: "row", gap: 12 });
-    expect(screen.getByTestId("finance-amount-input")).toHaveStyle({ minHeight: 48, borderWidth: 1.5 });
-    expect(screen.getByTestId("finance-date-field")).toHaveStyle({ minHeight: 48, borderWidth: 1.5 });
-    expect(screen.getByTestId("finance-note-input")).toHaveStyle({ minHeight: 44 });
-    expect(screen.getByTestId("finance-save-button")).toHaveProp("accessibilityState", { disabled: true });
   });
 
   it("renders very large monthly totals inside the summary card without breaking layout", () => {
@@ -148,51 +203,31 @@ describe("FinancePanel interactions", () => {
     expect(screen.getByText("¥1500000.00")).toBeOnTheScreen();
   });
 
-  it("creates expense and income details, updates summary, and recalculates after deletion", async () => {
+  it("deletes transactions from the compact statement list and recalculates summaries", async () => {
     const storage = makeStorage();
+    const today = new Date().toISOString().slice(0, 10);
+    saveFinanceTransactions(
+      [
+        {
+          amount: "25.50",
+          categoryName: "餐饮",
+          createTime: `${today}T08:10:00.000Z`,
+          id: "expense-delete",
+          localDate: today,
+          note: "午饭",
+          transactionType: "expense"
+        }
+      ],
+      storage
+    );
+
     render(<FinancePanel storage={storage} />);
 
-    expect(screen.getAllByText("今日支出").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("本月总结").length).toBeGreaterThan(0);
-    expect(screen.queryByText("今日收入")).toBeNull();
-    expect(screen.queryByText("本月支出")).toBeNull();
-    expect(screen.queryByText("本月收入")).toBeNull();
-    expect(screen.queryByText("预算剩余")).toBeNull();
-
-    fireEvent.press(screen.getByRole("button", { name: "选择分类：餐饮" }));
-    fireEvent.changeText(screen.getByPlaceholderText("0.00"), "25.50");
-    fireEvent.press(screen.getByRole("button", { name: "快速记账" }));
-
-    await waitFor(() => expect(screen.getAllByText("餐饮").length).toBeGreaterThan(1));
-    expect(screen.getByText("支出已保存，统计已更新。")).toBeOnTheScreen();
-    expect(screen.getAllByText(/¥25\.50/).length).toBeGreaterThan(0);
     expect(screen.getByText("-¥25.50")).toBeOnTheScreen();
-
-    fireEvent.press(screen.getByRole("button", { name: "统计" }));
-    expect(screen.getByText("收支比例")).toBeOnTheScreen();
-    expect(screen.getByText("本月分类占比")).toBeOnTheScreen();
-    expect(screen.queryByText("本月结余")).toBeNull();
-
-    fireEvent.press(screen.getByRole("button", { name: "记录" }));
-    expect(screen.getByRole("button", { name: "支出明细" })).toBeOnTheScreen();
-    expect(screen.getByRole("button", { name: "收入明细" })).toBeOnTheScreen();
     fireEvent.press(screen.getByRole("button", { name: "更多操作：餐饮" }));
     fireEvent.press(screen.getByRole("button", { name: "删除账单：餐饮" }));
-    await waitFor(() => expect(screen.getAllByText("餐饮")).toHaveLength(1));
-    await waitFor(() => expect(screen.getAllByText(/¥0\.00/).length).toBeGreaterThanOrEqual(3));
 
-    fireEvent.press(screen.getByRole("button", { name: "收入" }));
-    fireEvent.press(screen.getByRole("button", { name: "选择分类：工资" }));
-    fireEvent.changeText(screen.getByPlaceholderText("0.00"), "300.00");
-    fireEvent.press(screen.getByRole("button", { name: "快速记账" }));
-
-    expect(screen.getAllByText(/¥300\.00/).length).toBeGreaterThan(0);
-    fireEvent.press(screen.getByRole("button", { name: "收入明细" }));
-    await waitFor(() => expect(screen.getAllByText("工资").length).toBeGreaterThan(1));
-    expect(screen.getByText("+¥300.00")).toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "更多操作：工资" }));
-    fireEvent.press(screen.getByRole("button", { name: "删除账单：工资" }));
-    await waitFor(() => expect(screen.getAllByText("工资")).toHaveLength(1));
-    await waitFor(() => expect(screen.queryByText("+¥300.00")).toBeNull());
+    await waitFor(() => expect(screen.queryByText("-¥25.50")).toBeNull());
+    expect(screen.getAllByText("¥0.00").length).toBeGreaterThanOrEqual(1);
   });
 });
