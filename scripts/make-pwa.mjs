@@ -109,6 +109,30 @@ if (existsSync(expoRuntimeDir)) {
   }
   renameSync(expoRuntimeDir, publishedRuntimeDir);
   console.log('[make-pwa] 已重命名运行时目录 _expo -> expo-static');
+
+  // 4b) 改写 JS 产物内部的异步分包 URL：`<base>/_expo/...` -> `<base>/expo-static/...`
+  // HTML 里的同步 <script src> 由后面的注入步骤改写；但动态 import() 生成的
+  // chunk 地址是编译进 JS 字符串里的，如果不改写会 404（例如人像模式的
+  // pose-detection chunk 与懒加载路由 chunk）。
+  const oldPrefix = withBase('/_expo/');
+  const newPrefix = withBase('/expo-static/');
+  let rewritten = 0;
+  const rewriteJsDir = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name);
+      if (statSync(p).isDirectory()) {
+        rewriteJsDir(p);
+        continue;
+      }
+      if (!/\.(js|map)$/.test(name)) continue;
+      const src = readFileSync(p, 'utf8');
+      if (!src.includes(oldPrefix)) continue;
+      writeFileSync(p, src.replaceAll(oldPrefix, newPrefix));
+      rewritten += 1;
+    }
+  };
+  rewriteJsDir(publishedRuntimeDir);
+  console.log(`[make-pwa] 已改写 ${rewritten} 个 JS 产物内的分包路径 ${oldPrefix} -> ${newPrefix}`);
 }
 
 // 5) 写入 manifest.json
