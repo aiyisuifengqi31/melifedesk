@@ -31,6 +31,7 @@ import {
 import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
 import { NAV_ITEMS, type NavItem, type RouteKey, routeToKey } from "@/navigation/items";
 import { getTheme } from "@/theme/registry";
+import { withSemanticTokens } from "@/shared/ui/tokens";
 import type { ColorMode, ThemeId } from "@/theme/types";
 import { hydrateBackgroundFromCloud, loadBackground, saveBackground, type BackgroundSource, getImageSource } from "@/theme/background";
 import { FixedBottomTabs } from "@/shared/ui/FixedBottomTabs";
@@ -113,7 +114,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const moreRouteActive = MORE_ROUTE_KEYS.includes(activeKey);
   const moreNavOpen = manualMoreOpen ?? moreRouteActive;
   const theme = getTheme(themeId);
-  const tokens = theme.tokens[mode];
+  const tokens = withSemanticTokens(theme.tokens[mode], mode);
   const isMobile = inferredViewport === "mobile";
   const sidebarWidth = isMobile ? 68 : collapsed ? 72 : 224;
   const navOffset = Math.min(136, Math.max(120, Math.round(dimensions.height * 0.135)));

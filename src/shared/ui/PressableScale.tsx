@@ -1,6 +1,8 @@
 import { useRef } from "react";
 import { Animated, Pressable, type GestureResponderEvent, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
 
+import { MOTION, prefersReducedMotion } from "./tokens";
+
 type Props = Omit<PressableProps, "style"> & {
   style?: StyleProp<ViewStyle>;
   wrapperStyle?: StyleProp<ViewStyle>;
@@ -17,7 +19,11 @@ export function PressableScale({ style, wrapperStyle, children, vibrate = 0, onP
   const scale = useRef(new Animated.Value(1)).current;
 
   const animateTo = (to: number) => {
-    Animated.timing(scale, { toValue: to, duration: 140, useNativeDriver: true }).start();
+    if (prefersReducedMotion()) {
+      scale.setValue(to);
+      return;
+    }
+    Animated.timing(scale, { toValue: to, duration: MOTION.press, useNativeDriver: true }).start();
   };
 
   return (

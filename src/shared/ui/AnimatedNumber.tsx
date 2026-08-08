@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Text, type TextStyle } from "react-native";
 
+import { MOTION, prefersReducedMotion } from "./tokens";
+
 type Props = {
   value: number;
   format: (value: number) => string;
@@ -11,13 +13,20 @@ type Props = {
 /**
  * 轻量数字过渡：数值变化时在 duration 内从旧值平滑递增到新值，
  * 不做复杂滚轮动画，仅 200~350ms 淡入式切换。
+ * 开启「减少动态效果」时直接落定终值，不做滚动。
  */
-export function AnimatedNumber({ value, format, style, duration = 280 }: Props) {
+export function AnimatedNumber({ value, format, style, duration = MOTION.number }: Props) {
   const animated = useRef(new Animated.Value(value));
   const prev = useRef(value);
   const [display, setDisplay] = useState(() => format(value));
 
   useEffect(() => {
+    if (prefersReducedMotion()) {
+      setDisplay(format(value));
+      prev.current = value;
+      animated.current.setValue(value);
+      return;
+    }
     const node = animated.current;
     node.setValue(prev.current);
     const listener = node.addListener(({ value: v }) => setDisplay(format(v)));

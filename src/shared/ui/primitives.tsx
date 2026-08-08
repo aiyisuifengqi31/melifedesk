@@ -1,6 +1,9 @@
 import type { PropsWithChildren, ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { frostedCard, RADIUS } from "./tokens";
+import { PuppyIllustration, type PuppyScene } from "./PuppyIllustration";
+
 export type EmptyStateAction = {
   label: string;
   onPress: () => void;
@@ -19,6 +22,18 @@ export type UiTokens = {
   text: string;
   textMuted: string;
   warning?: string;
+  /** 以下为 Phase 3 统一语义字段（由 withSemanticTokens 回填默认值，可选）。 */
+  textSecondary?: string;
+  surfaceCard?: string;
+  surfaceOverlay?: string;
+  /** 支出：柔和珊瑚红。 */
+  expense?: string;
+  /** 收入：绿（与主操作绿有细微深浅区别）。 */
+  income?: string;
+  /** 储蓄：青绿 / 蓝绿。 */
+  saving?: string;
+  /** 提醒：柔和橙。 */
+  reminder?: string;
 };
 
 type TokenProps = {
@@ -29,14 +44,17 @@ export function AppPage({ children, tokens }: PropsWithChildren<TokenProps>) {
   return <View style={[styles.page, { backgroundColor: tokens.background }]}>{children}</View>;
 }
 
-export function PageHeader({ meta, subtitle, title, tokens }: TokenProps & { meta?: string; subtitle: string; title: string }) {
+export function PageHeader({ meta, subtitle, title, tokens, watermark }: TokenProps & { meta?: string; subtitle: string; title: string; watermark?: ReactNode }) {
   return (
-    <View style={[styles.header, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
-      <Text accessibilityRole="header" role="heading" style={[styles.pageTitle, { color: tokens.text }]}>
-        {title}
-      </Text>
-      <Text style={[styles.subtitle, { color: tokens.textMuted }]}>{subtitle}</Text>
-      {meta ? <Text style={[styles.meta, { color: tokens.accent }]}>{meta}</Text> : null}
+    <View style={[styles.header, frostedCard(tokens)]}>
+      {watermark ? <View style={styles.headerWatermark} pointerEvents="none">{watermark}</View> : null}
+      <View style={styles.headerContent}>
+        <Text accessibilityRole="header" role="heading" style={[styles.pageTitle, { color: tokens.text }]}>
+          {title}
+        </Text>
+        <Text style={[styles.subtitle, { color: tokens.textMuted }]}>{subtitle}</Text>
+        {meta ? <Text style={[styles.meta, { color: tokens.accent }]}>{meta}</Text> : null}
+      </View>
     </View>
   );
 }
@@ -51,12 +69,12 @@ export function SectionHeader({ action, title, tokens }: TokenProps & { action?:
 }
 
 export function ContentCard({ children, tokens }: PropsWithChildren<TokenProps>) {
-  return <View style={[styles.card, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>{children}</View>;
+  return <View style={[styles.card, frostedCard(tokens)]}>{children}</View>;
 }
 
 export function StatCard({ label, tokens, value }: TokenProps & { label: string; value: string }) {
   return (
-    <View style={[styles.statCard, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
+    <View style={[styles.statCard, frostedCard(tokens)]}>
       <Text style={[styles.statLabel, { color: tokens.textMuted }]}>{label}</Text>
       <Text style={[styles.statValue, { color: tokens.text }]}>{value}</Text>
     </View>
@@ -81,10 +99,23 @@ export function SegmentedTabs({ options, selected, tokens }: TokenProps & { opti
   );
 }
 
-export function EmptyState({ action, description, icon, title, tokens }: TokenProps & { action?: EmptyStateAction; description: string; icon?: ReactNode; title: string }) {
+export function EmptyState({
+  action,
+  description,
+  icon,
+  puppyScene,
+  title,
+  tokens
+}: TokenProps & { action?: EmptyStateAction; description: string; icon?: ReactNode; puppyScene?: PuppyScene; title: string }) {
   return (
     <ContentCard tokens={tokens}>
-      {icon ? <View style={styles.emptyIcon}>{icon}</View> : null}
+      {puppyScene ? (
+        <View style={styles.emptyPuppy} accessibilityElementsHidden>
+          <PuppyIllustration scene={puppyScene} color={tokens.textMuted} size={86} />
+        </View>
+      ) : icon ? (
+        <View style={styles.emptyIcon}>{icon}</View>
+      ) : null}
       <Text style={[styles.sectionTitle, { color: tokens.text }]}>{title}</Text>
       <Text style={[styles.body, { color: tokens.textMuted }]}>{description}</Text>
       {action ? (
@@ -142,7 +173,7 @@ const styles = StyleSheet.create({
     lineHeight: 20
   },
   card: {
-    borderRadius: 14,
+    borderRadius: RADIUS.card,
     borderWidth: 1,
     gap: 10,
     padding: 16
@@ -164,9 +195,23 @@ const styles = StyleSheet.create({
     paddingVertical: 11
   },
   header: {
-    borderRadius: 16,
+    borderRadius: RADIUS.card,
     borderWidth: 1,
-    padding: 18
+    overflow: "hidden",
+    padding: 18,
+    position: "relative"
+  },
+  headerContent: {
+    position: "relative",
+    zIndex: 1
+  },
+  headerWatermark: {
+    bottom: -8,
+    opacity: 0.06,
+    position: "absolute",
+    right: 6,
+    top: -8,
+    zIndex: 0
   },
   iconNavItem: {
     alignItems: "center",
@@ -199,7 +244,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     alignSelf: "flex-start",
-    borderRadius: 10,
+    borderRadius: RADIUS.input,
     paddingHorizontal: 14,
     paddingVertical: 10
   },
@@ -209,7 +254,7 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     alignSelf: "flex-start",
-    borderRadius: 10,
+    borderRadius: RADIUS.input,
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 10
@@ -235,7 +280,7 @@ const styles = StyleSheet.create({
     padding: 6
   },
   statCard: {
-    borderRadius: 14,
+    borderRadius: RADIUS.card,
     borderWidth: 1,
     minWidth: 142,
     padding: 14
@@ -257,9 +302,13 @@ const styles = StyleSheet.create({
     opacity: 0.32,
     marginBottom: 2
   },
+  emptyPuppy: {
+    marginBottom: 4,
+    opacity: 0.7
+  },
   emptyAction: {
     alignSelf: "flex-start",
-    borderRadius: 10,
+    borderRadius: RADIUS.input,
     paddingHorizontal: 14,
     paddingVertical: 9
   },

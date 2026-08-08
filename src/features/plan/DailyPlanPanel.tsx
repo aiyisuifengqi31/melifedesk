@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
+import { IconCalendarDays } from "@/shared/ui/lineIcons";
 import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
 import { consumePlanFocus } from "@/features/plan/planFocus";
 import type { UiTokens } from "@/shared/ui/primitives";
@@ -155,6 +157,9 @@ export function DailyPlanPanel({ shortcutNonce, shortcutTarget, storage, themeTo
   return (
     <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.stack}>
       <View style={styles.pageHeader}>
+        <View pointerEvents="none" style={styles.pageWatermark}>
+          <IconCalendarDays color="#111827" size={78} />
+        </View>
         <View>
           <Text style={styles.kicker}>每日计划</Text>
           <Text style={styles.headerTitle}>{formatHeaderDate(selectedDate)}</Text>
@@ -216,6 +221,7 @@ export function DailyPlanPanel({ shortcutNonce, shortcutTarget, storage, themeTo
         <View style={styles.scheduleList}>
           {selectedSchedule.length === 0 ? (
             <View style={styles.emptyBox}>
+              <PuppyIllustration color="#9cc39c" scene="checklist" size={78} />
               <Text style={styles.emptyTitle}>当天暂无安排</Text>
               <Text style={styles.emptyText}>可以补一个待办、提醒，或把快递记在这一天。</Text>
             </View>
@@ -481,12 +487,17 @@ const styles = StyleSheet.create({
     marginBottom: 6
   },
   card: {
-    backgroundColor: "#ffffff",
-    borderColor: "#e3e6eb",
-    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderColor: "#e6ebf2",
+    borderRadius: 20,
     borderWidth: 1,
+    elevation: 2,
     gap: 12,
-    padding: 14
+    padding: 14,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12
   },
   dayCell: {
     alignItems: "center",
@@ -516,8 +527,12 @@ const styles = StyleSheet.create({
     textAlign: "center"
   },
   emptyBox: {
+    alignItems: "center",
     backgroundColor: "#f8fafc",
-    borderRadius: 12,
+    borderRadius: 14,
+    gap: 4,
+    minHeight: 132,
+    justifyContent: "center",
     padding: 12
   },
   emptyText: {
@@ -584,13 +599,27 @@ const styles = StyleSheet.create({
   },
   pageHeader: {
     alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderColor: "#e3e6eb",
-    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderColor: "#e6ebf2",
+    borderRadius: 20,
     borderWidth: 1,
+    elevation: 2,
     flexDirection: "row",
     justifyContent: "space-between",
-    padding: 14
+    overflow: "hidden",
+    padding: 14,
+    position: "relative",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12
+  },
+  pageWatermark: {
+    bottom: -10,
+    opacity: 0.05,
+    position: "absolute",
+    right: 66,
+    top: -10
   },
   quickAddBox: {
     backgroundColor: "#f8fafc",

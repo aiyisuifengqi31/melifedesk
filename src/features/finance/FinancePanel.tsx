@@ -6,9 +6,13 @@ import { CollapsibleSectionFooter, sortByNewest, useCollapsibleList } from "@/sh
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
 import { ButtonFormField, TextFormField } from "@/shared/ui/FormField";
 import { MobileFormLayout, MobileFormRow } from "@/shared/ui/MobileFormLayout";
+import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
+import { StatusSticker } from "@/shared/ui/StatusSticker";
 import { BalanceSummaryCard, SummaryCard } from "@/shared/ui/SummaryCard";
+import { IconPiggyBank, IconWalletCards } from "@/shared/ui/lineIcons";
 import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
+import { CategoryLineIcon } from "@/features/finance/QuickAccountingSheet";
 import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
 import { buildFinanceSummary, type TransactionType } from "@/features/finance/financeService";
 import {
@@ -76,23 +80,6 @@ const incomeCategories = ["生活费", "工资", "奖学金", "兼职", "红包"
 const giftEventTypes = ["婚礼", "订婚", "生日", "满月", "乔迁", "升学", "丧事", "节日", "其他"];
 const categoryColors = ["#d8f8e7", "#fff3ce", "#ffe2e7", "#dfeeff", "#ffe6f3", "#eee5ff", "#d8f7f6", "#eef2f7"];
 const chartColors = ["#1fa8e2", "#f59e0b", "#84cc16", "#fb7185", "#a78bfa", "#14b8a6", "#f97316", "#6366f1"];
-const categoryIcons: Record<string, string> = {
-  买菜: "🥬",
-  加油: "⛽",
-  餐饮: "🍽",
-  出行: "🚕",
-  随份子: "🎁",
-  购物: "🛍",
-  医疗: "✚",
-  更多: "⋯",
-  生活费: "🏠",
-  工资: "💼",
-  奖学金: "🎓",
-  兼职: "🧰",
-  红包: "🧧",
-  退款: "↩",
-  其他: "•"
-};
 
 function getCategoryColor(categoryName: string, index?: number): string {
   if (index !== undefined) return chartColors[index % chartColors.length];
@@ -219,6 +206,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
   const savingPreviewEntries = savingDetailExpanded ? savingVisibleEntries : savingVisibleEntries.slice(0, 5);
   const savingPreviewTotal = centsToMoney(savingVisibleEntries.filter((entry) => entry.localDate.startsWith(todayIso().slice(0, 7))).reduce((sum, entry) => sum + moneyToCents(entry.amount), 0));
   const savingTrend = useMemo(() => getSavingTrend(savingEntries), [savingEntries]);
+  const savingSticker = useMemo(() => getSavingSticker(savingEntries, savingTotal, todayIso()), [savingEntries, savingTotal]);
   const detailCategories = useMemo(() => {
     const names = transactions.filter((transaction) => transaction.transactionType === detailType).map((transaction) => transaction.categoryName);
     return ["全部", ...Array.from(new Set(names))];
@@ -560,6 +548,9 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
   return (
     <View style={styles.stack}>
       {tab !== "saving" ? <View style={styles.overviewCard}>
+        <View pointerEvents="none" style={styles.pageWatermark}>
+          <IconWalletCards color="#111827" size={82} />
+        </View>
         <View style={styles.overviewHeader}>
           <Text style={styles.overviewTitle}>本月总结</Text>
           <Text style={styles.overviewSubTitle}>收入与支出概览</Text>
@@ -591,7 +582,9 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
             <View style={styles.categoryGrid}>
               {categories.map((category, index) => (
                 <Pressable key={category} accessibilityRole="button" accessibilityLabel={`选择分类：${category}`} onPress={() => setSelectedCategory(category)} style={[styles.categoryButton, selectedCategory === category ? styles.categorySelected : null]}>
-                  <Text style={[styles.categoryIcon, { backgroundColor: categoryColors[index % categoryColors.length] }]}>{categoryIcons[category] ?? category.slice(0, 1)}</Text>
+                  <View style={[styles.categoryIconBox, { backgroundColor: categoryColors[index % categoryColors.length] }]}>
+                    <CategoryLineIcon color="#4a5568" name={category} size={18} />
+                  </View>
                   <Text style={styles.categoryName} numberOfLines={2}>{category}</Text>
                 </Pressable>
               ))}
@@ -757,7 +750,6 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
             <View style={styles.categoryGrid}>
               {giftEventTypes.map((eventType) => (
                 <Pressable key={eventType} accessibilityRole="button" accessibilityLabel={`选择事项：${eventType}`} onPress={() => setGiftEventType(eventType)} style={[styles.categoryButton, giftEventType === eventType ? styles.categorySelected : null]}>
-                  <Text style={[styles.categoryIcon, { backgroundColor: categoryColors[giftEventTypes.indexOf(eventType) % categoryColors.length] }]}>{eventType.slice(0, 1)}</Text>
                   <Text style={styles.categoryName}>{eventType}</Text>
                 </Pressable>
               ))}
@@ -814,7 +806,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
             <Text style={styles.cardTitle}>份子记录（{giftList.total}）</Text>
             {giftRecords.length === 0 ? (
               <View style={styles.emptyBox}>
-                <Text style={styles.emptyIcon}>🧧</Text>
+                <PuppyIllustration color="#9cc39c" scene="gift" size={86} />
                 <Text style={styles.emptyTitle}>暂无份子记录</Text>
                 <Text style={styles.emptyText}>开始记录第一笔份子</Text>
               </View>
@@ -869,6 +861,8 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
           openMenuId={savingMenuId}
           pendingDeleteId={savingDeleteId}
           stats={savingStats}
+          sticker={savingSticker}
+          themeTokens={themeTokens}
           totalEntries={savingVisibleEntries.length}
           trend={savingTrend}
           type={savingType}
@@ -927,7 +921,9 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
           <Text style={styles.listTitle}>所有分类</Text>
           {allCategories.map((category, index) => (
             <View key={`${category.transactionType}-${category.name}-${index}`} style={styles.categoryRow}>
-              <Text style={[styles.categoryIcon, { backgroundColor: categoryColors[index % categoryColors.length] }]}>{category.name.slice(0, 1)}</Text>
+              <View style={[styles.statementIconBox, { backgroundColor: categoryColors[index % categoryColors.length] }]}>
+                <CategoryLineIcon color="#4a5568" name={category.name} size={18} />
+              </View>
               <Text style={styles.categoryRowName}>{category.name}</Text>
               <Text style={[styles.categoryBadge, { color: category.transactionType === "expense" ? "#ef4444" : "#16a34a" }]}>{category.transactionType === "expense" ? "支出" : "收入"}</Text>
               <Text style={styles.categoryBadge}>{category.isSystem ? "内置" : "自定义"}</Text>
@@ -965,6 +961,12 @@ type SavingTrendPoint = {
   value: string;
 };
 
+type SavingStickerInfo = {
+  label: string;
+  sublabel: string;
+  storageKey: string;
+};
+
 function SavingWorkspace({
   amount,
   currentTotal,
@@ -990,6 +992,8 @@ function SavingWorkspace({
   openMenuId,
   pendingDeleteId,
   stats,
+  sticker,
+  themeTokens,
   totalEntries,
   trend,
   type
@@ -1018,17 +1022,34 @@ function SavingWorkspace({
   openMenuId: string | null;
   pendingDeleteId: string | null;
   stats: SavingStats;
+  sticker?: SavingStickerInfo | null;
+  themeTokens?: UiTokens;
   totalEntries: number;
   trend: SavingTrendPoint[];
   type: "deposit" | "withdraw";
 }) {
   const isDeposit = type === "deposit";
   const visibleTypeName = isDeposit ? "存入" : "取出";
+  const stickerTokens = themeTokens ?? financeTokens;
 
   return (
     <>
-      <Text style={styles.savingPageTitle}>储蓄</Text>
+      <View style={styles.savingTitleRow}>
+        <Text style={styles.savingPageTitle}>储蓄</Text>
+        {sticker ? (
+          <StatusSticker
+            icon={<IconPiggyBank color={stickerTokens.accent} size={16} />}
+            label={sticker.label}
+            storageKey={sticker.storageKey}
+            sublabel={sticker.sublabel}
+            tokens={stickerTokens}
+          />
+        ) : null}
+      </View>
       <View testID="saving-overview-card" style={styles.savingOverviewCard}>
+        <View pointerEvents="none" style={styles.pageWatermark}>
+          <IconPiggyBank color="#111827" size={82} />
+        </View>
         <Text style={styles.savingOverviewLabel}>当前储蓄</Text>
         <Text style={styles.savingOverviewAmount}>¥{currentTotal}</Text>
         <View style={styles.savingMiniGrid}>
@@ -1170,7 +1191,10 @@ function SavingDetailList({
         <Text style={styles.savingDetailTotal}>本月 ¥{entryTotal}</Text>
       </View>
       {groups.length === 0 ? (
-        <Text style={styles.emptyText}>还没有{isDeposit ? "存入" : "取出"}记录。</Text>
+        <View style={styles.emptyBoxCompact}>
+          <PuppyIllustration color="#9cc39c" scene="piggy" size={78} />
+          <Text style={styles.emptyText}>还没有{isDeposit ? "存入" : "取出"}记录。</Text>
+        </View>
       ) : groups.map((group) => (
         <View key={group.date} style={styles.savingDateGroup}>
           <View style={styles.savingDateHeader}>
@@ -1301,7 +1325,7 @@ function FinanceStatementList({
 
       {groups.length === 0 ? (
         <View style={styles.emptyBox}>
-          <Text style={styles.emptyIcon}>💰</Text>
+          <PuppyIllustration color="#9cc39c" scene="piggy" size={86} />
           <Text style={styles.emptyTitle}>{type === "expense" ? "暂无支出记录" : "暂无收入记录"}</Text>
           <Text style={styles.emptyText}>{type === "expense" ? "开始记录你的第一笔支出" : "开始记录你的第一笔收入"}</Text>
         </View>
@@ -1355,7 +1379,9 @@ function StatementRow({
   const isIncome = transaction.transactionType === "income";
   return (
     <View testID={`finance-transaction-row-${transaction.id}`} style={styles.statementRow}>
-      <Text style={[styles.statementIcon, { backgroundColor: getCategorySoftColor(transaction.categoryName) }]}>{categoryIcons[transaction.categoryName] ?? transaction.categoryName.slice(0, 1)}</Text>
+      <View style={[styles.statementIconBox, { backgroundColor: getCategorySoftColor(transaction.categoryName) }]}>
+        <CategoryLineIcon color="#4a5568" name={transaction.categoryName} size={18} />
+      </View>
       <View style={styles.statementBody}>
         <Text style={styles.statementCategory} numberOfLines={1}>{transaction.categoryName}</Text>
         {transaction.note ? <Text style={styles.statementNote} numberOfLines={1}>{transaction.note}</Text> : null}
@@ -1509,6 +1535,23 @@ function getSavingStats(entries: SavingEntry[], now: string): SavingStats {
   };
 }
 
+const SAVING_MILESTONES = [10000, 5000, 1000];
+
+function getSavingSticker(entries: SavingEntry[], total: string, now: string): SavingStickerInfo | null {
+  const totalCents = moneyToCents(total);
+  for (const milestone of SAVING_MILESTONES) {
+    if (totalCents >= milestone * 100) {
+      return { label: `储蓄突破 ¥${milestone}`, sublabel: "继续保持", storageKey: `saving-milestone-${milestone}` };
+    }
+  }
+  const month = now.slice(0, 7);
+  const monthDeposits = entries.filter((entry) => entry.type === "deposit" && entry.localDate.startsWith(month));
+  if (monthDeposits.length === 1) {
+    return { label: "本月首存", sublabel: "好的开始", storageKey: `saving-first-${month}` };
+  }
+  return null;
+}
+
 function getSavingTrend(entries: SavingEntry[]): SavingTrendPoint[] {
   const byMonth = new Map<string, number>();
   for (const entry of entries) {
@@ -1598,13 +1641,18 @@ function makeTextInputChangeHandler(setValue: (value: string) => void) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#ffffff",
-    borderColor: "#e3e8ef",
-    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderColor: "#e6ebf2",
+    borderRadius: 20,
     borderWidth: 1,
+    elevation: 2,
     gap: 12,
     padding: 14,
-    position: "relative"
+    position: "relative",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12
   },
   cardTitle: {
     color: "#111827",
@@ -1650,17 +1698,12 @@ const styles = StyleSheet.create({
     gap: 8,
     justifyContent: "flex-start"
   },
-  categoryIcon: {
+  categoryIconBox: {
     alignItems: "center",
     borderRadius: 999,
-    color: "#1599d3",
-    fontSize: 11,
-    fontWeight: "900",
-    minWidth: 24,
-    overflow: "hidden",
-    textAlign: "center",
-    paddingHorizontal: 7,
-    paddingVertical: 4
+    height: 26,
+    justifyContent: "center",
+    width: 26
   },
   categoryName: {
     color: "#697386",
@@ -1825,9 +1868,17 @@ const styles = StyleSheet.create({
   },
   emptyBox: {
     alignItems: "center",
-    gap: 8,
-    minHeight: 180,
-    justifyContent: "center"
+    gap: 6,
+    minHeight: 160,
+    justifyContent: "center",
+    paddingVertical: 8
+  },
+  emptyBoxCompact: {
+    alignItems: "center",
+    gap: 6,
+    justifyContent: "center",
+    minHeight: 120,
+    paddingVertical: 6
   },
   weekHeader: {
     flexDirection: "row",
@@ -1839,9 +1890,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textAlign: "center",
     width: "13.2%"
-  },
-  emptyIcon: {
-    fontSize: 34
   },
   emptyText: {
     color: "#697386",
@@ -2023,17 +2071,19 @@ const styles = StyleSheet.create({
     letterSpacing: 0
   },
   overviewCard: {
-    backgroundColor: "#ffffff",
-    borderColor: "#d7eaf7",
-    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderColor: "#e6ebf2",
+    borderRadius: 20,
     borderWidth: 1,
     elevation: 2,
     gap: 12,
+    overflow: "hidden",
     padding: 12,
-    shadowColor: "#1fa8e2",
-    shadowOffset: { width: 0, height: 4 },
+    position: "relative",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.06,
-    shadowRadius: 14
+    shadowRadius: 12
   },
   overviewMetricStack: {
     gap: 8
@@ -2147,23 +2197,39 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 16
   },
+  pageWatermark: {
+    bottom: -10,
+    opacity: 0.05,
+    position: "absolute",
+    right: 4,
+    top: -10
+  },
+  savingTitleRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    justifyContent: "space-between"
+  },
   savingPageTitle: {
     color: "#111827",
     fontSize: 24,
     fontWeight: "900"
   },
   savingOverviewCard: {
-    backgroundColor: "#ffffff",
-    borderColor: "#dbeadf",
-    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderColor: "#e0eae2",
+    borderRadius: 20,
     borderWidth: 1,
     elevation: 2,
     gap: 12,
+    overflow: "hidden",
     padding: 16,
-    shadowColor: "#7cb87c",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 14
+    position: "relative",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12
   },
   savingOverviewLabel: {
     color: "#697386",
@@ -2238,12 +2304,17 @@ const styles = StyleSheet.create({
     marginTop: 8
   },
   savingDetailCard: {
-    backgroundColor: "#ffffff",
-    borderColor: "#e3e8ef",
-    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderColor: "#e6ebf2",
+    borderRadius: 20,
     borderWidth: 1,
+    elevation: 2,
     gap: 10,
-    padding: 14
+    padding: 14,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12
   },
   savingDetailHeader: {
     alignItems: "center",
@@ -2635,15 +2706,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between"
   },
-  statementIcon: {
+  statementIconBox: {
+    alignItems: "center",
     borderRadius: 999,
-    color: "#1599d3",
-    fontSize: 13,
-    fontWeight: "900",
     height: 34,
-    lineHeight: 34,
-    overflow: "hidden",
-    textAlign: "center",
+    justifyContent: "center",
     width: 34
   },
   statementList: {

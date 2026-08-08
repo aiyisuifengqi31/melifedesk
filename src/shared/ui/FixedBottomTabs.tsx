@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
 
 import type { UiTokens } from "@/shared/ui/primitives";
+import { RADIUS, SHADOW } from "@/shared/ui/tokens";
 
 export type FixedBottomTabItem<T extends string> = {
   label: string;
@@ -48,24 +49,20 @@ export function FixedBottomTabs<T extends string>({ activeValue, hidden = false,
 function createStyles(tokens: UiTokens) {
   return StyleSheet.create({
     shell: {
-      backgroundColor: "rgba(241, 245, 249, 0.94)",
+      backgroundColor: tokens.surfaceOverlay ?? "rgba(255, 255, 255, 0.96)",
       borderColor: tokens.border,
-      borderRadius: 16,
+      borderRadius: RADIUS.card,
       borderWidth: 1,
-      elevation: 10,
       flexDirection: "row",
       flexWrap: "nowrap",
       gap: 4,
       padding: 4,
-      shadowColor: "#000000",
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.12,
-      shadowRadius: 18,
-      zIndex: 80
+      zIndex: 80,
+      ...SHADOW.overlay
     },
     tab: {
       alignItems: "center",
-      borderRadius: 12,
+      borderRadius: RADIUS.sm,
       flex: 1,
       justifyContent: "center",
       minWidth: 0,

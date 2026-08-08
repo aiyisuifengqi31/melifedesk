@@ -23,7 +23,8 @@ export function showUndoToast(request: Omit<UndoRequest, "id">) {
   emit();
 }
 
-const DONE_DURATION = 1500;
+const DEFAULT_DURATION = 3500;
+const DONE_DURATION = 1300;
 
 export function UndoToastHost({ tokens }: { tokens: UiTokens }) {
   const [req, setReq] = useState<UndoRequest | null>(current);
@@ -41,7 +42,7 @@ export function UndoToastHost({ tokens }: { tokens: UiTokens }) {
   useEffect(() => {
     if (!req) return;
     setDone(false);
-    const timer = setTimeout(() => setReq(null), req.duration ?? 5000);
+    const timer = setTimeout(() => setReq(null), req.duration ?? DEFAULT_DURATION);
     return () => clearTimeout(timer);
   }, [req]);
 

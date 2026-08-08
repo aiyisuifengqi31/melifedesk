@@ -205,3 +205,109 @@ export function IconEyeOff({ size = 20, color = "currentColor", strokeWidth = 1.
     </Svg>
   );
 }
+
+export function IconCalendarDays({ size = 20, color = "currentColor", strokeWidth = 1.8 }: IconProps) {
+  return base(
+    size,
+    color,
+    strokeWidth,
+    <>
+      <Rect x="4" y="5" width="16" height="16" rx="2" />
+      <Path d="M4 9h16M8 3v4M16 3v4" />
+      <Path d="M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01M16 17h.01" />
+    </>
+  );
+}
+
+export function IconWalletCards({ size = 20, color = "currentColor", strokeWidth = 1.8 }: IconProps) {
+  return base(
+    size,
+    color,
+    strokeWidth,
+    <>
+      <Path d="M3 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v1H3z" />
+      <Rect x="3" y="9" width="18" height="11" rx="2" />
+      <Path d="M16 14.5h3" />
+    </>
+  );
+}
+
+export function IconBookOpenCheck({ size = 20, color = "currentColor", strokeWidth = 1.8 }: IconProps) {
+  return base(
+    size,
+    color,
+    strokeWidth,
+    <>
+      <Path d="M12 6S9 4 5 4v14c4 0 7-2 7-2c0 0 3 2 7 2V4c-4 0-7 2-7 2z" />
+      <Path d="M9 9l2 2 3-3" />
+    </>
+  );
+}
+
+export function IconDumbbell({ size = 20, color = "currentColor", strokeWidth = 1.8 }: IconProps) {
+  return base(
+    size,
+    color,
+    strokeWidth,
+    <>
+      <Path d="M5 9v6M19 9v6" />
+      <Path d="M5 12h14" />
+      <Path d="M3 7v10M21 7v10" />
+      <Path d="M7 8v8M17 8v8" />
+    </>
+  );
+}
+
+export function IconClapperboard({ size = 20, color = "currentColor", strokeWidth = 1.8 }: IconProps) {
+  return base(
+    size,
+    color,
+    strokeWidth,
+    <>
+      <Rect x="3" y="7" width="18" height="12" rx="2" />
+      <Path d="M3 7l2.5-3 2.5 3M10 7l2.5-3 2.5 3M17 7l2.5-3 2.5 3" />
+    </>
+  );
+}
+
+export function IconHeart({ size = 20, color = "currentColor", strokeWidth = 1.8 }: IconProps) {
+  return base(size, color, strokeWidth, <Path d="M12 21C12 21 4 14.5 4 9a4 4 0 0 1 8-1 4 4 0 0 1 8 1c0 5.5-8 12-8 12z" />);
+}
+
+export function IconSettings({ size = 20, color = "currentColor", strokeWidth = 1.8 }: IconProps) {
+  return base(
+    size,
+    color,
+    strokeWidth,
+    <>
+      <Circle cx="12" cy="12" r="3.2" />
+      <Path d="M19.4 13.5a7.9 7.9 0 0 0 0-3l2-1.5-2-3.5-2.4 1a8 8 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A8 8 0 0 0 7 6.5l-2.4-1-2 3.5 2 1.5a7.9 7.9 0 0 0 0 3l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a8 8 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5Z" />
+    </>
+  );
+}
+
+export function IconUser({ size = 20, color = "currentColor", strokeWidth = 1.8 }: IconProps) {
+  return base(
+    size,
+    color,
+    strokeWidth,
+    <>
+      <Circle cx="12" cy="8" r="3.6" />
+      <Path d="M4.8 20a7.2 7.2 0 0 1 14.4 0" />
+    </>
+  );
+}
+
+export function IconPalette({ size = 20, color = "currentColor", strokeWidth = 1.8 }: IconProps) {
+  return base(
+    size,
+    color,
+    strokeWidth,
+    <>
+      <Path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.4 0 2.2-.9 2.2-1.9 0-1.3-1-1.7-1-2.7 0-.8.7-1.4 1.6-1.4h1.4A4.3 4.3 0 0 0 20.5 10c0-3.6-3.6-6.5-8.5-6.5Z" />
+      <Circle cx="8" cy="10" fill={color} r="1.1" stroke="none" />
+      <Circle cx="12" cy="7.6" fill={color} r="1.1" stroke="none" />
+      <Circle cx="15.8" cy="10" fill={color} r="1.1" stroke="none" />
+    </>
+  );
+}

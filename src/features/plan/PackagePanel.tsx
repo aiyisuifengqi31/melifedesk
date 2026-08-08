@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
+import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
 import { createPackageId, getDefaultPackageStorage, hydratePackagesFromCloud, loadPackages, savePackages, type PackageItem, type PackageStorage } from "./packageStorage";
@@ -229,7 +230,12 @@ export function PackagePanel({ shortcutCreate = false, shortcutScan = false, sto
       {feedback ? <Text style={styles.feedback}>{feedback}</Text> : null}
 
       <View style={styles.list}>
-        {unpicked.length === 0 && picked.length === 0 ? <Text style={styles.empty}>还没有快递。上传截图就能先记一条。</Text> : null}
+        {unpicked.length === 0 && picked.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <PuppyIllustration color={themeTokens.textMuted} scene="package" size={78} />
+            <Text style={styles.empty}>还没有快递。上传截图就能先记一条。</Text>
+          </View>
+        ) : null}
         {unpicked.map((item) => (
           <PackageCard
             confirmDelete={deleteConfirmId === item.id}
@@ -586,7 +592,15 @@ function createStyles(tokens: UiTokens) {
     empty: {
       color: tokens.textMuted,
       fontSize: 13,
-      fontWeight: "700"
+      fontWeight: "700",
+      textAlign: "center"
+    },
+    emptyBox: {
+      alignItems: "center",
+      gap: 6,
+      justifyContent: "center",
+      minHeight: 132,
+      paddingVertical: 8
     },
     expandedImage: {
       height: "80%",

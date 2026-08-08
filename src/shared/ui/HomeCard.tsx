@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { UiTokens } from "@/shared/ui/primitives";
+import { frostedCard, RADIUS } from "@/shared/ui/tokens";
 import { IconChevronDown, IconEye, IconEyeOff, IconGripVertical } from "@/shared/ui/lineIcons";
 
 type HomeCardProps = {
@@ -48,7 +49,7 @@ export function HomeCard({
   testID,
   children
 }: HomeCardProps) {
-  const wrapStyle = [styles.card, accentSurface ? styles.cardAccent : null, hidden && editMode ? styles.cardHidden : null];
+  const wrapStyle = [styles.card, frostedCard(tokens), accentSurface ? styles.cardAccent : null, hidden && editMode ? styles.cardHidden : null];
 
   return (
     <View style={wrapStyle} testID={testID}>
@@ -122,15 +123,9 @@ const styles = StyleSheet.create({
     marginTop: 10
   },
   card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 18,
-    elevation: 2,
+    borderRadius: RADIUS.card,
     gap: 0,
-    padding: 14,
-    shadowColor: "#7cb87c",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16
+    padding: 14
   },
   cardAccent: {
     backgroundColor: "#eef7ee"

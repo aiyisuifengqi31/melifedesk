@@ -2,6 +2,10 @@
 import { Pressable, StyleSheet, Text, TextInput, View, type NativeSyntheticEvent, type TextInputChangeEventData } from "react-native";
 
 import { getSupabaseClient } from "@/auth/supabaseClient";
+import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
+import { StatusSticker } from "@/shared/ui/StatusSticker";
+import { IconDumbbell } from "@/shared/ui/lineIcons";
+import type { UiTokens } from "@/shared/ui/primitives";
 import { CollapsibleSectionFooter, sortByNewest, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import { addWorkoutPart, createWorkoutSession, softDeleteWorkoutSession } from "@/features/workout/workoutRepository";
 import {
@@ -17,6 +21,20 @@ import {
 
 type WorkoutPanelProps = {
   storage?: WorkoutStorage;
+};
+
+const workoutTokens: UiTokens = {
+  accent: "#7cb87c",
+  accentSoft: "#eaf6ea",
+  background: "#f5fbf7",
+  border: "#e6ebf2",
+  danger: "#ef4444",
+  success: "#2f9e44",
+  surface: "#ffffff",
+  surfaceMuted: "#f8fafc",
+  text: "#111827",
+  textMuted: "#697386",
+  warning: "#f59e0b"
 };
 
 const WORKOUT_PARTS: Array<{ icon: string; name: string }> = [
@@ -59,6 +77,7 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const localDirtyRef = useRef(false);
 
   const stats = useMemo(() => buildWorkoutStats(logs), [logs]);
+  const weekStickerKey = useMemo(() => startOfWeek(new Date()).toISOString().slice(0, 10), []);
   const chartBars = useMemo(() => buildPeriodBars(logs, chartPeriod), [chartPeriod, logs]);
   const chartTotal = useMemo(() => chartBars.reduce((sum, bar) => sum + bar.minutes, 0), [chartBars]);
   const sortedLogs = useMemo(() => sortByNewest(logs, (log) => [log.sessionDate, log.createTime]), [logs]);
@@ -167,6 +186,9 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   return (
     <View style={styles.stack}>
       <View style={styles.card}>
+        <View pointerEvents="none" style={styles.pageWatermark}>
+          <IconDumbbell color="#111827" size={82} />
+        </View>
         <View style={styles.todayStatusRow}>
           <View style={[styles.todayStatusDot, todayTrainedLog ? styles.todayStatusDotTrained : styles.todayStatusDotRest]} />
           <Text style={styles.todayStatusText}>
@@ -202,7 +224,18 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>本周训练统计</Text>
+        <View style={styles.cardTitleStickerRow}>
+          <Text style={styles.cardTitle}>本周训练统计</Text>
+          {stats.weekCount >= 3 ? (
+            <StatusSticker
+              icon={<IconDumbbell color={workoutTokens.accent} size={16} />}
+              label="本周 3 次"
+              storageKey={`workout-week3-${weekStickerKey}`}
+              sublabel="状态在线"
+              tokens={workoutTokens}
+            />
+          ) : null}
+        </View>
         <Text style={styles.statLine}>本周训练 {stats.weekCount} 次</Text>
         <View style={styles.partStatRow}>
           {stats.weekPartCounts.map((item) => (
@@ -216,7 +249,6 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       <View style={styles.chartCard}>
         <View style={styles.chartHeader}>
           <View style={styles.cardTitleRow}>
-            <Text style={styles.chartIcon}>▥</Text>
             <Text style={styles.chartTitle}>{chartPeriodTitle[chartPeriod]}</Text>
           </View>
           <Text style={styles.chartTotal}>合计 {chartTotal} 分钟</Text>
@@ -252,7 +284,10 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>训练日志（{logList.total}）</Text>
         {logs.length === 0 ? (
-          <Text style={styles.empty}>还没有训练记录，保存一条后会出现在这里。</Text>
+          <View style={styles.emptyBox}>
+            <PuppyIllustration color="#9cc39c" scene="generic" size={78} />
+            <Text style={styles.empty}>还没有训练记录，保存一条后会出现在这里。</Text>
+          </View>
         ) : (
           <>
           {logList.visibleItems.map((log) => (
@@ -484,12 +519,33 @@ const styles = StyleSheet.create({
     width: "84%"
   },
   card: {
-    backgroundColor: "#ffffff",
-    borderColor: "#e3e8ef",
-    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderColor: "#e6ebf2",
+    borderRadius: 20,
     borderWidth: 1,
+    elevation: 2,
     gap: 12,
-    padding: 14
+    overflow: "hidden",
+    padding: 14,
+    position: "relative",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12
+  },
+  pageWatermark: {
+    bottom: -12,
+    opacity: 0.05,
+    position: "absolute",
+    right: 4,
+    top: -12
+  },
+  emptyBox: {
+    alignItems: "center",
+    gap: 6,
+    justifyContent: "center",
+    minHeight: 132,
+    paddingVertical: 6
   },
   cardTitle: {
     color: "#111827",
@@ -500,6 +556,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     gap: 10
+  },
+  cardTitleStickerRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    justifyContent: "space-between"
   },
   chart: {
     alignItems: "flex-end",
@@ -597,7 +660,8 @@ const styles = StyleSheet.create({
   empty: {
     color: "#697386",
     fontSize: 15,
-    lineHeight: 22
+    lineHeight: 22,
+    textAlign: "center"
   },
   feedback: {
     color: "#697386",

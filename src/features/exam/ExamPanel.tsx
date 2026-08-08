@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
+import { StatusSticker } from "@/shared/ui/StatusSticker";
+import { IconBookOpenCheck } from "@/shared/ui/lineIcons";
 import { GOLDEN_SENTENCES } from "@/features/exam/examLinks";
 import {
   hydrateIdiomCheckinFromCloud,
@@ -170,6 +173,12 @@ export function ExamPanel({ activeTab, onTabChange, showInlineTabs = true, theme
     };
   }, [dailyIdioms, dailyKnowledge, essayStatus, favoriteIds.length, reviewMap, study, todayKey]);
 
+  const streakSticker = useMemo(() => {
+    if (stats.streak >= 30) return { label: "连续 30 天", storageKey: "exam-streak-30" };
+    if (stats.streak >= 7) return { label: "连续 7 天", storageKey: "exam-streak-7" };
+    return null;
+  }, [stats.streak]);
+
   const persistStudy = (next: StudyState) => {
     setStudy(next);
     saveStudyState(next);
@@ -250,8 +259,24 @@ export function ExamPanel({ activeTab, onTabChange, showInlineTabs = true, theme
   return (
     <View style={styles.stack}>
       <View style={styles.hero}>
-        <Text style={styles.heroTitle}>考公学习</Text>
-        <Text style={styles.heroSub}>每天 5 到 15 分钟，读一点、记一点、复习一点。</Text>
+        <View pointerEvents="none" style={styles.pageWatermark}>
+          <IconBookOpenCheck color={themeTokens.text} size={80} />
+        </View>
+        <View style={styles.heroMain}>
+          <View style={styles.heroTexts}>
+            <Text style={styles.heroTitle}>考公学习</Text>
+            <Text style={styles.heroSub}>每天 5 到 15 分钟，读一点、记一点、复习一点。</Text>
+          </View>
+          {streakSticker ? (
+            <StatusSticker
+              icon={<IconBookOpenCheck color={themeTokens.accent} size={16} />}
+              label={streakSticker.label}
+              storageKey={streakSticker.storageKey}
+              sublabel="坚持住"
+              tokens={themeTokens}
+            />
+          ) : null}
+        </View>
       </View>
 
       {feedback ? <Text style={styles.feedback}>{feedback}</Text> : null}
@@ -264,7 +289,12 @@ export function ExamPanel({ activeTab, onTabChange, showInlineTabs = true, theme
             <FilterRow label="时间" options={[...ESSAY_TIME_FILTERS]} selected={timeFilter} onSelect={(value) => setTimeFilter(value as (typeof ESSAY_TIME_FILTERS)[number])} styles={styles} />
             <FilterRow label="主题" options={ESSAY_TOPICS} selected={topicFilter} onSelect={setTopicFilter} styles={styles} />
             <FilterRow label="来源" options={ESSAY_SOURCES} selected={sourceFilter} onSelect={setSourceFilter} styles={styles} />
-            {filteredArticles.length === 0 ? <Text style={styles.emptyText}>暂时无法获取今日文章，请稍后刷新。已收藏文章会保留在历史收藏中。</Text> : null}
+            {filteredArticles.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <PuppyIllustration color={themeTokens.textMuted} scene="search" size={78} />
+                <Text style={styles.emptyText}>暂时无法获取今日文章，请稍后刷新。已收藏文章会保留在历史收藏中。</Text>
+              </View>
+            ) : null}
             {filteredArticles.map((article) => {
               const status = essayStatus[article.id] ?? "unread";
               return (
@@ -562,7 +592,7 @@ function createStyles(tokens: UiTokens) {
     barColumn: { alignItems: "center", flex: 1, gap: 4 },
     barFill: { backgroundColor: tokens.accent, borderRadius: 6, bottom: 0, left: "22%", position: "absolute", right: "22%" },
     barTrack: { backgroundColor: tokens.surfaceMuted, borderRadius: 6, height: 84, position: "relative", width: "100%" },
-    card: { backgroundColor: tokens.surface, borderColor: tokens.border, borderRadius: 18, borderWidth: 1, gap: 12, padding: 14 },
+    card: { backgroundColor: tokens.surfaceCard ?? tokens.surface, borderColor: tokens.border, borderRadius: 20, borderWidth: 1, elevation: 2, gap: 12, padding: 14, shadowColor: "#000000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.06, shadowRadius: 12 },
     cardHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
     cardHint: { color: tokens.textMuted, fontSize: 12, lineHeight: 18 },
     cardTitle: { color: tokens.text, fontSize: 17, fontWeight: "900" },
@@ -576,12 +606,16 @@ function createStyles(tokens: UiTokens) {
     chipTextActive: { color: "#ffffff" },
     detailSection: { gap: 5 },
     detailTitle: { color: tokens.text, fontSize: 22, fontWeight: "900", lineHeight: 30 },
-    emptyText: { color: tokens.textMuted, fontSize: 13, lineHeight: 20, paddingVertical: 12 },
+    emptyText: { color: tokens.textMuted, fontSize: 13, lineHeight: 20, paddingVertical: 4, textAlign: "center" },
     feedback: { color: tokens.accent, fontSize: 13, fontWeight: "800" },
     fieldLabel: { color: tokens.accent, fontSize: 12, fontWeight: "900", lineHeight: 18 },
     filterBlock: { gap: 6 },
     filterLabel: { color: tokens.text, fontSize: 13, fontWeight: "900" },
-    hero: { gap: 4 },
+    hero: { gap: 4, overflow: "hidden", position: "relative" },
+    heroMain: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 10, justifyContent: "space-between" },
+    heroTexts: { flexShrink: 1, gap: 4 },
+    pageWatermark: { bottom: -12, opacity: 0.05, position: "absolute", right: 4, top: -12 },
+    emptyBox: { alignItems: "center", gap: 4, justifyContent: "center", minHeight: 132, paddingVertical: 6 },
     heroSub: { color: tokens.textMuted, fontSize: 13 },
     heroTitle: { color: tokens.text, fontSize: 22, fontWeight: "900" },
     idiomWord: { color: tokens.text, fontSize: 18, fontWeight: "900" },

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { CollapsibleSectionFooter, sortByNewest, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
+import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
+import { IconHeart } from "@/shared/ui/lineIcons";
 import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { hydrateFromCloud, saveCloudValue } from "@/features/sync/cloudSync";
@@ -308,6 +310,9 @@ export function LovePanel({
   return (
     <View style={styles.stack}>
       <View style={styles.hero}>
+        <View pointerEvents="none" style={styles.pageWatermark}>
+          <IconHeart color="#111827" size={84} />
+        </View>
         <Text style={styles.heroTitle}>恋爱日记</Text>
         <Text style={styles.heroSub}>记录每一个甜蜜瞬间</Text>
       </View>
@@ -394,7 +399,7 @@ export function LovePanel({
 
           {diaries.length === 0 ? (
             <View style={styles.emptyBox}>
-              <Text style={styles.emptyIcon}>♡</Text>
+              <PuppyIllustration color="#9cc39c" scene="generic" size={86} />
               <Text style={styles.emptyTitle}>还没有日记</Text>
               <Text style={styles.emptyText}>记录第一篇日记吧</Text>
             </View>
@@ -491,7 +496,7 @@ export function LovePanel({
 
           {gifts.length === 0 ? (
             <View style={styles.emptyBox}>
-              <Text style={styles.emptyIcon}>🎁</Text>
+              <PuppyIllustration color="#9cc39c" scene="gift" size={86} />
               <Text style={styles.emptyTitle}>还没有礼物记录</Text>
               <Text style={styles.emptyText}>记录你们互赠的礼物</Text>
             </View>
@@ -581,7 +586,7 @@ export function LovePanel({
 
           {anniversaries.length === 0 ? (
             <View style={styles.emptyBox}>
-              <Text style={styles.emptyIcon}>♡</Text>
+              <PuppyIllustration color="#9cc39c" scene="generic" size={86} />
               <Text style={styles.emptyTitle}>还没有纪念日</Text>
               <Text style={styles.emptyText}>添加你们的特殊日子</Text>
             </View>
@@ -624,7 +629,7 @@ export function LovePanel({
       {tab === "photos" ? (
         groupedPhotos.length === 0 ? (
           <View style={styles.emptyBox}>
-            <Text style={styles.emptyIcon}>🖼️</Text>
+            <PuppyIllustration color="#9cc39c" scene="search" size={86} />
             <Text style={styles.emptyTitle}>照片墙还是空的</Text>
             <Text style={styles.emptyText}>日记、礼物和纪念日里的照片会在这里按月份聚合展示。</Text>
           </View>
@@ -830,12 +835,17 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   card: {
-    backgroundColor: "#ffffff",
-    borderColor: "#e3e8ef",
-    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderColor: "#e6ebf2",
+    borderRadius: 20,
     borderWidth: 1,
+    elevation: 2,
     gap: 12,
-    padding: 14
+    padding: 14,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12
   },
   cardTitle: {
     color: "#111827",
@@ -926,11 +936,6 @@ const styles = StyleSheet.create({
     minHeight: 230,
     justifyContent: "center"
   },
-  emptyIcon: {
-    color: "#c6ccd5",
-    fontSize: 76,
-    lineHeight: 82
-  },
   emptyText: {
     color: "#697386",
     fontSize: 16,
@@ -981,7 +986,16 @@ const styles = StyleSheet.create({
     width: 84
   },
   hero: {
-    gap: 6
+    gap: 6,
+    overflow: "hidden",
+    position: "relative"
+  },
+  pageWatermark: {
+    bottom: -14,
+    opacity: 0.05,
+    position: "absolute",
+    right: 4,
+    top: -14
   },
   heroSub: {
     color: "#697386",

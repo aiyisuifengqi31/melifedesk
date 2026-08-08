@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { IconPackage, IconPalette, IconSettings, IconUser } from "@/shared/ui/lineIcons";
 import { acceptCoupleInvite, createCoupleInvite, leaveActiveCouple, signOut } from "@/auth/authRepository";
 import { clearActiveUser } from "@/auth/localScope";
 import { getSupabaseClient } from "@/auth/supabaseClient";
@@ -46,10 +47,10 @@ type SettingsPanelProps = {
   tokens: ThemeTokens;
 };
 
-const TABS: Array<{ icon: string; key: SettingsTab; label: string }> = [
-  { icon: "👤", key: "profile", label: "我的" },
-  { icon: "🎨", key: "theme", label: "主题" },
-  { icon: "📦", key: "backup", label: "导出" }
+const TABS: Array<{ icon: (color: string) => ReactNode; key: SettingsTab; label: string }> = [
+  { icon: (color) => <IconUser color={color} size={16} />, key: "profile", label: "我的" },
+  { icon: (color) => <IconPalette color={color} size={16} />, key: "theme", label: "主题" },
+  { icon: (color) => <IconPackage color={color} size={16} />, key: "backup", label: "导出" }
 ];
 
 export function SettingsPanel({
@@ -265,6 +266,9 @@ export function SettingsPanel({
     <View nativeID="settings-panel" style={styles.overlay}>
       <View style={styles.sheet}>
         <View style={styles.header}>
+          <View pointerEvents="none" style={styles.pageWatermark}>
+            <IconSettings color={tokens.text} size={74} />
+          </View>
           <Text style={styles.title}>设置</Text>
           <Pressable accessibilityLabel="关闭设置" accessibilityRole="button" onPress={onClose} style={styles.closeButton}>
             <Text style={styles.closeText}>关闭</Text>
@@ -282,7 +286,7 @@ export function SettingsPanel({
                 onPress={() => setTab(item.key)}
                 style={[styles.tabButton, selected ? styles.tabButtonActive : null]}
               >
-                <Text style={styles.tabIcon}>{item.icon}</Text>
+                {item.icon(selected ? tokens.surface : tokens.textMuted)}
                 <Text style={[styles.tabText, selected ? styles.tabTextActive : null]}>{item.label}</Text>
               </Pressable>
             );
@@ -773,8 +777,17 @@ function createStyles(tokens: ThemeTokens) {
       alignItems: "center",
       flexDirection: "row",
       justifyContent: "space-between",
+      overflow: "hidden",
       paddingHorizontal: 14,
-      paddingTop: 14
+      paddingTop: 14,
+      position: "relative"
+    },
+    pageWatermark: {
+      bottom: -18,
+      opacity: 0.05,
+      position: "absolute",
+      right: 78,
+      top: -12
     },
     input: {
       backgroundColor: tokens.surfaceMuted,
@@ -822,12 +835,17 @@ function createStyles(tokens: ThemeTokens) {
     sheet: {
       backgroundColor: tokens.background,
       borderColor: tokens.border,
-      borderRadius: 20,
+      borderRadius: 28,
       borderWidth: 1,
+      elevation: 10,
       gap: 10,
       maxHeight: "92%",
       maxWidth: 520,
       overflow: "hidden",
+      shadowColor: "#000000",
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.16,
+      shadowRadius: 22,
       width: "100%"
     },
     swatch: {

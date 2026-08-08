@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import { CollapsibleSectionFooter, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
+import { IconClapperboard } from "@/shared/ui/lineIcons";
 import { openLink } from "./entertainmentData";
 import { fetchHotList, type HotItem, type HotSource } from "./hotListService";
 import {
@@ -167,6 +168,9 @@ export function EntertainmentPanel({ activeTab, onTabChange, showInlineTabs = tr
   return (
     <View style={styles.stack}>
       <View style={styles.hero}>
+        <View pointerEvents="none" style={styles.pageWatermark}>
+          <IconClapperboard color={tokens.text} size={80} />
+        </View>
         <Text style={styles.heroTitle}>娱乐</Text>
         <Text style={styles.heroSub}>热点先看摘要，影视和实用工具都能点进去处理。</Text>
       </View>
@@ -470,7 +474,7 @@ function createStyles(tokens: UiTokens) {
     actionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
     backButton: { alignSelf: "flex-start", backgroundColor: tokens.surface, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
     backText: { color: tokens.accent, fontSize: 13, fontWeight: "900" },
-    card: { backgroundColor: tokens.surface, borderColor: tokens.border, borderRadius: 18, borderWidth: 1, gap: 12, padding: 14 },
+    card: { backgroundColor: tokens.surfaceCard ?? tokens.surface, borderColor: tokens.border, borderRadius: 20, borderWidth: 1, elevation: 2, gap: 12, padding: 14, shadowColor: "#000000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.06, shadowRadius: 12 },
     cardHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
     cardHint: { color: tokens.textMuted, fontSize: 12, lineHeight: 18 },
     cardTitle: { color: tokens.text, fontSize: 17, fontWeight: "900" },
@@ -488,7 +492,8 @@ function createStyles(tokens: UiTokens) {
     fieldLabel: { color: tokens.text, fontSize: 13, fontWeight: "900" },
     filterBlock: { gap: 6 },
     formRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-    hero: { gap: 4 },
+    hero: { gap: 4, overflow: "hidden", position: "relative" },
+    pageWatermark: { bottom: -12, opacity: 0.05, position: "absolute", right: 4, top: -12 },
     heroSub: { color: tokens.textMuted, fontSize: 13 },
     heroTitle: { color: tokens.text, fontSize: 22, fontWeight: "900" },
     hot: { color: tokens.textMuted, fontSize: 11, fontWeight: "800" },
