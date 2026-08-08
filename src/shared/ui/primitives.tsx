@@ -1,6 +1,11 @@
 import type { PropsWithChildren, ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+export type EmptyStateAction = {
+  label: string;
+  onPress: () => void;
+};
+
 export type UiTokens = {
   accent: string;
   accentSoft: string;
@@ -76,11 +81,17 @@ export function SegmentedTabs({ options, selected, tokens }: TokenProps & { opti
   );
 }
 
-export function EmptyState({ description, title, tokens }: TokenProps & { description: string; title: string }) {
+export function EmptyState({ action, description, icon, title, tokens }: TokenProps & { action?: EmptyStateAction; description: string; icon?: ReactNode; title: string }) {
   return (
     <ContentCard tokens={tokens}>
+      {icon ? <View style={styles.emptyIcon}>{icon}</View> : null}
       <Text style={[styles.sectionTitle, { color: tokens.text }]}>{title}</Text>
       <Text style={[styles.body, { color: tokens.textMuted }]}>{description}</Text>
+      {action ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={action.label} onPress={action.onPress} style={[styles.emptyAction, { backgroundColor: tokens.accent }]}>
+          <Text style={styles.emptyActionText}>{action.label}</Text>
+        </Pressable>
+      ) : null}
     </ContentCard>
   );
 }
@@ -241,5 +252,20 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     marginTop: 5
+  },
+  emptyIcon: {
+    opacity: 0.32,
+    marginBottom: 2
+  },
+  emptyAction: {
+    alignSelf: "flex-start",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9
+  },
+  emptyActionText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "900"
   }
 });

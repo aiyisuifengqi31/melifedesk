@@ -1,13 +1,21 @@
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { hydrateFinanceTransactionsFromCloud, loadFinanceTransactions, type FinanceTransaction } from "@/features/finance/financeStorage";
 import { hydrateNotesFromCloud, loadNotes } from "@/features/home/notesStorage";
 import { hydratePackagesFromCloud, loadPackages, type PackageItem } from "@/features/plan/packageStorage";
+import { hydrateRemindersFromCloud, loadReminders, type ReminderItem } from "@/features/plan/reminderStorage";
+import { setPlanFocus, type PlanFocus } from "@/features/plan/planFocus";
 import { getDefaultTodoStorage, hydrateTodosFromCloud, loadLocalTodos, saveLocalTodos, sortTodos, type TodoStorage, type TodoTask } from "@/features/plan/todoStorage";
 import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
 import { CollapsibleSectionFooter, useCollapsibleList } from "@/shared/ui/CollapsibleList";
+import { AnimatedNumber } from "@/shared/ui/AnimatedNumber";
+import { IconCheck, IconChecklist, IconChevronRight, IconClock } from "@/shared/ui/lineIcons";
+import { PressableScale } from "@/shared/ui/PressableScale";
 import type { UiTokens } from "@/shared/ui/primitives";
+import { EmptyState } from "@/shared/ui/primitives";
+import { showUndoToast } from "@/shared/ui/UndoToast";
 import { MealSpinner } from "./MealSpinner";
 import { NotesPanel } from "./NotesPanel";
 import { TodoPanel } from "@/features/plan/TodoPanel";
@@ -16,8 +24,9 @@ const MEAL_PRESET_COUNT = 8;
 
 type HomePanelProps = {
   onOpenFinance?: () => void;
-  onOpenQuickAccounting?: () => void;
   onOpenPackages?: () => void;
+  onOpenPlan?: (focus: PlanFocus) => void;
+  onOpenQuickAccounting?: () => void;
   shortcutNonce?: number;
   shortcutView?: "notes" | "todos";
   storage?: TodoStorage;
@@ -25,6 +34,13 @@ type HomePanelProps = {
 };
 
 type ViewState = "home" | "notes" | "todos";
+
+type NextThing = {
+  focus: PlanFocus;
+  title: string;
+  timeLabel: string;
+  near: boolean;
+};
 
 const todoPriorityLabels: Record<TodoTask["priority"], string> = {
   high: "重要",
@@ -56,14 +72,69 @@ function moneyToCents(value: string) {
 }
 
 function centsToMoney(cents: number) {
-  return `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}`;
+  const safe = Math.max(0, Math.round(cents));
+  return `${Math.floor(safe / 100)}.${String(safe % 100).padStart(2, "0")}`;
 }
 
-export function HomePanel({ onOpenFinance, onOpenQuickAccounting, onOpenPackages, shortcutNonce, shortcutView, storage, themeTokens }: HomePanelProps) {
+function timeLabelFromIso(iso?: string | null): string | null {
+  if (!iso || !iso.includes("T")) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function buildNextThing(todos: TodoTask[], reminders: ReminderItem[], packages: PackageItem[]): NextThing | null {
+  const today = todayIso();
+  const now = Date.now();
+  type Candidate = { focus: PlanFocus; title: string; timeLabel: string; sortKey: number };
+  const candidates: Candidate[] = [];
+
+  for (const todo of todos) {
+    if (todo.completed || !todo.deadline) continue;
+    const d = new Date(todo.deadline);
+    if (Number.isNaN(d.getTime())) continue;
+    const isoDate = d.toISOString().slice(0, 10);
+    if (isoDate !== today) continue;
+    candidates.push({
+      focus: { date: isoDate, kind: "todo", id: todo.id },
+      title: todo.title,
+      timeLabel: timeLabelFromIso(todo.deadline) ?? "全天",
+      sortKey: d.getTime()
+    });
+  }
+  for (const reminder of reminders) {
+    if (reminder.date !== today) continue;
+    const sortKey = reminder.time ? new Date(`${reminder.date}T${reminder.time}`).getTime() : new Date(`${reminder.date}T23:59`).getTime();
+    candidates.push({
+      focus: { date: reminder.date, kind: "reminder", id: reminder.id },
+      title: reminder.title,
+      timeLabel: reminder.time ?? "全天",
+      sortKey
+    });
+  }
+  for (const pkg of packages) {
+    if (pkg.pickedUp || pkg.arrivalDate !== today) continue;
+    candidates.push({
+      focus: { date: pkg.arrivalDate, kind: "package", id: pkg.id },
+      title: pkg.company ? `取快递（${pkg.company}）` : "取快递",
+      timeLabel: "待取",
+      sortKey: new Date(`${pkg.arrivalDate}T23:58`).getTime()
+    });
+  }
+
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.sortKey - b.sortKey);
+  const first = candidates[0];
+  const near = first.sortKey - now > 0 && first.sortKey - now < 2 * 60 * 60 * 1000;
+  return { ...first, near };
+}
+
+export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQuickAccounting, shortcutNonce, shortcutView, storage, themeTokens }: HomePanelProps) {
   const todoStorage = useMemo(() => storage ?? getDefaultTodoStorage(), [storage]);
   const [todos, setTodos] = useState<TodoTask[]>(() => loadLocalTodos(todoStorage));
   const [notes, setNotes] = useState(() => loadNotes());
   const [packages, setPackages] = useState<PackageItem[]>(() => loadPackages());
+  const [reminders, setReminders] = useState<ReminderItem[]>(() => loadReminders());
   const [transactions, setTransactions] = useState<FinanceTransaction[]>(() => loadFinanceTransactions());
   const [viewState, setViewState] = useState<ViewState>("home");
   const [mealOpen, setMealOpen] = useState(false);
@@ -78,6 +149,7 @@ export function HomePanel({ onOpenFinance, onOpenQuickAccounting, onOpenPackages
     hydrateTodosFromCloud(todoStorage).then((next) => !cancelled && setTodos(next)).catch(() => {});
     hydrateNotesFromCloud().then((next) => !cancelled && setNotes(next)).catch(() => {});
     hydratePackagesFromCloud().then((next) => !cancelled && setPackages(next)).catch(() => {});
+    hydrateRemindersFromCloud().then((next) => !cancelled && setReminders(next)).catch(() => {});
     hydrateFinanceTransactionsFromCloud().then((next) => !cancelled && setTransactions(next)).catch(() => {});
     return () => {
       cancelled = true;
@@ -90,6 +162,7 @@ export function HomePanel({ onOpenFinance, onOpenQuickAccounting, onOpenPackages
       setTodos(sortTodos(loadLocalTodos(todoStorage)));
       setNotes(loadNotes());
       setPackages(loadPackages());
+      setReminders(loadReminders());
       setTransactions(loadFinanceTransactions());
     };
     window.addEventListener(QUICK_CAPTURE_DATA_EVENT, refresh);
@@ -101,26 +174,40 @@ export function HomePanel({ onOpenFinance, onOpenQuickAccounting, onOpenPackages
   const pendingPackages = packages.filter((item) => !item.pickedUp).length;
   const sortedHomeTodos = useMemo(() => sortTodos(todos), [todos]);
   const todoList = useCollapsibleList(sortedHomeTodos);
-  const todayExpense = useMemo(() => {
+  const todayExpenseCents = useMemo(() => {
     const today = todayIso();
-    return centsToMoney(
-      transactions
-        .filter((transaction) => transaction.transactionType === "expense" && transaction.localDate === today)
-        .reduce((sum, transaction) => sum + moneyToCents(transaction.amount), 0)
-    );
+    return transactions
+      .filter((transaction) => transaction.transactionType === "expense" && transaction.localDate === today)
+      .reduce((sum, transaction) => sum + moneyToCents(transaction.amount), 0);
   }, [transactions]);
-  const summaryLine = useMemo(() => {
-    if (todos.length > 0 && pendingCount === 0) return "今天的待办已经全部完成。";
-    if (pendingCount > 0) return `今天还有 ${pendingCount} 项待办未完成。`;
-    if (pendingPackages > 0) return `你还有 ${pendingPackages} 个快递等待领取。`;
-    if (Number(todayExpense) === 0) return "今天还没有新增待办、快递或支出记录。";
-    return `今天已记录支出 ¥${todayExpense}。`;
-  }, [pendingCount, pendingPackages, todayExpense, todos.length]);
+  const nextThing = useMemo(() => buildNextThing(todos, reminders, packages), [todos, reminders, packages]);
+  const statusChip = useMemo<{ text: string; icon: "check" | "dot"; onPress?: () => void } | null>(() => {
+    if (pendingCount > 0) return { text: `还有 ${pendingCount} 项`, icon: "dot", onPress: () => setViewState("todos") };
+    if (pendingPackages > 0) return { text: `${pendingPackages} 个待取快递`, icon: "dot", onPress: () => onOpenPackages?.() };
+    if (todos.length > 0) return { text: "今天已清空", icon: "check", onPress: () => setViewState("todos") };
+    return { text: "今天很轻松", icon: "dot" };
+  }, [pendingCount, pendingPackages, todos.length, onOpenPackages]);
 
   const toggleHomeTodo = (todoId: string) => {
+    const target = todos.find((todo) => todo.id === todoId);
+    if (!target) return;
+    const wasCompleted = target.completed;
     const next = sortTodos(todos.map((todo) => (todo.id === todoId ? { ...todo, completed: !todo.completed } : todo)));
     setTodos(next);
     saveLocalTodos(next, todoStorage);
+    if (!wasCompleted) {
+      showUndoToast({
+        message: "待办已完成",
+        onUndo: () => {
+          const revert = sortTodos(todos.map((todo) => (todo.id === todoId ? { ...todo, completed: wasCompleted } : todo)));
+          setTodos(revert);
+          saveLocalTodos(revert, todoStorage);
+          if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+            window.dispatchEvent(new Event(QUICK_CAPTURE_DATA_EVENT));
+          }
+        }
+      });
+    }
   };
 
   if (viewState === "notes") {
@@ -146,19 +233,52 @@ export function HomePanel({ onOpenFinance, onOpenQuickAccounting, onOpenPackages
           <Text style={styles.greeting}>{greeting()}</Text>
           <Text style={styles.date}>{formatToday()}</Text>
         </View>
+        {statusChip ? (
+          <PressableScale
+            testID="home-status-chip"
+            accessibilityRole="button"
+            accessibilityLabel={`今日状态：${statusChip.text}`}
+            onPress={statusChip.onPress}
+            style={styles.statusChip}
+            wrapperStyle={styles.statusChipWrap}
+          >
+            {statusChip.icon === "check" ? <IconCheck size={13} color={themeTokens.accent} /> : <View style={[styles.statusDot, { backgroundColor: themeTokens.accent }]} />}
+            <Text style={styles.statusChipText}>{statusChip.text}</Text>
+          </PressableScale>
+        ) : null}
       </View>
 
       <View testID="home-control-strip" style={styles.controlStrip}>
         <View style={styles.summaryCard}>
           <Text style={styles.widgetTitle}>今日概览</Text>
           <View style={styles.summaryGrid}>
-            <OverviewItem label="今日待办" onPress={() => setViewState("todos")} styles={styles} value={`${completedCount}/${todos.length}`} />
+            <OverviewItem label="今日待办" onPress={() => setViewState("todos")} styles={styles} value={<AnimatedNumber value={completedCount} format={(v) => `${Math.round(v)}/${todos.length}`} style={styles.summaryValue} />} />
             <View style={styles.summaryDivider} />
-            <OverviewItem label="待取快递" onPress={() => onOpenPackages?.()} styles={styles} value={String(pendingPackages)} />
+            <OverviewItem label="待取快递" onPress={() => onOpenPackages?.()} styles={styles} value={<AnimatedNumber value={pendingPackages} format={(v) => `${Math.round(v)}`} style={styles.summaryValue} />} />
           </View>
-          <Text style={styles.summaryLine} numberOfLines={1}>{summaryLine}</Text>
+          <Text style={styles.summaryLine} numberOfLines={1}>{nextThing ? `下一件事：${nextThing.timeLabel} ${nextThing.title}` : statusSummaryLine(pendingCount, pendingPackages, todayExpenseCents)}</Text>
         </View>
       </View>
+
+      {nextThing ? (
+        <PressableScale
+          testID="home-next-thing"
+          accessibilityRole="button"
+          accessibilityLabel={`下一件事：${nextThing.timeLabel} ${nextThing.title}`}
+          onPress={() => onOpenPlan?.(nextThing.focus)}
+          style={[styles.nextThing, nextThing.near ? styles.nextThingNear : null]}
+          wrapperStyle={{ width: "100%" }}
+        >
+          <View style={styles.nextTime}>
+            <IconClock size={14} color={themeTokens.accent} />
+            <Text style={styles.nextTimeText}>{nextThing.timeLabel}</Text>
+          </View>
+          <Text style={styles.nextTitle} numberOfLines={1}>{nextThing.title}</Text>
+          <View style={styles.nextArrow}>
+            <IconChevronRight size={18} color={themeTokens.textMuted} />
+          </View>
+        </PressableScale>
+      ) : null}
 
       <View testID="home-quick-accounting-card" style={styles.widget}>
         <View style={styles.quickAccountingHeader}>
@@ -168,29 +288,35 @@ export function HomePanel({ onOpenFinance, onOpenQuickAccounting, onOpenPackages
           </View>
           <View style={styles.quickAccountingAmount}>
             <Text style={styles.summaryLabel}>今日支出</Text>
-            <Text style={styles.quickAccountingValue}>¥{todayExpense}</Text>
+            <AnimatedNumber value={todayExpenseCents} format={(v) => `¥${centsToMoney(v)}`} style={styles.quickAccountingValue} />
           </View>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="快速记账：记一笔" onPress={() => onOpenQuickAccounting?.()} style={styles.quickAccountingButton}>
+        <PressableScale accessibilityRole="button" accessibilityLabel="快速记账：记一笔" onPress={() => onOpenQuickAccounting?.()} style={styles.quickAccountingButton} wrapperStyle={{ width: "100%" }} vibrate={12}>
           <Text style={styles.quickAccountingButtonText}>＋ 记一笔</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="查看账单" onPress={() => onOpenFinance?.()} style={styles.financeLink}>
+        </PressableScale>
+        <PressableScale accessibilityRole="button" accessibilityLabel="查看账单" onPress={() => onOpenFinance?.()} style={styles.financeLink} wrapperStyle={{ alignSelf: "flex-end" }}>
           <Text style={styles.widgetMoreText}>查看账单 →</Text>
-        </Pressable>
+        </PressableScale>
       </View>
 
       <View testID="home-todo-widget" style={styles.widget}>
         <View style={styles.widgetHeader}>
-          <Text style={styles.widgetTitle}>今日待办</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="查看全部每日待办" onPress={() => setViewState("todos")} style={styles.widgetMore}>
+          <View style={styles.titleRow}>
+            <Text style={styles.widgetTitle}>今日待办</Text>
+            <TitleBadge>{`${completedCount}/${todos.length}`}</TitleBadge>
+          </View>
+          <PressableScale accessibilityRole="button" accessibilityLabel="查看全部每日待办" onPress={() => setViewState("todos")} style={styles.widgetMore} wrapperStyle={{ flexShrink: 0 }}>
             <Text style={styles.widgetMoreText}>全部 →</Text>
-          </Pressable>
+          </PressableScale>
         </View>
         {todos.length === 0 ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="添加待办" onPress={() => setViewState("todos")} style={styles.compactEmpty}>
-            <Text style={styles.emptyHint}>今天还没有待办</Text>
-            <Text style={styles.quickLink}>添加待办</Text>
-          </Pressable>
+          <EmptyState
+            description="今天还没有安排，先加一件小事。"
+            icon={<IconChecklist size={34} color={themeTokens.text} />}
+            title="今天暂时没有安排"
+            tokens={themeTokens}
+            action={{ label: "＋ 添加待办", onPress: () => setViewState("todos") }}
+          />
         ) : (
           <View style={styles.todoPreviewList}>
             {todoList.visibleItems.map((todo) => (
@@ -211,33 +337,60 @@ export function HomePanel({ onOpenFinance, onOpenQuickAccounting, onOpenPackages
 
       <View style={styles.widget}>
         <View style={styles.widgetHeader}>
-          <Text style={styles.widgetTitle}>备忘录</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="查看全部备忘" onPress={() => setViewState("notes")} style={styles.widgetMore}>
+          <View style={styles.titleRow}>
+            <Text style={styles.widgetTitle}>备忘录</Text>
+            {notes.length > 0 ? <TitleBadge>{`${notes.length} 条`}</TitleBadge> : null}
+          </View>
+          <PressableScale accessibilityRole="button" accessibilityLabel="查看全部备忘" onPress={() => setViewState("notes")} style={styles.widgetMore} wrapperStyle={{ flexShrink: 0 }}>
             <Text style={styles.widgetMoreText}>全部 →</Text>
-          </Pressable>
+          </PressableScale>
         </View>
-        <Pressable testID="home-notes-quick-entry" accessibilityRole="button" accessibilityLabel="快速记一条备忘" onPress={() => setViewState("notes")} style={styles.notesQuickEntry}>
+        <PressableScale testID="home-notes-quick-entry" accessibilityRole="button" accessibilityLabel="快速记一条备忘" onPress={() => setViewState("notes")} style={styles.notesQuickEntry} wrapperStyle={{ width: "100%" }}>
           <Text style={styles.notesPlaceholder}>闪过的念头、待买清单……</Text>
           <Text style={styles.quickLink}>＋ 快速记一条备忘</Text>
-          {notes.length > 0 ? <Text style={styles.notesCount}>已有 {notes.length} 条</Text> : null}
-        </Pressable>
+        </PressableScale>
       </View>
 
       <View style={styles.widget}>
-        <Pressable testID="meal-spinner-compact-entry" accessibilityRole="button" accessibilityLabel="打开今天吃什么转盘" onPress={() => setMealOpen((value) => !value)} style={styles.mealEntry}>
+        <PressableScale testID="meal-spinner-compact-entry" accessibilityRole="button" accessibilityLabel="打开今天吃什么转盘" onPress={() => setMealOpen((value) => !value)} style={styles.mealEntry} wrapperStyle={{ width: "100%" }}>
           <View>
-            <Text style={styles.widgetTitle}>今天吃什么</Text>
+            <View style={styles.titleRow}>
+              <Text style={styles.widgetTitle}>今天吃什么</Text>
+              <TitleBadge>{`${MEAL_PRESET_COUNT} 候选`}</TitleBadge>
+            </View>
             <Text style={styles.notesPlaceholder}>已添加 {MEAL_PRESET_COUNT} 个候选选项</Text>
           </View>
           <Text style={styles.quickLink}>{mealOpen ? "收起" : "去转盘 →"}</Text>
-        </Pressable>
+        </PressableScale>
         {mealOpen ? <MealSpinner /> : null}
       </View>
     </ScrollView>
   );
 }
 
-function OverviewItem({ label, onPress, styles, value }: { label: string; onPress: () => void; styles: ReturnType<typeof createStyles>; value: string }) {
+function statusSummaryLine(pendingCount: number, pendingPackages: number, todayExpenseCents: number) {
+  if (pendingCount > 0) return `今天还有 ${pendingCount} 项待办未完成。`;
+  if (pendingPackages > 0) return `你还有 ${pendingPackages} 个快递等待领取。`;
+  if (todayExpenseCents === 0) return "今天还没有新增待办、快递或支出记录。";
+  return `今天已记录支出 ¥${centsToMoney(todayExpenseCents)}。`;
+}
+
+function TitleBadge({ children }: { children: ReactNode }) {
+  return <Text style={titleBadgeStyle}>{children}</Text>;
+}
+
+const titleBadgeStyle: import("react-native").TextStyle = {
+  color: "#4f9d39",
+  fontSize: 12,
+  fontWeight: "900",
+  backgroundColor: "#e8f6ee",
+  borderRadius: 999,
+  paddingHorizontal: 8,
+  paddingVertical: 2,
+  overflow: "hidden"
+};
+
+function OverviewItem({ label, onPress, styles, value }: { label: string; onPress: () => void; styles: ReturnType<typeof createStyles>; value: ReactNode }) {
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`打开${label}`} onPress={onPress} style={styles.summaryStat}>
       <Text numberOfLines={1} style={styles.summaryValue}>{value}</Text>
@@ -471,6 +624,70 @@ function createStyles(tokens: UiTokens) {
       color: tokens.text,
       fontSize: 16,
       fontWeight: "900"
+    },
+    titleRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 8
+    },
+    statusChip: {
+      alignItems: "center",
+      backgroundColor: tokens.accentSoft,
+      borderRadius: 999,
+      flexDirection: "row",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 7
+    },
+    statusChipWrap: {
+      flexShrink: 0
+    },
+    statusChipText: {
+      color: tokens.text,
+      fontSize: 13,
+      fontWeight: "900"
+    },
+    statusDot: {
+      borderRadius: 999,
+      height: 7,
+      width: 7
+    },
+    nextThing: {
+      alignItems: "center",
+      backgroundColor: "#eef7ee",
+      borderRadius: 14,
+      flexDirection: "row",
+      gap: 12,
+      minHeight: 64,
+      paddingHorizontal: 14,
+      paddingVertical: 10
+    },
+    nextThingNear: {
+      backgroundColor: tokens.accentSoft
+    },
+    nextTime: {
+      alignItems: "center",
+      backgroundColor: "#ffffff",
+      borderRadius: 10,
+      flexDirection: "row",
+      gap: 5,
+      paddingHorizontal: 10,
+      paddingVertical: 7
+    },
+    nextTimeText: {
+      color: tokens.text,
+      fontSize: 14,
+      fontWeight: "900"
+    },
+    nextTitle: {
+      color: tokens.text,
+      flex: 1,
+      fontSize: 15,
+      fontWeight: "800",
+      minWidth: 0
+    },
+    nextArrow: {
+      flexShrink: 0
     }
   });
 }

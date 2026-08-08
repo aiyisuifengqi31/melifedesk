@@ -1,0 +1,40 @@
+import { useEffect, useRef, useState } from "react";
+import { Animated, Text, type TextStyle } from "react-native";
+
+type Props = {
+  value: number;
+  format: (value: number) => string;
+  style?: TextStyle;
+  duration?: number;
+};
+
+/**
+ * 轻量数字过渡：数值变化时在 duration 内从旧值平滑递增到新值，
+ * 不做复杂滚轮动画，仅 200~350ms 淡入式切换。
+ */
+export function AnimatedNumber({ value, format, style, duration = 280 }: Props) {
+  const animated = useRef(new Animated.Value(value));
+  const prev = useRef(value);
+  const [display, setDisplay] = useState(() => format(value));
+
+  useEffect(() => {
+    const node = animated.current;
+    node.setValue(prev.current);
+    const listener = node.addListener(({ value: v }) => setDisplay(format(v)));
+    const animation = Animated.timing(node, { toValue: value, duration, useNativeDriver: false });
+    animation.start(({ finished }) => {
+      if (finished) {
+        node.removeListener(listener);
+        setDisplay(format(value));
+      }
+    });
+    prev.current = value;
+    return () => {
+      node.removeListener(listener);
+      animation.stop();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, duration]);
+
+  return <Text style={style}>{display}</Text>;
+}

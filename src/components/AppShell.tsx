@@ -34,7 +34,9 @@ import { getTheme } from "@/theme/registry";
 import type { ColorMode, ThemeId } from "@/theme/types";
 import { hydrateBackgroundFromCloud, loadBackground, saveBackground, type BackgroundSource, getImageSource } from "@/theme/background";
 import { FixedBottomTabs } from "@/shared/ui/FixedBottomTabs";
+import { UndoToastHost, showUndoToast } from "@/shared/ui/UndoToast";
 import { useDisableTouchCallout } from "@/shared/ui/useDisableTouchCallout";
+import { setPlanFocus } from "@/features/plan/planFocus";
 import { ThemedNavIcon } from "./ThemedNavIcon";
 
 type AppShellProps = {
@@ -70,7 +72,6 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
   const [quickAccountingOpen, setQuickAccountingOpen] = useState(false);
-  const [quickAccountingToast, setQuickAccountingToast] = useState<FinanceTransaction | null>(null);
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const [shortcutRequest, setShortcutRequest] = useState<ShortcutRequest | null>(null);
   const [themeId, setThemeId] = useState<ThemeId>(() => readStoredThemeId(typeof window === "undefined" ? undefined : window.localStorage) ?? "default");
@@ -197,27 +198,25 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
     setCurrentRoute(href);
   };
 
-  const undoQuickAccounting = () => {
-    if (!quickAccountingToast) return;
+  const undoQuickAccounting = (transaction: FinanceTransaction) => {
     const storage = getDefaultFinanceStorage();
-    if (quickAccountingToast.savingEntryId || quickAccountingToast.categoryName === "储蓄") {
+    if (transaction.savingEntryId || transaction.categoryName === "储蓄") {
       saveSavingEntries(
-        loadSavingEntries(storage).filter((entry) => entry.id !== quickAccountingToast.savingEntryId && entry.financeTransactionId !== quickAccountingToast.id),
+        loadSavingEntries(storage).filter((entry) => entry.id !== transaction.savingEntryId && entry.financeTransactionId !== transaction.id),
         storage
       );
     }
-    if (quickAccountingToast.giftRecordId || quickAccountingToast.categoryName === "随份子") {
+    if (transaction.giftRecordId || transaction.categoryName === "随份子") {
       saveGiftRecords(
-        loadGiftRecords(storage).filter((record) => record.id !== quickAccountingToast.giftRecordId && record.financeTransactionId !== quickAccountingToast.id),
+        loadGiftRecords(storage).filter((record) => record.id !== transaction.giftRecordId && record.financeTransactionId !== transaction.id),
         storage
       );
     }
-    const next = sortTransactions(loadFinanceTransactions(storage).filter((transaction) => transaction.id !== quickAccountingToast.id));
+    const next = sortTransactions(loadFinanceTransactions(storage).filter((t) => t.id !== transaction.id));
     saveFinanceTransactions(next, storage);
     if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
       window.dispatchEvent(new Event(QUICK_CAPTURE_DATA_EVENT));
     }
-    setQuickAccountingToast(null);
   };
 
   const openQuickCapture = () => {
@@ -448,21 +447,18 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
 
       <QuickAccountingSheet
         onClose={() => setQuickAccountingOpen(false)}
-        onSaved={(transaction) => setQuickAccountingToast(transaction)}
+        onSaved={(transaction) => {
+          const sign = transaction.transactionType === "expense" ? "-" : "+";
+          showUndoToast({
+            message: `已记录 ${transaction.categoryName} ${sign}¥${transaction.amount}`,
+            onUndo: () => undoQuickAccounting(transaction)
+          });
+        }}
         tokens={tokens}
         visible={quickAccountingOpen}
       />
 
-      {quickAccountingToast ? (
-        <View style={styles.quickAccountingToast}>
-          <Text style={styles.quickAccountingToastText}>
-            已记录 {quickAccountingToast.categoryName} {quickAccountingToast.transactionType === "expense" ? "-" : "+"}¥{quickAccountingToast.amount}
-          </Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="撤销刚刚的记账" onPress={undoQuickAccounting} style={styles.quickAccountingUndo}>
-            <Text style={styles.quickAccountingUndoText}>撤销</Text>
-          </Pressable>
-        </View>
-      ) : null}
+      <UndoToastHost tokens={tokens} />
 
       {settingsOpen ? (
         <SettingsPanel
@@ -556,6 +552,10 @@ function PageContent({
       {activeKey === "home" ? (
         <HomePanel
           onOpenFinance={() => handleNavigate("/finance")}
+          onOpenPlan={(focus) => {
+            setPlanFocus(focus);
+            handleNavigate("/plan");
+          }}
           onOpenQuickAccounting={onOpenQuickAccounting}
           onOpenPackages={onOpenPackages}
           shortcutNonce={shortcutRequest?.nonce}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
+import { consumePlanFocus } from "@/features/plan/planFocus";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { getHolidayLabel, isWeekend } from "./holidays";
 import { PackagePanel } from "./PackagePanel";
@@ -54,6 +55,19 @@ export function DailyPlanPanel({ shortcutNonce, shortcutTarget, storage, themeTo
   const [quickKind, setQuickKind] = useState<"todo" | "reminder" | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftTime, setDraftTime] = useState("");
+  const [focusId, setFocusId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const focus = consumePlanFocus();
+    if (!focus) return;
+    const parsed = parseIsoDate(focus.date);
+    setSelectedDate(focus.date);
+    setViewYear(parsed.getFullYear());
+    setViewMonth(parsed.getMonth());
+    setFocusId(focus.id);
+    const timer = setTimeout(() => setFocusId(null), 4000);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -206,7 +220,7 @@ export function DailyPlanPanel({ shortcutNonce, shortcutTarget, storage, themeTo
               <Text style={styles.emptyText}>可以补一个待办、提醒，或把快递记在这一天。</Text>
             </View>
           ) : (
-            selectedSchedule.map((item) => <ScheduleRow item={item} key={`${item.kind}-${item.id}`} onToggleTodo={toggleTodo} />)
+            selectedSchedule.map((item) => <ScheduleRow highlight={item.id === focusId} item={item} key={`${item.kind}-${item.id}`} onToggleTodo={toggleTodo} />)
           )}
         </View>
       </View>
@@ -297,10 +311,10 @@ function LifeCalendar({
   );
 }
 
-function ScheduleRow({ item, onToggleTodo }: { item: ScheduleItem; onToggleTodo: (id: string) => void }) {
+function ScheduleRow({ highlight, item, onToggleTodo }: { highlight?: boolean; item: ScheduleItem; onToggleTodo: (id: string) => void }) {
   const done = item.kind === "todo" && item.todo.completed;
   return (
-    <View style={[styles.scheduleRow, done ? styles.scheduleRowDone : null]}>
+    <View style={[styles.scheduleRow, done ? styles.scheduleRowDone : null, highlight ? styles.scheduleRowFocus : null]}>
       {item.kind === "todo" ? (
         <Pressable
           accessibilityRole="checkbox"
@@ -690,6 +704,11 @@ const styles = StyleSheet.create({
   },
   scheduleRowDone: {
     opacity: 0.72
+  },
+  scheduleRowFocus: {
+    backgroundColor: "#eef7ee",
+    borderColor: "#7cb87c",
+    borderWidth: 1.5
   },
   scheduleTitle: {
     color: "#111827",

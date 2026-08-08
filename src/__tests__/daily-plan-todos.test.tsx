@@ -211,7 +211,7 @@ describe("Todo route interactions", () => {
 
     expect(screen.getByText("今日概览")).toBeOnTheScreen();
     expect(screen.queryByText("生活控制中心")).toBeNull();
-    expect(screen.getByText("1/2")).toBeOnTheScreen();
+    expect(screen.getAllByText("1/2").length).toBeGreaterThan(0);
     expect(screen.getByText("待取快递")).toBeOnTheScreen();
     expect(screen.getAllByText("¥52.00").length).toBeGreaterThan(0);
     expect(screen.queryByText("金币")).toBeNull();

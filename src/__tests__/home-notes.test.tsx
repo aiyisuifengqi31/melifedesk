@@ -61,7 +61,7 @@ describe("HomePanel notes", () => {
     render(<HomePanel themeTokens={testTokens} />);
 
     expect(screen.getByTestId("home-notes-quick-entry")).toBeOnTheScreen();
-    expect(screen.getByText("已有 4 条")).toBeOnTheScreen();
+    expect(screen.getByText("4 条")).toBeOnTheScreen();
     expect(screen.queryByText("买菜清单")).toBeNull();
     expect(screen.queryByRole("button", { name: "删除备忘：周末安排" })).toBeNull();
 
