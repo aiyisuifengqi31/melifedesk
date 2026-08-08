@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
+import type { StyleProp, ViewStyle } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 
 type IconProps = {
   size?: number;
   color?: string;
   strokeWidth?: number;
+  style?: StyleProp<ViewStyle>;
 };
 
 function base(size: number, color: string, strokeWidth: number, children: ReactNode) {
@@ -165,5 +167,41 @@ export function IconCalendar({ size = 20, color = "currentColor", strokeWidth = 
       <Rect x="4" y="5" width="16" height="16" rx="2" />
       <Path d="M4 9h16M8 3v4M16 3v4" />
     </>
+  );
+}
+
+export function IconChevronDown({ size = 20, color = "currentColor", strokeWidth = 2, style }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+      <Path d="M6 9l6 6 6-6" />
+    </Svg>
+  );
+}
+
+export function IconGripVertical({ size = 20, color = "currentColor", strokeWidth = 2, style }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+      <Path d="M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01" />
+    </Svg>
+  );
+}
+
+export function IconEye({ size = 20, color = "currentColor", strokeWidth = 1.8, style }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+      <Path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+      <Circle cx="12" cy="12" r="3" />
+    </Svg>
+  );
+}
+
+export function IconEyeOff({ size = 20, color = "currentColor", strokeWidth = 1.8, style }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+      <Path d="M3 3l18 18" />
+      <Path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.3 4.1" />
+      <Path d="M6.2 6.2A17 17 0 0 0 2 12s3.5 7 10 7a10.6 10.6 0 0 0 4.3-.9" />
+      <Path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    </Svg>
   );
 }

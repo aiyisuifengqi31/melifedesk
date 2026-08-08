@@ -172,7 +172,7 @@ describe("Todo route interactions", () => {
   it("keeps the life control center compact without the removed pet widget", () => {
     render(<HomePanel storage={window.localStorage} themeTokens={testTokens} />);
 
-    expect(screen.getByTestId("home-control-strip")).toHaveStyle({ flexDirection: "row" });
+    expect(screen.getByTestId("home-summary-card")).toBeOnTheScreen();
     expect(screen.queryByRole("button", { name: "切换为小猫" })).toBeNull();
     expect(screen.queryByRole("button", { name: "切换为小狗" })).toBeNull();
     expect(screen.queryByRole("button", { name: "摸摸小宠物" })).toBeNull();

@@ -9,12 +9,14 @@ import { hydrateRemindersFromCloud, loadReminders, type ReminderItem } from "@/f
 import { setPlanFocus, type PlanFocus } from "@/features/plan/planFocus";
 import { getDefaultTodoStorage, hydrateTodosFromCloud, loadLocalTodos, saveLocalTodos, sortTodos, type TodoStorage, type TodoTask } from "@/features/plan/todoStorage";
 import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
+import { HOME_CARDS, loadHomeCollapsed, loadHomeOrder, moveCardDown, moveCardUp, saveHomeCollapsed, saveHomeOrder, toggleCardHidden, type HomeCardId } from "@/features/home/homeLayout";
 import { CollapsibleSectionFooter, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import { AnimatedNumber } from "@/shared/ui/AnimatedNumber";
-import { IconCheck, IconChecklist, IconChevronRight, IconClock } from "@/shared/ui/lineIcons";
+import { IconCheck, IconChecklist, IconChevronRight, IconClock, IconGripVertical, IconMoreHorizontal } from "@/shared/ui/lineIcons";
 import { PressableScale } from "@/shared/ui/PressableScale";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { EmptyState } from "@/shared/ui/primitives";
+import { HomeCard } from "@/shared/ui/HomeCard";
 import { showUndoToast } from "@/shared/ui/UndoToast";
 import { MealSpinner } from "./MealSpinner";
 import { NotesPanel } from "./NotesPanel";
@@ -138,7 +140,39 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQui
   const [transactions, setTransactions] = useState<FinanceTransaction[]>(() => loadFinanceTransactions());
   const [viewState, setViewState] = useState<ViewState>("home");
   const [mealOpen, setMealOpen] = useState(false);
+  const [order, setOrder] = useState<HomeCardId[]>(() => loadHomeOrder());
+  const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>(() => loadHomeCollapsed());
+  const [editMode, setEditMode] = useState(false);
   const styles = useMemo(() => createStyles(themeTokens), [themeTokens]);
+
+  const toggleCollapse = (id: HomeCardId) => {
+    setCollapsedMap((previous) => {
+      const next = { ...previous, [id]: !(previous[id] ?? false) };
+      saveHomeCollapsed(next);
+      return next;
+    });
+  };
+  const moveUp = (id: HomeCardId) => {
+    setOrder((previous) => {
+      const next = moveCardUp(previous, id);
+      if (next !== previous) saveHomeOrder(next);
+      return next;
+    });
+  };
+  const moveDown = (id: HomeCardId) => {
+    setOrder((previous) => {
+      const next = moveCardDown(previous, id);
+      if (next !== previous) saveHomeOrder(next);
+      return next;
+    });
+  };
+  const toggleHide = (id: HomeCardId) => {
+    setOrder((previous) => {
+      const next = toggleCardHidden(previous, id);
+      if (next !== previous) saveHomeOrder(next);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (shortcutView) setViewState(shortcutView);
@@ -226,6 +260,189 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQui
     );
   }
 
+  const renderHomeCard = (id: HomeCardId, hidden: boolean) => {
+    const meta = HOME_CARDS.find((card) => card.id === id);
+    if (!meta) return null;
+    const index = order.indexOf(id);
+    const collapsed = collapsedMap[id] ?? false;
+    const common = {
+      collapsed,
+      collapsible: true,
+      onToggleCollapse: () => toggleCollapse(id),
+      editMode,
+      onMoveUp: () => moveUp(id),
+      onMoveDown: () => moveDown(id),
+      onToggleHide: () => toggleHide(id),
+      hidden,
+      locked: meta.core,
+      canMoveUp: index > 0,
+      canMoveDown: index < order.length - 1,
+      tokens: themeTokens
+    };
+
+    switch (id) {
+      case "summary":
+        return (
+          <HomeCard key={id} testID="home-summary-card" {...common} title={<Text style={styles.widgetTitle}>今日概览</Text>}>
+            <View style={styles.summaryGrid}>
+              <OverviewItem label="今日待办" onPress={() => setViewState("todos")} styles={styles} value={<AnimatedNumber value={completedCount} format={(v) => `${Math.round(v)}/${todos.length}`} style={styles.summaryValue} />} />
+              <View style={styles.summaryDivider} />
+              <OverviewItem label="待取快递" onPress={() => onOpenPackages?.()} styles={styles} value={<AnimatedNumber value={pendingPackages} format={(v) => `${Math.round(v)}`} style={styles.summaryValue} />} />
+            </View>
+            <Text style={styles.summaryLine} numberOfLines={1}>{nextThing ? `下一件事：${nextThing.timeLabel} ${nextThing.title}` : statusSummaryLine(pendingCount, pendingPackages, todayExpenseCents)}</Text>
+          </HomeCard>
+        );
+      case "nextThing":
+        if (!nextThing && !editMode) return null;
+        return (
+          <HomeCard key={id} testID="home-next-thing" {...common} collapsible={false} accentSurface title={<Text style={styles.widgetTitle}>下一件事</Text>}>
+            {nextThing ? (
+              <PressableScale
+                accessibilityRole="button"
+                accessibilityLabel={`下一件事：${nextThing.timeLabel} ${nextThing.title}`}
+                onPress={() => onOpenPlan?.(nextThing.focus)}
+                style={[styles.nextThing, nextThing.near ? styles.nextThingNear : null]}
+                wrapperStyle={{ width: "100%" }}
+              >
+                <View style={styles.nextTime}>
+                  <IconClock size={14} color={themeTokens.accent} />
+                  <Text style={styles.nextTimeText}>{nextThing.timeLabel}</Text>
+                </View>
+                <Text style={styles.nextTitle} numberOfLines={1}>{nextThing.title}</Text>
+                <View style={styles.nextArrow}>
+                  <IconChevronRight size={18} color={themeTokens.textMuted} />
+                </View>
+              </PressableScale>
+            ) : (
+              <Text style={styles.notesPlaceholder}>今天没有待办、提醒或快递需要处理。</Text>
+            )}
+          </HomeCard>
+        );
+      case "quickAccounting":
+        return (
+          <HomeCard
+            key={id}
+            testID="home-quick-accounting-card"
+            {...common}
+            title={
+              <View>
+                <Text style={styles.widgetTitle}>快速记账</Text>
+                <Text style={styles.notesPlaceholder}>不进入记账页，直接记录一笔</Text>
+              </View>
+            }
+            headerRight={
+              <View style={styles.quickAccountingAmount}>
+                <Text style={styles.summaryLabel}>今日支出</Text>
+                <AnimatedNumber value={todayExpenseCents} format={(v) => `¥${centsToMoney(v)}`} style={styles.quickAccountingValue} />
+              </View>
+            }
+          >
+            <PressableScale accessibilityRole="button" accessibilityLabel="快速记账：记一笔" onPress={() => onOpenQuickAccounting?.()} style={styles.quickAccountingButton} wrapperStyle={{ width: "100%" }} vibrate={12}>
+              <Text style={styles.quickAccountingButtonText}>＋ 记一笔</Text>
+            </PressableScale>
+            <PressableScale accessibilityRole="button" accessibilityLabel="查看账单" onPress={() => onOpenFinance?.()} style={styles.financeLink} wrapperStyle={{ alignSelf: "flex-end" }}>
+              <Text style={styles.widgetMoreText}>查看账单 →</Text>
+            </PressableScale>
+          </HomeCard>
+        );
+      case "todos":
+        return (
+          <HomeCard
+            key={id}
+            testID="home-todo-widget"
+            {...common}
+            title={
+              <View style={styles.titleRow}>
+                <Text style={styles.widgetTitle}>今日待办</Text>
+                <TitleBadge>{`${completedCount}/${todos.length}`}</TitleBadge>
+              </View>
+            }
+            headerRight={
+              <PressableScale accessibilityRole="button" accessibilityLabel="查看全部每日待办" onPress={() => setViewState("todos")} style={styles.widgetMore} wrapperStyle={{ flexShrink: 0 }}>
+                <Text style={styles.widgetMoreText}>全部 →</Text>
+              </PressableScale>
+            }
+          >
+            {todos.length === 0 ? (
+              <EmptyState
+                description="今天还没有安排，先加一件小事。"
+                icon={<IconChecklist size={34} color={themeTokens.text} />}
+                title="今天暂时没有安排"
+                tokens={themeTokens}
+                action={{ label: "＋ 添加待办", onPress: () => setViewState("todos") }}
+              />
+            ) : (
+              <View style={styles.todoPreviewList}>
+                {todoList.visibleItems.map((todo) => (
+                  <View key={todo.id} style={styles.todoRow}>
+                    <Pressable accessibilityRole="checkbox" accessibilityLabel={`${todo.completed ? "恢复" : "完成"}首页待办：${todo.title}`} accessibilityState={{ checked: todo.completed }} onPress={() => toggleHomeTodo(todo.id)} style={styles.todoCheckWrap}>
+                      <View style={[styles.todoCheck, todo.completed ? styles.todoCheckActive : null]}>{todo.completed ? <Text style={styles.todoCheckMark}>✓</Text> : null}</View>
+                    </Pressable>
+                    <View style={styles.todoTextButton}>
+                      <Text style={[styles.todoTitle, todo.completed ? styles.todoTitleDone : null]} numberOfLines={1}>{todo.title}</Text>
+                    </View>
+                    <Text style={[styles.todoPriorityText, todo.completed ? styles.todoPriorityTextDone : null]}>{todoPriorityLabels[todo.priority]}</Text>
+                  </View>
+                ))}
+                <CollapsibleSectionFooter testID="home-todo-show-more" name="待办" expanded={todoList.expanded} hiddenCount={todoList.hiddenCount} onPress={todoList.toggle} tokens={themeTokens} visible={todoList.canExpand} />
+              </View>
+            )}
+          </HomeCard>
+        );
+      case "notes":
+        return (
+          <HomeCard
+            key={id}
+            testID="home-notes-card"
+            {...common}
+            title={
+              <View style={styles.titleRow}>
+                <Text style={styles.widgetTitle}>备忘录</Text>
+                {notes.length > 0 ? <TitleBadge>{`${notes.length} 条`}</TitleBadge> : null}
+              </View>
+            }
+            headerRight={
+              <PressableScale accessibilityRole="button" accessibilityLabel="查看全部备忘" onPress={() => setViewState("notes")} style={styles.widgetMore} wrapperStyle={{ flexShrink: 0 }}>
+                <Text style={styles.widgetMoreText}>全部 →</Text>
+              </PressableScale>
+            }
+          >
+            <PressableScale testID="home-notes-quick-entry" accessibilityRole="button" accessibilityLabel="快速记一条备忘" onPress={() => setViewState("notes")} style={styles.notesQuickEntry} wrapperStyle={{ width: "100%" }}>
+              <Text style={styles.notesPlaceholder}>闪过的念头、待买清单……</Text>
+              <Text style={styles.quickLink}>＋ 快速记一条备忘</Text>
+            </PressableScale>
+          </HomeCard>
+        );
+      case "meal":
+        return (
+          <HomeCard
+            key={id}
+            testID="home-meal-card"
+            {...common}
+            title={
+              <View style={styles.titleRow}>
+                <Text style={styles.widgetTitle}>今天吃什么</Text>
+                <TitleBadge>{`${MEAL_PRESET_COUNT} 候选`}</TitleBadge>
+              </View>
+            }
+            headerRight={
+              <PressableScale testID="meal-spinner-compact-entry" accessibilityRole="button" accessibilityLabel="打开今天吃什么转盘" onPress={() => setMealOpen((value) => !value)} style={styles.widgetMore} wrapperStyle={{ flexShrink: 0 }}>
+                <Text style={styles.widgetMoreText}>{mealOpen ? "收起" : "去转盘 →"}</Text>
+              </PressableScale>
+            }
+          >
+            {mealOpen ? <MealSpinner /> : null}
+          </HomeCard>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const workingOrder = editMode
+    ? [...order, ...HOME_CARDS.filter((card) => !order.includes(card.id)).map((card) => card.id)]
+    : order;
+
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.page}>
       <View style={styles.header}>
@@ -233,137 +450,41 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQui
           <Text style={styles.greeting}>{greeting()}</Text>
           <Text style={styles.date}>{formatToday()}</Text>
         </View>
-        {statusChip ? (
+        <View style={styles.headerRight}>
+          {statusChip ? (
+            <PressableScale
+              testID="home-status-chip"
+              accessibilityRole="button"
+              accessibilityLabel={`今日状态：${statusChip.text}`}
+              onPress={statusChip.onPress}
+              style={styles.statusChip}
+              wrapperStyle={styles.statusChipWrap}
+            >
+              {statusChip.icon === "check" ? <IconCheck size={13} color={themeTokens.accent} /> : <View style={[styles.statusDot, { backgroundColor: themeTokens.accent }]} />}
+              <Text style={styles.statusChipText}>{statusChip.text}</Text>
+            </PressableScale>
+          ) : null}
           <PressableScale
-            testID="home-status-chip"
+            testID="home-edit-toggle"
             accessibilityRole="button"
-            accessibilityLabel={`今日状态：${statusChip.text}`}
-            onPress={statusChip.onPress}
-            style={styles.statusChip}
-            wrapperStyle={styles.statusChipWrap}
+            accessibilityLabel={editMode ? "完成编辑首页" : "编辑首页"}
+            onPress={() => setEditMode((value) => !value)}
+            style={styles.editButton}
+            wrapperStyle={styles.editButtonWrap}
           >
-            {statusChip.icon === "check" ? <IconCheck size={13} color={themeTokens.accent} /> : <View style={[styles.statusDot, { backgroundColor: themeTokens.accent }]} />}
-            <Text style={styles.statusChipText}>{statusChip.text}</Text>
+            {editMode ? <IconCheck size={16} color={themeTokens.accent} /> : <IconMoreHorizontal size={18} color={themeTokens.textMuted} />}
           </PressableScale>
-        ) : null}
-      </View>
-
-      <View testID="home-control-strip" style={styles.controlStrip}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.widgetTitle}>今日概览</Text>
-          <View style={styles.summaryGrid}>
-            <OverviewItem label="今日待办" onPress={() => setViewState("todos")} styles={styles} value={<AnimatedNumber value={completedCount} format={(v) => `${Math.round(v)}/${todos.length}`} style={styles.summaryValue} />} />
-            <View style={styles.summaryDivider} />
-            <OverviewItem label="待取快递" onPress={() => onOpenPackages?.()} styles={styles} value={<AnimatedNumber value={pendingPackages} format={(v) => `${Math.round(v)}`} style={styles.summaryValue} />} />
-          </View>
-          <Text style={styles.summaryLine} numberOfLines={1}>{nextThing ? `下一件事：${nextThing.timeLabel} ${nextThing.title}` : statusSummaryLine(pendingCount, pendingPackages, todayExpenseCents)}</Text>
         </View>
       </View>
 
-      {nextThing ? (
-        <PressableScale
-          testID="home-next-thing"
-          accessibilityRole="button"
-          accessibilityLabel={`下一件事：${nextThing.timeLabel} ${nextThing.title}`}
-          onPress={() => onOpenPlan?.(nextThing.focus)}
-          style={[styles.nextThing, nextThing.near ? styles.nextThingNear : null]}
-          wrapperStyle={{ width: "100%" }}
-        >
-          <View style={styles.nextTime}>
-            <IconClock size={14} color={themeTokens.accent} />
-            <Text style={styles.nextTimeText}>{nextThing.timeLabel}</Text>
-          </View>
-          <Text style={styles.nextTitle} numberOfLines={1}>{nextThing.title}</Text>
-          <View style={styles.nextArrow}>
-            <IconChevronRight size={18} color={themeTokens.textMuted} />
-          </View>
-        </PressableScale>
+      {editMode ? (
+        <View style={styles.editBanner}>
+          <IconGripVertical size={14} color={themeTokens.textMuted} />
+          <Text style={styles.editBannerText}>拖动排序、隐藏卡片；核心模块已锁定不可隐藏</Text>
+        </View>
       ) : null}
 
-      <View testID="home-quick-accounting-card" style={styles.widget}>
-        <View style={styles.quickAccountingHeader}>
-          <View>
-            <Text style={styles.widgetTitle}>快速记账</Text>
-            <Text style={styles.notesPlaceholder}>不进入记账页，直接记录一笔</Text>
-          </View>
-          <View style={styles.quickAccountingAmount}>
-            <Text style={styles.summaryLabel}>今日支出</Text>
-            <AnimatedNumber value={todayExpenseCents} format={(v) => `¥${centsToMoney(v)}`} style={styles.quickAccountingValue} />
-          </View>
-        </View>
-        <PressableScale accessibilityRole="button" accessibilityLabel="快速记账：记一笔" onPress={() => onOpenQuickAccounting?.()} style={styles.quickAccountingButton} wrapperStyle={{ width: "100%" }} vibrate={12}>
-          <Text style={styles.quickAccountingButtonText}>＋ 记一笔</Text>
-        </PressableScale>
-        <PressableScale accessibilityRole="button" accessibilityLabel="查看账单" onPress={() => onOpenFinance?.()} style={styles.financeLink} wrapperStyle={{ alignSelf: "flex-end" }}>
-          <Text style={styles.widgetMoreText}>查看账单 →</Text>
-        </PressableScale>
-      </View>
-
-      <View testID="home-todo-widget" style={styles.widget}>
-        <View style={styles.widgetHeader}>
-          <View style={styles.titleRow}>
-            <Text style={styles.widgetTitle}>今日待办</Text>
-            <TitleBadge>{`${completedCount}/${todos.length}`}</TitleBadge>
-          </View>
-          <PressableScale accessibilityRole="button" accessibilityLabel="查看全部每日待办" onPress={() => setViewState("todos")} style={styles.widgetMore} wrapperStyle={{ flexShrink: 0 }}>
-            <Text style={styles.widgetMoreText}>全部 →</Text>
-          </PressableScale>
-        </View>
-        {todos.length === 0 ? (
-          <EmptyState
-            description="今天还没有安排，先加一件小事。"
-            icon={<IconChecklist size={34} color={themeTokens.text} />}
-            title="今天暂时没有安排"
-            tokens={themeTokens}
-            action={{ label: "＋ 添加待办", onPress: () => setViewState("todos") }}
-          />
-        ) : (
-          <View style={styles.todoPreviewList}>
-            {todoList.visibleItems.map((todo) => (
-              <View key={todo.id} style={styles.todoRow}>
-                <Pressable accessibilityRole="checkbox" accessibilityLabel={`${todo.completed ? "恢复" : "完成"}首页待办：${todo.title}`} accessibilityState={{ checked: todo.completed }} onPress={() => toggleHomeTodo(todo.id)} style={styles.todoCheckWrap}>
-                  <View style={[styles.todoCheck, todo.completed ? styles.todoCheckActive : null]}>{todo.completed ? <Text style={styles.todoCheckMark}>✓</Text> : null}</View>
-                </Pressable>
-                <View style={styles.todoTextButton}>
-                  <Text style={[styles.todoTitle, todo.completed ? styles.todoTitleDone : null]} numberOfLines={1}>{todo.title}</Text>
-                </View>
-                <Text style={[styles.todoPriorityText, todo.completed ? styles.todoPriorityTextDone : null]}>{todoPriorityLabels[todo.priority]}</Text>
-              </View>
-            ))}
-            <CollapsibleSectionFooter testID="home-todo-show-more" name="待办" expanded={todoList.expanded} hiddenCount={todoList.hiddenCount} onPress={todoList.toggle} tokens={themeTokens} visible={todoList.canExpand} />
-          </View>
-        )}
-      </View>
-
-      <View style={styles.widget}>
-        <View style={styles.widgetHeader}>
-          <View style={styles.titleRow}>
-            <Text style={styles.widgetTitle}>备忘录</Text>
-            {notes.length > 0 ? <TitleBadge>{`${notes.length} 条`}</TitleBadge> : null}
-          </View>
-          <PressableScale accessibilityRole="button" accessibilityLabel="查看全部备忘" onPress={() => setViewState("notes")} style={styles.widgetMore} wrapperStyle={{ flexShrink: 0 }}>
-            <Text style={styles.widgetMoreText}>全部 →</Text>
-          </PressableScale>
-        </View>
-        <PressableScale testID="home-notes-quick-entry" accessibilityRole="button" accessibilityLabel="快速记一条备忘" onPress={() => setViewState("notes")} style={styles.notesQuickEntry} wrapperStyle={{ width: "100%" }}>
-          <Text style={styles.notesPlaceholder}>闪过的念头、待买清单……</Text>
-          <Text style={styles.quickLink}>＋ 快速记一条备忘</Text>
-        </PressableScale>
-      </View>
-
-      <View style={styles.widget}>
-        <PressableScale testID="meal-spinner-compact-entry" accessibilityRole="button" accessibilityLabel="打开今天吃什么转盘" onPress={() => setMealOpen((value) => !value)} style={styles.mealEntry} wrapperStyle={{ width: "100%" }}>
-          <View>
-            <View style={styles.titleRow}>
-              <Text style={styles.widgetTitle}>今天吃什么</Text>
-              <TitleBadge>{`${MEAL_PRESET_COUNT} 候选`}</TitleBadge>
-            </View>
-            <Text style={styles.notesPlaceholder}>已添加 {MEAL_PRESET_COUNT} 个候选选项</Text>
-          </View>
-          <Text style={styles.quickLink}>{mealOpen ? "收起" : "去转盘 →"}</Text>
-        </PressableScale>
-        {mealOpen ? <MealSpinner /> : null}
-      </View>
+      {workingOrder.map((id) => renderHomeCard(id, !order.includes(id)))}
     </ScrollView>
   );
 }
@@ -688,6 +809,40 @@ function createStyles(tokens: UiTokens) {
     },
     nextArrow: {
       flexShrink: 0
+    },
+    headerRight: {
+      alignItems: "center",
+      flexDirection: "row",
+      flexShrink: 0,
+      gap: 8
+    },
+    editButton: {
+      alignItems: "center",
+      backgroundColor: tokens.accentSoft,
+      borderRadius: 999,
+      height: 34,
+      justifyContent: "center",
+      width: 34
+    },
+    editButtonWrap: {
+      flexShrink: 0
+    },
+    editBanner: {
+      alignItems: "center",
+      backgroundColor: "#f6faf6",
+      borderColor: tokens.border,
+      borderRadius: 12,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8
+    },
+    editBannerText: {
+      color: tokens.textMuted,
+      flex: 1,
+      fontSize: 12,
+      fontWeight: "800"
     }
   });
 }

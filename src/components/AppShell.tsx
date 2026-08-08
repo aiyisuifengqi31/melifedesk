@@ -331,6 +331,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
 
           {moreNavOpen ? (
             <View testID="sidebar-more-panel" style={styles.morePanel}>
+              <View style={styles.moreConnector} />
               {MORE_NAV_ITEMS.map((item) => {
                 const selected = item.key === activeKey;
                 return (
@@ -342,6 +343,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
                     style={[styles.navSubItem, selected ? styles.navSubItemSelected : null]}
                     testID={`sidebar-subitem-${item.key}`}
                   >
+                    <View style={styles.navSubTick} />
                     <ThemedNavIcon routeKey={item.key} selected={selected} size={20} theme={theme} />
                     {collapsed && !isMobile ? null : <Text style={[styles.navSubLabel, selected ? styles.navSubLabelSelected : null]}>{item.label}</Text>}
                   </Pressable>
@@ -813,10 +815,21 @@ function createStyles(
       color: tokens.accent
     },
     morePanel: {
-      alignItems: "center",
-      gap: 5,
-      paddingTop: 3,
+      alignItems: "flex-start",
+      gap: 4,
+      paddingLeft: compactSidebar ? 18 : 24,
+      paddingTop: 4,
+      position: "relative",
       width: "100%"
+    },
+    moreConnector: {
+      backgroundColor: tokens.border,
+      bottom: 6,
+      left: compactSidebar ? 8 : 11,
+      position: "absolute",
+      top: 6,
+      width: 1,
+      zIndex: 0
     },
     navSubItem: {
       alignItems: "center",
@@ -827,7 +840,18 @@ function createStyles(
       minHeight: 44,
       paddingHorizontal: 4,
       paddingVertical: 5,
-      width: compactSidebar ? 48 : "74%"
+      position: "relative",
+      width: compactSidebar ? 48 : "74%",
+      zIndex: 1
+    },
+    navSubTick: {
+      backgroundColor: tokens.border,
+      height: 1,
+      left: compactSidebar ? -10 : -13,
+      position: "absolute",
+      top: "50%",
+      width: compactSidebar ? 10 : 13,
+      zIndex: 0
     },
     navSubItemSelected: {
       backgroundColor: "#e9f7ee",
