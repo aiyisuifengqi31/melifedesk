@@ -6,6 +6,7 @@ import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { hydrateFromCloud, saveCloudValue } from "@/features/sync/cloudSync";
 import { deleteDiaryFromCloud, getCurrentLoveUserId, loadDiariesFromCloud, saveDiariesToCloud } from "./loveDiaryCloud";
+import { consumePendingCameraPhoto } from "@/features/camera/pendingCameraPhoto";
 
 export type LoveTab = "diary" | "gifts" | "anniversary" | "photos";
 type DiaryVisibility = "private" | "couple_read" | "couple_edit";
@@ -31,6 +32,7 @@ export type DiaryEntry = {
   updatedAt?: string;
   updatedBy?: string;
   visibility: DiaryVisibility;
+  source?: string;
 };
 
 export type GiftEntry = {
@@ -123,6 +125,7 @@ export function LovePanel({
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [selectedPhotoSource, setSelectedPhotoSource] = useState<{ id: string; type: "diary" | "gift" | "anniversary" } | null>(null);
   const localDirtyRef = useRef(false);
+  const pendingSourceRef = useRef<string | undefined>(undefined);
   const diaryFileInputRef = useRef<HTMLInputElement | null>(null);
   const giftFileInputRef = useRef<HTMLInputElement | null>(null);
   const anniFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -147,6 +150,18 @@ export function LovePanel({
     };
   }, [loveStorage]);
 
+  // 智能相机：进入本页时若带有暂存照片，则预填到日记图片并标记来源
+  useEffect(() => {
+    const photo = consumePendingCameraPhoto();
+    if (photo) {
+      setDiaryImages([photo]);
+      pendingSourceRef.current = "smart_camera";
+      setTab("diary");
+      setFeedback("已带入智能相机照片，补充文字后保存即可。");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const saveDiary = () => {
     const cleanTitle = title.trim();
     const cleanContent = content.trim();
@@ -168,11 +183,13 @@ export function LovePanel({
       title: cleanTitle,
       updatedAt: new Date().toISOString(),
       updatedBy: currentUserId ?? undefined,
-      visibility: "couple_edit"
+      visibility: "couple_edit",
+      source: pendingSourceRef.current
     };
     const nextEntries = [entry, ...diaries];
     setDiaries(nextEntries);
     localDirtyRef.current = true;
+    pendingSourceRef.current = undefined;
     saveDiaries(nextEntries, loveStorage);
     setTitle("");
     setContent("");
