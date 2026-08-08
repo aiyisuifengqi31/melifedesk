@@ -1,6 +1,12 @@
-import type { CameraFacing, CameraMode, LandscapeGuidance, NormBox, PortraitGuidance } from "./types";
-
-export type PortraitTemplate = "normal" | "side" | "back";
+import type {
+  CameraFacing,
+  CameraMode,
+  LandscapeGuidance,
+  NormBox,
+  PortraitGuidance,
+  PortraitRecommendation,
+  PortraitTemplate
+} from "./types";
 
 type DrawParams = {
   mode: CameraMode;
@@ -8,13 +14,21 @@ type DrawParams = {
   landscape?: LandscapeGuidance | null;
   portrait?: PortraitGuidance | null;
   portraitTemplate?: PortraitTemplate;
+  recommend?: PortraitRecommendation | null;
+  manualMode?: boolean;
 };
+
+// PortraitTemplate 已在 types.ts 定义并由此处重新导出，供其他模块引用
+export type { PortraitTemplate };
 
 const STATUS_COLOR = {
   far: "#9aa3ad",
   near: "#f5c518",
   good: "#36c46b"
 } as const;
+
+const SMART_COLOR = "#36c46b"; // 智能推荐目标框
+const MANUAL_COLOR = "#9aa3ad"; // 手动构图参考
 
 /** 在相机 canvas 上绘制三分线、水平辅助、推荐区域 / 人物目标轮廓。 */
 export function drawOverlay(canvas: HTMLCanvasElement, params: DrawParams): void {
@@ -35,8 +49,8 @@ export function drawOverlay(canvas: HTMLCanvasElement, params: DrawParams): void
 
   if (params.mode === "landscape" && params.landscape) {
     drawLandscape(ctx, cssW, cssH, params.landscape);
-  } else if (params.mode === "portrait" && params.portrait) {
-    drawPortrait(ctx, cssW, cssH, params.portrait, params.portraitTemplate ?? "normal");
+  } else if (params.mode === "portrait") {
+    drawPortrait(ctx, cssW, cssH, params.portrait ?? null, params.recommend ?? null, params.manualMode ?? false, params.portraitTemplate ?? "normal");
   }
 }
 
@@ -101,32 +115,56 @@ function drawLandscape(ctx: CanvasRenderingContext2D, w: number, h: number, g: L
   ctx.restore();
 }
 
-function drawPortrait(ctx: CanvasRenderingContext2D, w: number, h: number, g: PortraitGuidance, template: PortraitTemplate) {
-  const color = STATUS_COLOR[g.status];
-  const box = g.target;
-  drawPerson(ctx, box, w, h, color, template);
+function drawPortrait(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  g: PortraitGuidance | null,
+  recommend: PortraitRecommendation | null,
+  manualMode: boolean,
+  template: PortraitTemplate
+) {
+  // 其他候选位置：淡白点，提示"还有这些可选站位"
+  if (recommend && recommend.candidates.length > 1) {
+    for (const c of recommend.candidates) {
+      if (c.side === recommend.best) continue;
+      const cx = (c.box.x + c.box.w / 2) * w;
+      const cy = (c.box.y + c.box.h / 2) * h;
+      ctx.save();
+      ctx.fillStyle = "rgba(255,255,255,0.22)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
 
-  if (g.detected && g.actual) {
-    const a = g.actual;
+  const targetBox: NormBox | null = recommend ? recommend.bestBox : g ? g.target : null;
+  if (targetBox) {
+    const color = manualMode ? MANUAL_COLOR : SMART_COLOR;
+    drawPerson(ctx, targetBox, w, h, color, template);
+    const label = manualMode ? "手动构图参考" : g && g.detected ? "推荐站位" : "请站这里";
     ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.7)";
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([4, 4]);
-    ctx.strokeRect(a.x * w, a.y * h, a.w * w, a.h * h);
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.font = "600 13px sans-serif";
+    const tw = ctx.measureText(label).width;
+    const lx = targetBox.x * w;
+    const ly = targetBox.y * h - 22;
+    ctx.fillRect(lx, ly, tw + 12, 18);
+    ctx.fillStyle = color;
+    ctx.fillText(label, lx + 6, ly + 13);
     ctx.restore();
   }
 
-  ctx.save();
-  ctx.fillStyle = "rgba(0,0,0,0.55)";
-  ctx.font = "600 13px sans-serif";
-  const label = g.detected ? "实际位置" : "请站在这里";
-  const tw = ctx.measureText(label).width;
-  const lx = box.x * w;
-  const ly = box.y * h - 22;
-  ctx.fillRect(lx, ly, tw + 12, 18);
-  ctx.fillStyle = color;
-  ctx.fillText(label, lx + 6, ly + 13);
-  ctx.restore();
+  if (g && g.detected && g.actual) {
+    const a = g.actual;
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.85)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    ctx.strokeRect(a.x * w, a.y * h, a.w * w, a.h * h);
+    ctx.restore();
+  }
 }
 
 function drawPerson(ctx: CanvasRenderingContext2D, box: NormBox, w: number, h: number, color: string, template: PortraitTemplate) {
@@ -138,7 +176,7 @@ function drawPerson(ctx: CanvasRenderingContext2D, box: NormBox, w: number, h: n
 
   ctx.save();
   ctx.strokeStyle = color;
-  ctx.fillStyle = "rgba(255,255,255,0.12)";
+  ctx.fillStyle = "rgba(255,255,255,0.10)";
   ctx.lineWidth = 3;
   ctx.lineJoin = "round";
   ctx.shadowColor = "rgba(0,0,0,0.5)";
@@ -184,10 +222,9 @@ function drawPerson(ctx: CanvasRenderingContext2D, box: NormBox, w: number, h: n
   ctx.stroke();
 
   if (template === "normal" || template === "side") {
-    // 简单面部提示（侧身只画一个点）
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(headCx + (template === "side" ? headR * 0.4 : 0), headCy, 1.6, 0, Math.PI * 2);
+    ctx.arc(headCx + (template === "side" ? headR * 0.4 : 0), headCy, 1.8, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();

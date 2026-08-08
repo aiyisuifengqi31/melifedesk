@@ -1,6 +1,8 @@
 export type CameraMode = "landscape" | "portrait";
 export type CameraFacing = "user" | "environment";
 
+export type PortraitTemplate = "normal" | "side" | "back";
+
 export type CompositionStatus = "far" | "near" | "good";
 
 export type CameraStatus = "idle" | "loading" | "ready" | "denied" | "unsupported" | "error";
@@ -37,4 +39,16 @@ export type PortraitGuidance = {
 export type CameraMedia = {
   video: HTMLVideoElement | null;
   canvas: HTMLCanvasElement | null;
+};
+
+export type CandidateSide = "left" | "center" | "right" | "lowerLeft" | "lowerRight";
+
+export type PortraitRecommendation = {
+  best: CandidateSide;
+  bestBox: NormBox;
+  confidence: number; // 0..1，最优与次优之差
+  lowConfidence: boolean;
+  reasons: string[];
+  candidates: { side: CandidateSide; box: NormBox; norm: number; reasons: string[] }[];
+  auto: boolean;
 };

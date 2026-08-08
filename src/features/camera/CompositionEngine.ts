@@ -169,12 +169,14 @@ export function analyzeFrame(pixels: Uint8ClampedArray, w: number, h: number): L
 function buildHint(dx: number, dy: number, horizon: { y: number | null; tiltDeg: number }, status: CompositionStatus): string {
   if (status === "good") return "✓ 构图合适，可以拍了";
   const parts: string[] = [];
-  if (dx > 0.06) parts.push("→ 向右侧构图");
-  else if (dx < -0.06) parts.push("← 向左侧构图");
-  if (dy > 0.06) parts.push("↓ 下移一点");
-  else if (dy < -0.06) parts.push("↑ 上移一点");
+  // 只有出现明显方向偏差时才提示移动，避免无意义反复要求用户挪动
+  if (dx > 0.1) parts.push("→ 向右侧构图");
+  else if (dx < -0.1) parts.push("← 向左侧构图");
+  if (dy > 0.1) parts.push("↓ 下移一点");
+  else if (dy < -0.1) parts.push("↑ 上移一点");
   if (horizon.y !== null && Math.abs(horizon.tiltDeg) > 6) {
     parts.push(horizon.tiltDeg > 0 ? "手机稍微向左旋转" : "手机稍微向右旋转");
   }
-  return parts.length ? parts.join("　") : "微调一下位置";
+  if (parts.length === 0) return "当前画面构图较均衡";
+  return parts.join("　");
 }
