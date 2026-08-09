@@ -30,7 +30,7 @@ export function generateBindingCode(length = 6): string {
 }
 
 export function normalizeBindingCode(value: string): string {
-  return value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+  return value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10);
 }
 
 function defaultState(): CoupleState {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { IconPackage, IconPalette, IconSettings, IconUser } from "@/shared/ui/lineIcons";
-import { acceptCoupleInvite, createCoupleInvite, leaveActiveCouple, signOut } from "@/auth/authRepository";
+import { acceptCoupleInvite, getOrCreateMyInviteCode, leaveActiveCouple, signOut } from "@/auth/authRepository";
 import { clearActiveUser } from "@/auth/localScope";
 import { getSupabaseClient } from "@/auth/supabaseClient";
 import { openImagePicker, saveProfile, type AppProfile } from "@/features/profile/profileStorage";
@@ -96,9 +96,19 @@ export function SettingsPanel({
       });
     }
     hydrateCoupleFromCloud()
-      .then((next) => {
+      .then(async (next) => {
         if (!cancelled) {
           setCouple(next);
+        }
+        if (!cancelled && client && !next.boundAt) {
+          const { code, error } = await getOrCreateMyInviteCode(client);
+          if (!error && code) {
+            const updated = { ...next, myCode: code };
+            if (!cancelled) {
+              setCouple(updated);
+              saveCoupleState(updated);
+            }
+          }
         }
       })
       .catch(() => {});
@@ -176,15 +186,19 @@ export function SettingsPanel({
   const regenerateCode = async () => {
     const client = getSupabaseClient();
     if (client) {
-      const { data, error } = await createCoupleInvite(client);
-      if (!error && typeof data === "string" && data) {
-        persistCouple({ ...couple, myCode: normalizeBindingCode(data) || couple.myCode });
+      const { code, error } = await getOrCreateMyInviteCode(client);
+      if (!error && code) {
+        persistCouple({ ...couple, myCode: code });
         setCoupleMessage("绑定码已生成，发给对方即可。");
+        return;
+      }
+      if (error) {
+        setCoupleMessage(`生成失败：${error.message}`);
         return;
       }
     }
     persistCouple({ ...couple, myCode: generateBindingCode() });
-    setCoupleMessage("绑定码已生成，发给对方即可。");
+    setCoupleMessage("绑定码已生成，发给对方即可。（本地模式）");
   };
 
   const copyCode = async () => {
@@ -422,7 +436,7 @@ export function SettingsPanel({
                         accessibilityLabel="对方绑定码"
                         autoCapitalize="characters"
                         onChangeText={(value) => setPartnerCodeDraft(normalizeBindingCode(value))}
-                        placeholder="例如 A7K2M9"
+                        placeholder="例如 A7K2M9R2WT"
                         placeholderTextColor={tokens.textMuted}
                         style={[styles.input, styles.inputFlex]}
                         value={partnerCodeDraft}
