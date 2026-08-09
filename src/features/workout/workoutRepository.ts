@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import type { WorkoutLog } from "./workoutStorage";
+
 export type WorkoutVisibility = "private" | "couple_read" | "couple_edit";
 export type KcalSource = "manual" | "estimated";
 export type WorkoutIntensity = "easy" | "moderate" | "hard";
@@ -62,6 +64,49 @@ export async function listWorkoutSessions(client: SupabaseClient, ownerUserId: s
     .lte("session_date", dateTo)
     .is("deleted_at", null)
     .order("session_date", { ascending: false });
+}
+
+export type PartnerWorkoutRow = {
+  duration_minutes: number | null;
+  id: string;
+  intensity: string | null;
+  name: string | null;
+  session_date: string;
+  title: string;
+  workout_parts: Array<{ part: string }> | null;
+};
+
+/**
+ * Reads another user's workout sessions that the CURRENT user is allowed to see.
+ * RLS guarantees the caller only receives rows they may read: their own, or an
+ * active partner's sessions that are shared (couple_read / couple_edit). Other
+ * users' rows are invisible and would be filtered out by RLS.
+ */
+export async function listPartnerWorkoutSessions(client: SupabaseClient, partnerId: string) {
+  return client
+    .from("workout_sessions")
+    .select("id, title, session_date, duration_minutes, intensity, workout_parts(part)")
+    .eq("owner_user_id", partnerId)
+    .gte("session_date", "2000-01-01")
+    .lte("session_date", "2100-01-01")
+    .is("deleted_at", null)
+    .order("session_date", { ascending: false });
+}
+
+export function mapPartnerWorkoutRow(row: PartnerWorkoutRow): WorkoutLog {
+  return {
+    createTime: new Date().toISOString(),
+    durationMinutes: Number.isFinite(row.duration_minutes) ? (row.duration_minutes as number) : 0,
+    id: row.id,
+    intensity: (row.intensity as WorkoutIntensity) ?? "moderate",
+    kcal: 0,
+    kcalSource: "manual",
+    parts: (row.workout_parts ?? []).map((part) => part.part),
+    remoteId: row.id,
+    sessionDate: row.session_date,
+    status: "trained",
+    title: row.title
+  };
 }
 
 export async function createWorkoutSession(client: SupabaseClient, ownerUserId: string, input: WorkoutSessionInput) {

@@ -31,13 +31,16 @@ export async function loadDiariesFromCloud(
   const session = await getLoveSession(client);
   if (!session) return localDiaries;
   const activeCoupleId = await getActiveCoupleId(session.client, session.userId);
-  if (!activeCoupleId) return localDiaries;
 
-  const { data, error } = await selectDiaryRows(session.client, activeCoupleId, ENRICHED_DIARY_COLUMNS);
+  // Access is decided by RLS (owner + current active partner of owner), so we
+  // no longer filter by the stored couple_id. A user with or without a partner
+  // still loads their own cloud diaries; the active partner's shared diaries are
+  // returned by RLS automatically.
+  const { data, error } = await selectDiaryRows(session.client, ENRICHED_DIARY_COLUMNS);
 
   if (error) {
     if (!isMissingColumnError(error)) return localDiaries;
-    const fallback = await selectDiaryRows(session.client, activeCoupleId, BASE_DIARY_COLUMNS);
+    const fallback = await selectDiaryRows(session.client, BASE_DIARY_COLUMNS);
     if (fallback.error || !Array.isArray(fallback.data)) return localDiaries;
     return handleLoadedDiaryRows(fallback.data, localDiaries, writeLocal, session.client, session.userId, activeCoupleId);
   }
@@ -52,7 +55,7 @@ async function handleLoadedDiaryRows(
   writeLocal: (entries: DiaryEntry[]) => void,
   client: LoveClient,
   userId: string,
-  activeCoupleId: string
+  activeCoupleId: string | null
 ): Promise<DiaryEntry[]> {
   if (data.length === 0 && localDiaries.length > 0) {
     const migratedDiaries = localDiaries.map((entry) => ({ ...entry, visibility: "couple_edit" as const }));
@@ -66,11 +69,10 @@ async function handleLoadedDiaryRows(
   return diaries;
 }
 
-async function selectDiaryRows(client: LoveClient, activeCoupleId: string, columns: string) {
+async function selectDiaryRows(client: LoveClient, columns: string) {
   return client
     .from("diary_entries")
     .select(columns)
-    .eq("couple_id", activeCoupleId)
     .is("deleted_at", null)
     .order("entry_date", { ascending: false })
     .order("created_at", { ascending: false });

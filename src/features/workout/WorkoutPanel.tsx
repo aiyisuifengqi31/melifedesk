@@ -2,12 +2,19 @@
 import { Pressable, StyleSheet, Text, TextInput, View, type NativeSyntheticEvent, type TextInputChangeEventData } from "react-native";
 
 import { getSupabaseClient } from "@/auth/supabaseClient";
+import { getCurrentCoupleId, getCurrentPartnerId } from "@/auth/partnership";
 import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
 import { StatusSticker } from "@/shared/ui/StatusSticker";
 import { IconDumbbell } from "@/shared/ui/lineIcons";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { CollapsibleSectionFooter, sortByNewest, useCollapsibleList } from "@/shared/ui/CollapsibleList";
-import { addWorkoutPart, createWorkoutSession, softDeleteWorkoutSession } from "@/features/workout/workoutRepository";
+import {
+  addWorkoutPart,
+  createWorkoutSession,
+  listPartnerWorkoutSessions,
+  mapPartnerWorkoutRow,
+  softDeleteWorkoutSession
+} from "@/features/workout/workoutRepository";
 import {
   createWorkoutId,
   getDefaultWorkoutStorage,
@@ -74,6 +81,9 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const [duration, setDuration] = useState("10");
   const [feedback, setFeedback] = useState("选择训练部位并填写时长后保存记录。");
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("week");
+  const [partnerId, setPartnerId] = useState<string | null>(null);
+  const [partnerWorkouts, setPartnerWorkouts] = useState<WorkoutLog[]>([]);
+  const [partnerLoading, setPartnerLoading] = useState(false);
   const localDirtyRef = useRef(false);
 
   const stats = useMemo(() => buildWorkoutStats(logs), [logs]);
@@ -99,6 +109,39 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       cancelled = true;
     };
   }, [workoutStorage]);
+
+  // Read-only view of the active partner's workouts. Access is enforced by RLS:
+  // only an active partner's shared sessions are returned; everything else is
+  // invisible. The viewer can never edit or delete the partner's records here.
+  useEffect(() => {
+    let cancelled = false;
+    void getCurrentPartnerId().then((pid) => {
+      if (cancelled) return;
+      setPartnerId(pid);
+      if (!pid) {
+        setPartnerWorkouts([]);
+        setPartnerLoading(false);
+        return;
+      }
+      void (async () => {
+        const client = getSupabaseClient();
+        if (!client) {
+          setPartnerLoading(false);
+          return;
+        }
+        setPartnerLoading(true);
+        const { data } = await listPartnerWorkoutSessions(client, pid);
+        if (cancelled) return;
+        if (Array.isArray(data)) {
+          setPartnerWorkouts(data.map((row) => mapPartnerWorkoutRow(row as never)));
+        }
+        setPartnerLoading(false);
+      })();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [partnerId]);
 
   const persistLogs = (nextLogs: WorkoutLog[]) => {
     localDirtyRef.current = true;
@@ -154,14 +197,22 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       return;
     }
 
-    const { data, error } = await createWorkoutSession(client, userData.user.id, {
+    const userId = userData.user.id;
+    // When the creator currently has an active partner, mark the session shared
+    // (couple_read) and tag it with the active couple as a historical marker.
+    // The active partner can READ it (RLS); only the owner can edit/delete.
+    const activeCoupleId = await getCurrentCoupleId(client, userId);
+    const isShared = Boolean(activeCoupleId);
+
+    const { data, error } = await createWorkoutSession(client, userId, {
+      coupleId: activeCoupleId,
       durationMinutes: log.durationMinutes,
       intensity: log.intensity,
       kcal: log.kcal,
       kcalSource: "manual",
       sessionDate: log.sessionDate,
       title: log.title,
-      visibility: "private"
+      visibility: isShared ? "couple_read" : "private"
     });
 
     if (error || !data) {
@@ -316,6 +367,31 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
           </>
         )}
       </View>
+
+      {partnerId ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>TA 的运动（只读）</Text>
+          {partnerLoading ? (
+            <Text style={styles.empty}>正在加载对方的运动记录…</Text>
+          ) : partnerWorkouts.length === 0 ? (
+            <Text style={styles.empty}>对方还没有可共享的运动记录。</Text>
+          ) : (
+            partnerWorkouts.map((log) => (
+              <View key={log.id} style={[styles.logItem, styles.logItemReadOnly]}>
+                <View style={styles.logBadge}>
+                  <Text style={styles.logBadgeText}>{log.parts[0] ?? "训"}</Text>
+                </View>
+                <View style={styles.logBody}>
+                  <Text style={styles.logDate}>{formatChineseDate(log.sessionDate)}</Text>
+                  <Text style={styles.logTitle}>{log.title}</Text>
+                  <Text style={styles.logMeta}>{log.durationMinutes}分钟</Text>
+                </View>
+                <Text style={styles.readOnlyTag}>只读</Text>
+              </View>
+            ))
+          )}
+        </View>
+      ) : null}
 
       <View style={styles.metricRow}>
         <Metric title="最近30天" unit="次" value={String(stats.monthCount)} />
@@ -761,11 +837,24 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 10
   },
+  logItemReadOnly: {
+    backgroundColor: "#f8fafc",
+    borderStyle: "dashed"
+  },
   logMeta: {
     color: "#697386",
     fontSize: 12,
     fontWeight: "700",
     lineHeight: 17
+  },
+  readOnlyTag: {
+    backgroundColor: "#eef2f7",
+    borderRadius: 999,
+    color: "#697386",
+    fontSize: 12,
+    fontWeight: "800",
+    paddingHorizontal: 10,
+    paddingVertical: 4
   },
   logTitle: {
     color: "#111827",

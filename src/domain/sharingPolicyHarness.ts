@@ -45,6 +45,8 @@ export function createSharingPolicyHarness(users: UserId[]) {
     const record = records.get(recordId);
     if (!record) return false;
     if (record.ownerUserId === userId) return true;
+    // Workouts are READ-ONLY for the active partner: only the owner may edit.
+    if (record.kind === "workout") return false;
     return record.visibility === "couple_edit" && areActivePartners(userId, record.ownerUserId);
   }
 

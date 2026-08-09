@@ -6,6 +6,7 @@ import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
 import { IconHeart } from "@/shared/ui/lineIcons";
 import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
+import { getCurrentPartnerId } from "@/auth/partnership";
 import { hydrateFromCloud, saveCloudValue } from "@/features/sync/cloudSync";
 import { deleteDiaryFromCloud, getCurrentLoveUserId, loadDiariesFromCloud, saveDiariesToCloud } from "./loveDiaryCloud";
 
@@ -111,6 +112,7 @@ export function LovePanel({
   const [date, setDate] = useState(todayIso());
   const [diaryImages, setDiaryImages] = useState<string[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [partnerId, setPartnerId] = useState<string | null>(null);
   const [anniversaryTitle, setAnniversaryTitle] = useState("");
   const [anniversaryDate, setAnniversaryDate] = useState(todayIso());
   const [repeatYearly, setRepeatYearly] = useState(false);
@@ -137,6 +139,9 @@ export function LovePanel({
     void getCurrentLoveUserId().then((userId) => {
       if (!cancelled) setCurrentUserId(userId);
     });
+    void getCurrentPartnerId().then((pid) => {
+      if (!cancelled) setPartnerId(pid);
+    });
     void hydrateLoveFromCloud(loveStorage).then((next) => {
       if (!cancelled && !localDirtyRef.current) {
         setDiaries(next.diaries);
@@ -147,7 +152,7 @@ export function LovePanel({
     return () => {
       cancelled = true;
     };
-  }, [loveStorage]);
+  }, [loveStorage, partnerId]);
 
   // 智能相机联动已移除：拍照后不再自动带入恋爱日记，照片只保存在本机
   const saveDiary = () => {
@@ -288,6 +293,9 @@ export function LovePanel({
   const sortedDiaries = useMemo(() => sortByNewest(diaries, (entry) => [entry.date, entry.createTime]), [diaries]);
   const sortedGifts = useMemo(() => sortByNewest(gifts, (entry) => [entry.date, entry.createTime]), [gifts]);
   const sortedAnniversaries = useMemo(() => sortByNewest(anniversaries, (entry) => entry.date), [anniversaries]);
+  // A diary is "mine" (deletable by me) only when I am its owner. Co-edited
+  // entries created by the partner stay deletable only by the partner.
+  const isOwnEntry = (entry: DiaryEntry) => !entry.ownerUserId || entry.ownerUserId === currentUserId;
   const diaryList = useCollapsibleList(sortedDiaries);
   const giftList = useCollapsibleList(sortedGifts);
   const anniversaryList = useCollapsibleList(sortedAnniversaries);
@@ -412,14 +420,16 @@ export function LovePanel({
                     <Text style={styles.diaryDate}>{entry.date}</Text>
                     <View style={styles.diaryActions}>
                       <Text style={styles.visibilityBadge}>共享</Text>
-                      <Pressable accessibilityRole="button" accessibilityLabel={`删除日记：${entry.title}`} onPress={() => deleteDiary(entry.id)} style={styles.deleteButton}>
-                        <Text style={styles.deleteText}>删除</Text>
-                      </Pressable>
+                      {isOwnEntry(entry) ? (
+                        <Pressable accessibilityRole="button" accessibilityLabel={`删除日记：${entry.title}`} onPress={() => deleteDiary(entry.id)} style={styles.deleteButton}>
+                          <Text style={styles.deleteText}>删除</Text>
+                        </Pressable>
+                      ) : null}
                     </View>
                   </View>
                   <Text style={styles.diaryTitle}>{entry.title ?? (entry.content.slice(0, 24) || "恋爱日记")}</Text>
                   <Text style={styles.diaryMood}>{moodIcons[entry.mood]} {entry.mood}</Text>
-                  <Text style={styles.emptyText}>{entry.category ?? "日常记录"} · 最后由 {entry.creator ?? entry.updatedBy ?? entry.ownerUserId ?? "对方"} 修改</Text>
+                  <Text style={styles.emptyText}>{entry.category ?? "日常记录"} · {entry.ownerUserId === currentUserId ? "我创建" : "TA创建"} · 最后由 {entry.creator ?? entry.updatedBy ?? entry.ownerUserId ?? "对方"} 修改</Text>
                   {entry.images && entry.images.length > 0 ? (
                     <View style={styles.imageGrid}>
                       {entry.images.map((image, index) => (

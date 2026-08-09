@@ -79,6 +79,7 @@ export function SettingsPanel({
   const [couple, setCouple] = useState<CoupleState>(() => loadCoupleState());
   const [partnerCodeDraft, setPartnerCodeDraft] = useState("");
   const [coupleMessage, setCoupleMessage] = useState("");
+  const [confirmUnbind, setConfirmUnbind] = useState(false);
 
   const [backupItems, setBackupItems] = useState<Record<string, string>>(() => collectBackupData());
   const [backupMessage, setBackupMessage] = useState("");
@@ -217,16 +218,22 @@ export function SettingsPanel({
 
     persistCouple({ ...couple, boundAt: new Date().toISOString(), partnerCode: code });
     setPartnerCodeDraft("");
-    setCoupleMessage("绑定成功，你们现在可以共享内容了。");
+    setCoupleMessage("绑定成功。你创建的恋爱空间历史内容将继续保留，并可与你当前绑定的对象共同编辑。");
   };
 
-  const unbindPartner = async () => {
+  const requestUnbind = () => {
+    setConfirmUnbind(true);
+    setCoupleMessage("解除绑定不会删除你创建的任何数据，但你们将无法继续查看或编辑对方的数据。再次点击「确认解除」完成。");
+  };
+
+  const confirmUnbindNow = async () => {
     const client = getSupabaseClient();
     if (client) {
       await leaveActiveCouple(client);
     }
     persistCouple({ ...couple, boundAt: null, partnerCode: null, partnerName: null });
-    setCoupleMessage("已解除绑定。");
+    setConfirmUnbind(false);
+    setCoupleMessage("已解除绑定。你创建的数据都保留在本人账户中。");
   };
 
   const exportBackup = () => {
@@ -392,9 +399,20 @@ export function SettingsPanel({
                 {couple.partnerCode ? (
                   <View style={styles.boundCard}>
                     <Text style={styles.boundText}>已绑定：{couple.partnerName ?? couple.partnerCode}</Text>
-                    <Pressable accessibilityLabel="解除绑定" accessibilityRole="button" onPress={() => void unbindPartner()} style={styles.dangerButton}>
-                      <Text style={styles.dangerButtonText}>解除</Text>
-                    </Pressable>
+                    {confirmUnbind ? (
+                      <View style={styles.buttonRow}>
+                        <Pressable accessibilityLabel="确认解除绑定" accessibilityRole="button" onPress={() => void confirmUnbindNow()} style={styles.dangerButton}>
+                          <Text style={styles.dangerButtonText}>确认解除</Text>
+                        </Pressable>
+                        <Pressable accessibilityLabel="取消解除绑定" accessibilityRole="button" onPress={() => { setConfirmUnbind(false); setCoupleMessage(""); }} style={styles.ghostButton}>
+                          <Text style={styles.ghostButtonText}>取消</Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <Pressable accessibilityLabel="解除绑定" accessibilityRole="button" onPress={() => requestUnbind()} style={styles.dangerButton}>
+                        <Text style={styles.dangerButtonText}>解除</Text>
+                      </Pressable>
+                    )}
                   </View>
                 ) : (
                   <>
@@ -433,7 +451,7 @@ export function SettingsPanel({
                     );
                   })}
                 </View>
-                {coupleMessage ? <Text style={styles.feedback}>{coupleMessage}</Text> : null}
+                {coupleMessage ? <Text style={confirmUnbind ? styles.warningText : styles.feedback}>{coupleMessage}</Text> : null}
               </View>
             </>
           ) : null}
@@ -759,6 +777,12 @@ function createStyles(tokens: ThemeTokens) {
       color: tokens.accent,
       fontSize: 13,
       fontWeight: "800"
+    },
+    warningText: {
+      color: tokens.danger,
+      fontSize: 13,
+      fontWeight: "800",
+      lineHeight: 19
     },
     ghostButton: {
       backgroundColor: tokens.surfaceMuted,

@@ -118,7 +118,11 @@ describe("love diary cloud sharing", () => {
       args: { p_user_id: "user-a" },
       name: "current_active_couple_id"
     });
-    expect(calls.eq).toContainEqual({ column: "couple_id", value: "couple-1" });
+    // Access is now decided by RLS (owner + current active partner of owner),
+    // not by a stored couple_id filter, so the cloud query no longer filters by
+    // couple_id. The shared diaries returned by RLS (including the partner's)
+    // are what we map and surface.
+    expect(calls.eq).not.toContainEqual({ column: "couple_id", value: "couple-1" });
   });
 
   it("saves partner edits into the shared couple row without changing the original author", async () => {
