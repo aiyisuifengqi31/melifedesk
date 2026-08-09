@@ -123,6 +123,8 @@ export function LovePanel({
   const [giftDescription, setGiftDescription] = useState("");
   const [giftImage, setGiftImage] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("写下今天的小瞬间。");
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [diaryHeight, setDiaryHeight] = useState(44);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [selectedPhotoSource, setSelectedPhotoSource] = useState<{ id: string; type: "diary" | "gift" | "anniversary" } | null>(null);
@@ -155,6 +157,26 @@ export function LovePanel({
   }, [loveStorage, partnerId]);
 
   // 智能相机联动已移除：拍照后不再自动带入恋爱日记，照片只保存在本机
+  // 主动从云端重新拉取对方（及自己）的共享内容。PWA 没有浏览器地址栏刷新，
+  // 对方写了新内容后必须手动触发才能看到最新的。
+  const refreshShared = async () => {
+    setSyncing(true);
+    setFeedback("正在同步对方的共享内容…");
+    try {
+      const next = await hydrateLoveFromCloud(loveStorage);
+      localDirtyRef.current = false;
+      setDiaries(next.diaries);
+      setAnniversaries(next.anniversaries);
+      setGifts(next.gifts);
+      setLastSync(new Date().toLocaleString());
+      setFeedback(partnerId ? "已同步：当前已与对方绑定，可看到彼此的共享内容。" : "已同步：当前未绑定，内容仅自己可见。");
+    } catch {
+      setFeedback("同步失败，请检查网络后重试。");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const saveDiary = () => {
     const cleanTitle = title.trim();
     const cleanContent = content.trim();
@@ -185,7 +207,11 @@ export function LovePanel({
     setTitle("");
     setContent("");
     setDiaryImages([]);
-    setFeedback("日记已保存到情侣共享空间。");
+    setFeedback(
+      partnerId
+        ? "日记已保存到情侣共享空间，对方点「刷新」即可看到。"
+        : "日记已保存（当前未绑定，仅自己可见）。去设置里绑定后才会共享。"
+    );
   };
 
   const saveGift = () => {
@@ -323,6 +349,25 @@ export function LovePanel({
         </View>
         <Text style={styles.heroTitle}>恋爱日记</Text>
         <Text style={styles.heroSub}>记录每一个甜蜜瞬间</Text>
+      </View>
+
+      <View style={styles.syncBar}>
+        <View style={styles.syncStatus}>
+          <Text style={styles.syncStatusText}>
+            {partnerId ? "已绑定 · 可与对方共享" : "未绑定 · 内容仅自己可见"}
+          </Text>
+          {lastSync ? <Text style={styles.syncTimeText}>上次同步：{lastSync}</Text> : null}
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="刷新共享内容"
+          disabled={syncing}
+          onPress={refreshShared}
+          style={[styles.refreshButton, syncing ? styles.refreshButtonBusy : null]}
+          testID="love-refresh-button"
+        >
+          <Text style={styles.refreshText}>{syncing ? "同步中…" : "⟳ 刷新"}</Text>
+        </Pressable>
       </View>
 
       {tab === "diary" ? (
@@ -1173,6 +1218,48 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     lineHeight: 18
+  },
+  syncBar: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderColor: "#e6ebf2",
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 10
+  },
+  syncStatus: {
+    flex: 1,
+    gap: 2
+  },
+  syncStatusText: {
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  syncTimeText: {
+    color: "#697386",
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  refreshButton: {
+    alignItems: "center",
+    backgroundColor: "#1fa8e2",
+    borderRadius: 12,
+    minWidth: 88,
+    paddingHorizontal: 14,
+    paddingVertical: 9
+  },
+  refreshButtonBusy: {
+    backgroundColor: "#9cc3d8"
+  },
+  refreshText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "900"
   },
   stack: {
     gap: 18,

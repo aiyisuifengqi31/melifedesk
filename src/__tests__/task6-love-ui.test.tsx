@@ -40,7 +40,7 @@ describe("Task 6 love page and UI polish", () => {
     fireEvent.press(screen.getByRole("button", { name: "选择心情：甜蜜" }));
     fireEvent.press(screen.getByRole("button", { name: "保存日记" }));
 
-    expect(screen.getByText("日记已保存到情侣共享空间。")).toBeOnTheScreen();
+    expect(screen.getByText(/日记已保存/)).toBeOnTheScreen();
     expect(screen.getByText("一起散步")).toBeOnTheScreen();
     expect(screen.getByText("今天一起散步，很开心")).toBeOnTheScreen();
     expect(screen.getByText("共享")).toBeOnTheScreen();
