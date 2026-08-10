@@ -461,7 +461,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
         visible={quickAccountingOpen}
       />
 
-      <UndoToastHost tokens={tokens} />
+      <UndoToastHost routeKey={activeKey} style={styles.undoToastHost} tokens={tokens} />
 
       {settingsOpen ? (
         <SettingsPanel
@@ -1005,6 +1005,12 @@ function createStyles(
       position: "absolute",
       right: contentPadding,
       zIndex: 80
+    },
+    undoToastHost: {
+      left: sidebarWidth + contentPadding,
+      right: contentPadding,
+      top: Platform.OS === "web" ? ("calc(14px + env(safe-area-inset-top))" as unknown as number) : 14,
+      zIndex: 1200
     },
     card: {
       backgroundColor: tokens.surface,

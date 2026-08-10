@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import type { UiTokens } from "./primitives";
 
 export type UndoRequest = {
@@ -23,10 +23,16 @@ export function showUndoToast(request: Omit<UndoRequest, "id">) {
   emit();
 }
 
-const DEFAULT_DURATION = 3500;
-const DONE_DURATION = 1300;
+export function dismissUndoToast(id?: number) {
+  if (id && current?.id !== id) return;
+  current = null;
+  emit();
+}
 
-export function UndoToastHost({ tokens }: { tokens: UiTokens }) {
+const DEFAULT_DURATION = 1800;
+const DONE_DURATION = 700;
+
+export function UndoToastHost({ routeKey, style, tokens }: { routeKey?: string; style?: StyleProp<ViewStyle>; tokens: UiTokens }) {
   const [req, setReq] = useState<UndoRequest | null>(current);
   const [done, setDone] = useState(false);
   const doneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -42,9 +48,13 @@ export function UndoToastHost({ tokens }: { tokens: UiTokens }) {
   useEffect(() => {
     if (!req) return;
     setDone(false);
-    const timer = setTimeout(() => setReq(null), req.duration ?? DEFAULT_DURATION);
+    const timer = setTimeout(() => dismissUndoToast(req.id), req.duration ?? DEFAULT_DURATION);
     return () => clearTimeout(timer);
   }, [req]);
+
+  useEffect(() => {
+    dismissUndoToast();
+  }, [routeKey]);
 
   useEffect(() => () => {
     if (doneTimer.current) clearTimeout(doneTimer.current);
@@ -60,11 +70,11 @@ export function UndoToastHost({ tokens }: { tokens: UiTokens }) {
     }
     setDone(true);
     if (doneTimer.current) clearTimeout(doneTimer.current);
-    doneTimer.current = setTimeout(() => setReq(null), DONE_DURATION);
+    doneTimer.current = setTimeout(() => dismissUndoToast(req.id), DONE_DURATION);
   };
 
   return (
-    <View style={[styles.host, { backgroundColor: tokens.text }]} pointerEvents="box-none">
+    <View style={[styles.host, { backgroundColor: tokens.text }, style]} pointerEvents="box-none">
       <Text style={[styles.message, { color: tokens.surface }]} numberOfLines={1}>
         {done ? "已撤销" : req.message}
       </Text>
@@ -80,12 +90,12 @@ export function UndoToastHost({ tokens }: { tokens: UiTokens }) {
 const styles = StyleSheet.create({
   host: {
     position: "absolute",
-    bottom: 26,
-    left: 16,
-    right: 16,
+    top: 18,
+    left: 18,
+    right: 18,
     alignItems: "center",
     borderRadius: 14,
-    elevation: 8,
+    elevation: 24,
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -94,7 +104,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.22,
     shadowRadius: 16,
-    zIndex: 60
+    zIndex: 1000
   },
   message: {
     fontSize: 14,
