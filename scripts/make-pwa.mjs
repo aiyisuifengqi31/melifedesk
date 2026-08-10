@@ -112,8 +112,7 @@ if (existsSync(expoRuntimeDir)) {
 
   // 4b) 改写 JS 产物内部的异步分包 URL：`<base>/_expo/...` -> `<base>/expo-static/...`
   // HTML 里的同步 <script src> 由后面的注入步骤改写；但动态 import() 生成的
-  // chunk 地址是编译进 JS 字符串里的，如果不改写会 404（例如人像模式的
-  // pose-detection chunk 与懒加载路由 chunk）。
+  // chunk 地址是编译进 JS 字符串里的，如果不改写会 404（例如懒加载路由 chunk）。
   const oldPrefix = withBase('/_expo/');
   const newPrefix = withBase('/expo-static/');
   let rewritten = 0;

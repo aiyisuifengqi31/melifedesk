@@ -364,7 +364,6 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
                 <ShortcutButton icon="□" label="添加待办" testID="quick-shortcut-todos" onPress={() => openShortcut("todos")} />
                 <ShortcutButton icon="✎" label="写备忘录" testID="quick-shortcut-notes" onPress={() => openShortcut("notes")} />
                 <ShortcutButton icon="↗" label="记录运动" testID="quick-shortcut-workout" onPress={() => openShortcut("workout")} />
-                <ShortcutButton icon="📷" label="智能相机" testID="quick-shortcut-camera" onPress={() => handleNavigate("/smart-camera" as unknown as NavItem["href"])} />
               </View>
             ) : null}
             <Pressable

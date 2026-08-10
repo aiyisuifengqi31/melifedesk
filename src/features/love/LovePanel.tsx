@@ -156,7 +156,6 @@ export function LovePanel({
     };
   }, [loveStorage, partnerId]);
 
-  // 智能相机联动已移除：拍照后不再自动带入恋爱日记，照片只保存在本机
   // 主动从云端重新拉取对方（及自己）的共享内容。PWA 没有浏览器地址栏刷新，
   // 对方写了新内容后必须手动触发才能看到最新的。
   const refreshShared = async () => {
