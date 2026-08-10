@@ -30,7 +30,7 @@ export async function loadDiariesFromCloud(
 ): Promise<DiaryEntry[]> {
   const session = await getLoveSession(client);
   if (!session) return localDiaries;
-  const activeCoupleId = await getActiveCoupleId(session.client, session.userId);
+  const activeCoupleId = await getActiveLoveCoupleId(session.client);
 
   // Access is decided by RLS (owner + current active partner of owner), so we
   // no longer filter by the stored couple_id. A user with or without a partner
@@ -58,6 +58,7 @@ async function handleLoadedDiaryRows(
   activeCoupleId: string | null
 ): Promise<DiaryEntry[]> {
   if (data.length === 0 && localDiaries.length > 0) {
+    if (!activeCoupleId) return localDiaries;
     const migratedDiaries = localDiaries.map((entry) => ({ ...entry, visibility: "couple_edit" as const }));
     await upsertOwnedDiaries(client, userId, activeCoupleId, migratedDiaries);
     writeLocal(migratedDiaries);
@@ -85,7 +86,7 @@ export async function saveDiariesToCloud(
   const session = await getLoveSession(client);
   if (!session) return;
 
-  const activeCoupleId = await getActiveCoupleId(session.client, session.userId);
+  const activeCoupleId = await getActiveLoveCoupleId(session.client);
   await upsertOwnedDiaries(session.client, session.userId, activeCoupleId, entries);
 }
 
@@ -103,12 +104,25 @@ export async function getCurrentLoveUserId(client: LoveClient | null = getSupaba
   return session?.userId ?? null;
 }
 
+export async function getActiveLoveCoupleId(client: LoveClient | null = getSupabaseClient()): Promise<string | null> {
+  const session = await getLoveSession(client);
+  if (!session) return null;
+  const { data, error } = await session.client.rpc("current_active_couple_id", { p_user_id: session.userId });
+  if (error || typeof data !== "string" || !data) return null;
+  return data;
+}
+
 async function upsertOwnedDiaries(
   client: LoveClient,
   userId: string,
   activeCoupleId: string | null,
   entries: DiaryEntry[]
 ) {
+  const hasSharedEntries = entries.some((entry) => entry.visibility !== "private");
+  if (hasSharedEntries && !activeCoupleId) {
+    throw new Error("not_bound_to_partner");
+  }
+
   const rows = entries
     .filter((entry) => entry.visibility !== "private" ? Boolean(activeCoupleId) : (!entry.ownerUserId || entry.ownerUserId === userId))
     .map((entry) => {
@@ -132,8 +146,11 @@ async function upsertOwnedDiaries(
   if (rows.length === 0) return;
   const { error } = await client.from("diary_entries").upsert(rows, { onConflict: "id" });
   if (error && isMissingColumnError(error)) {
-    await client.from("diary_entries").upsert(rows.map(({ category: _category, updated_by: _updatedBy, ...row }) => row), { onConflict: "id" });
+    const fallback = await client.from("diary_entries").upsert(rows.map(({ category: _category, updated_by: _updatedBy, ...row }) => row), { onConflict: "id" });
+    if (fallback.error) throw fallback.error;
+    return;
   }
+  if (error) throw error;
 }
 
 async function getLoveSession(client: LoveClient | null): Promise<{ client: LoveClient; userId: string } | null> {
@@ -141,12 +158,6 @@ async function getLoveSession(client: LoveClient | null): Promise<{ client: Love
   const { data, error } = await client.auth.getUser();
   if (error || !data.user) return null;
   return { client, userId: data.user.id };
-}
-
-async function getActiveCoupleId(client: LoveClient, userId: string): Promise<string | null> {
-  const { data, error } = await client.rpc("current_active_couple_id", { p_user_id: userId });
-  if (error || typeof data !== "string") return null;
-  return data;
 }
 
 function mapDiaryRow(row: DiaryRow): DiaryEntry {
@@ -176,5 +187,5 @@ function isUuid(value: string) {
 
 function isMissingColumnError(error: unknown) {
   const message = typeof error === "object" && error && "message" in error ? String((error as { message?: unknown }).message) : String(error);
-  return /column .* (category|updated_by).* does not exist|Could not find .* (category|updated_by)/i.test(message);
+  return /column .* (category|updated_by).* does not exist|Could not find .*['"]?(category|updated_by)['"]?/i.test(message);
 }

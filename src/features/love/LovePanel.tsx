@@ -177,13 +177,21 @@ export function LovePanel({
     }
   };
 
-  const saveDiary = () => {
+  const saveDiary = async () => {
     const cleanTitle = title.trim();
     const cleanContent = content.trim();
     if (!cleanTitle) {
       setFeedback("请先填写日记标题。");
       return;
     }
+
+    const activePartnerId = partnerId ?? await getCurrentPartnerId();
+    setPartnerId(activePartnerId);
+    if (!activePartnerId) {
+      setFeedback("当前云端未绑定，日记暂未发布到双方共享空间。请重新完成伴侣绑定后再保存。");
+      return;
+    }
+    const authorId = currentUserId ?? await getCurrentLoveUserId();
 
     const entry: DiaryEntry = {
       category,
@@ -194,16 +202,22 @@ export function LovePanel({
       id: createLoveId("diary"),
       images: diaryImages,
       mood,
-      ownerUserId: currentUserId ?? undefined,
+      ownerUserId: authorId ?? undefined,
       title: cleanTitle,
       updatedAt: new Date().toISOString(),
-      updatedBy: currentUserId ?? undefined,
+      updatedBy: authorId ?? undefined,
       visibility: "couple_edit"
     };
     const nextEntries = [entry, ...diaries];
+    try {
+      await saveDiariesToCloud(nextEntries);
+    } catch {
+      setFeedback("云端共享保存失败，请检查登录和伴侣绑定状态后重试。");
+      return;
+    }
     setDiaries(nextEntries);
     localDirtyRef.current = true;
-    saveDiaries(nextEntries, loveStorage);
+    writeDiariesLocal(nextEntries, loveStorage);
     setTitle("");
     setContent("");
     setDiaryImages([]);
@@ -435,7 +449,7 @@ export function LovePanel({
                 <Text style={styles.dateValue}>{date.replaceAll("-", "/")}</Text>
                 <Text style={styles.dateChevron}>⌄</Text>
               </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="保存日记" nativeID="love-save-diary-button" onPress={saveDiary} style={styles.primaryButton}>
+              <Pressable accessibilityRole="button" accessibilityLabel="保存日记" nativeID="love-save-diary-button" onPress={() => void saveDiary()} style={styles.primaryButton}>
                 <Text style={styles.primaryText}>保存</Text>
               </Pressable>
             </View>
@@ -773,7 +787,7 @@ function loadArray<T>(storage: LoveStorage, key: string) {
 
 export function saveDiaries(entries: DiaryEntry[], storage: LoveStorage = getDefaultLoveStorage()) {
   storage.setItem(DIARY_KEY, JSON.stringify(entries));
-  void saveDiariesToCloud(entries);
+  void saveDiariesToCloud(entries).catch(() => undefined);
 }
 
 export function saveAnniversaries(entries: AnniversaryEntry[], storage: LoveStorage = getDefaultLoveStorage()) {

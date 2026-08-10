@@ -3,6 +3,19 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import { AppShell } from "@/components/AppShell";
 import { ActionChip, ContentCard, EmptyState, FloatingQuickAction, InlineError, PageHeader, PrimaryButton, SecondaryButton, SegmentedTabs, StatCard } from "@/shared/ui/primitives";
 
+jest.mock("@/auth/partnership", () => ({
+  getCurrentCoupleId: jest.fn(async () => "couple-1"),
+  getCurrentPartnerId: jest.fn(async () => "partner-b")
+}));
+
+jest.mock("@/features/love/loveDiaryCloud", () => ({
+  deleteDiaryFromCloud: jest.fn(async () => undefined),
+  getActiveLoveCoupleId: jest.fn(async () => "couple-1"),
+  getCurrentLoveUserId: jest.fn(async () => "user-a"),
+  loadDiariesFromCloud: jest.fn(async (localDiaries: unknown[]) => localDiaries),
+  saveDiariesToCloud: jest.fn(async () => undefined)
+}));
+
 const tokens = {
   accent: "#65465a",
   accentSoft: "#f0e2ea",
@@ -32,7 +45,7 @@ describe("Task 6 love page and UI polish", () => {
     expect(screen.getByText("恋爱空间内容会保存到双方共享空间，双方都可以查看和编辑。")).toBeOnTheScreen();
   });
 
-  it("saves a diary directly into shared couple space", () => {
+  it("saves a diary directly into shared couple space", async () => {
     render(<AppShell initialRoute="/love" />);
 
     fireEvent.changeText(screen.getByPlaceholderText("标题，例如：一起吃饭"), "一起散步");
@@ -40,7 +53,7 @@ describe("Task 6 love page and UI polish", () => {
     fireEvent.press(screen.getByRole("button", { name: "选择心情：甜蜜" }));
     fireEvent.press(screen.getByRole("button", { name: "保存日记" }));
 
-    expect(screen.getByText(/日记已保存/)).toBeOnTheScreen();
+    expect(await screen.findByText(/日记已保存/)).toBeOnTheScreen();
     expect(screen.getByText("一起散步")).toBeOnTheScreen();
     expect(screen.getByText("今天一起散步，很开心")).toBeOnTheScreen();
     expect(screen.getByText("共享")).toBeOnTheScreen();

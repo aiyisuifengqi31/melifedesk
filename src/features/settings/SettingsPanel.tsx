@@ -4,6 +4,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { IconPackage, IconPalette, IconSettings, IconUser } from "@/shared/ui/lineIcons";
 import { acceptCoupleInvite, getOrCreateMyInviteCode, leaveActiveCouple, signOut } from "@/auth/authRepository";
 import { clearActiveUser } from "@/auth/localScope";
+import { getCurrentCoupleId } from "@/auth/partnership";
 import { getSupabaseClient } from "@/auth/supabaseClient";
 import { openImagePicker, saveProfile, type AppProfile } from "@/features/profile/profileStorage";
 import {
@@ -18,14 +19,10 @@ import {
   parseBackupPayload
 } from "./backup";
 import {
-  generateBindingCode,
   hydrateCoupleFromCloud,
   loadCoupleState,
   normalizeBindingCode,
   saveCoupleState,
-  SHARE_SCOPE_LABELS,
-  toggleShareScope,
-  type CoupleShareScope,
   type CoupleState
 } from "./coupleStorage";
 import { getTheme, THEME_IDS } from "@/theme/registry";
@@ -80,6 +77,7 @@ export function SettingsPanel({
   const [partnerCodeDraft, setPartnerCodeDraft] = useState("");
   const [coupleMessage, setCoupleMessage] = useState("");
   const [confirmUnbind, setConfirmUnbind] = useState(false);
+  const [cloudCoupleId, setCloudCoupleId] = useState<string | null>(null);
 
   const [backupItems, setBackupItems] = useState<Record<string, string>>(() => collectBackupData());
   const [backupMessage, setBackupMessage] = useState("");
@@ -92,6 +90,11 @@ export function SettingsPanel({
       void client.auth.getUser().then(({ data }) => {
         if (!cancelled) {
           setEmail(data.user?.email ?? null);
+        }
+      });
+      void getCurrentCoupleId(client).then((coupleId) => {
+        if (!cancelled) {
+          setCloudCoupleId(coupleId);
         }
       });
     }
@@ -185,20 +188,21 @@ export function SettingsPanel({
 
   const regenerateCode = async () => {
     const client = getSupabaseClient();
-    if (client) {
-      const { code, error } = await getOrCreateMyInviteCode(client);
-      if (!error && code) {
-        persistCouple({ ...couple, myCode: code });
-        setCoupleMessage("绑定码已生成，发给对方即可。");
-        return;
-      }
-      if (error) {
-        setCoupleMessage(`生成失败：${error.message}`);
-        return;
-      }
+    if (!client) {
+      setCoupleMessage("当前未连接云端账号，不能生成真实绑定码。请先登录后再试。");
+      return;
     }
-    persistCouple({ ...couple, myCode: generateBindingCode() });
-    setCoupleMessage("绑定码已生成，发给对方即可。（本地模式）");
+    const { code, error } = await getOrCreateMyInviteCode(client);
+    if (!error && code) {
+      persistCouple({ ...couple, myCode: code });
+      setCoupleMessage("绑定码已生成，发给对方即可。");
+      return;
+    }
+    if (error) {
+      setCoupleMessage(`生成失败：${error.message}`);
+      return;
+    }
+    setCoupleMessage("绑定码生成失败：云端没有返回绑定码。");
   };
 
   const copyCode = async () => {
@@ -222,6 +226,10 @@ export function SettingsPanel({
     }
 
     const client = getSupabaseClient();
+    if (!client) {
+      setCoupleMessage("当前未连接云端账号，不能完成真实绑定。请先登录后再试。");
+      return;
+    }
     if (client) {
       const { error } = await acceptCoupleInvite(client, code);
       if (error) {
@@ -230,6 +238,8 @@ export function SettingsPanel({
       }
     }
 
+    const activeCoupleId = await getCurrentCoupleId(client);
+    setCloudCoupleId(activeCoupleId);
     persistCouple({ ...couple, boundAt: new Date().toISOString(), partnerCode: code });
     setPartnerCodeDraft("");
     setCoupleMessage("绑定成功。你创建的恋爱空间历史内容将继续保留，并可与你当前绑定的对象共同编辑。");
@@ -245,6 +255,7 @@ export function SettingsPanel({
     if (client) {
       await leaveActiveCouple(client);
     }
+    setCloudCoupleId(null);
     persistCouple({ ...couple, boundAt: null, partnerCode: null, partnerName: null });
     setConfirmUnbind(false);
     setCoupleMessage("已解除绑定。你创建的数据都保留在本人账户中。");
@@ -410,7 +421,7 @@ export function SettingsPanel({
                   </Pressable>
                 </View>
 
-                {couple.partnerCode ? (
+                {cloudCoupleId || couple.partnerCode ? (
                   <View style={styles.boundCard}>
                     <Text style={styles.boundText}>已绑定：{couple.partnerName ?? couple.partnerCode}</Text>
                     {confirmUnbind ? (
@@ -448,23 +459,7 @@ export function SettingsPanel({
                   </>
                 )}
 
-                <Text style={styles.blockLabel}>对方可以看到</Text>
-                <View style={styles.chipRow}>
-                  {(Object.keys(SHARE_SCOPE_LABELS) as CoupleShareScope[]).map((scope) => {
-                    const selected = couple.shareScopes.includes(scope);
-                    return (
-                      <Pressable
-                        key={scope}
-                        accessibilityLabel={`共享${SHARE_SCOPE_LABELS[scope]}`}
-                        accessibilityRole="button"
-                        onPress={() => persistCouple(toggleShareScope(couple, scope))}
-                        style={[styles.chip, selected ? styles.chipActive : null]}
-                      >
-                        <Text style={[styles.chipText, selected ? styles.chipTextActive : null]}>{SHARE_SCOPE_LABELS[scope]}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+                <Text style={styles.feedback}>恋爱空间内容默认全部共享给当前绑定对象，不再单独选择共享范围。</Text>
                 {coupleMessage ? <Text style={confirmUnbind ? styles.warningText : styles.feedback}>{coupleMessage}</Text> : null}
               </View>
             </>
