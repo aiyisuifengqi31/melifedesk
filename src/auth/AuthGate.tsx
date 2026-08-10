@@ -10,7 +10,13 @@ import { getSupabaseClient } from "./supabaseClient";
 type GateState = "loading" | "signedIn" | "signedOut";
 
 const app = getPublicAppConfig();
-const STARTUP_SESSION_GRACE_MS = 1200;
+const STARTUP_SESSION_GRACE_MS = 300;
+
+function getInitialGateState(client: ReturnType<typeof getSupabaseClient>, pathname: string): GateState {
+  if (!client) return "signedIn";
+  if (pathname === "/login") return "loading";
+  return readActiveUser() ? "signedIn" : "loading";
+}
 
 /**
  * 登录守卫：
@@ -23,7 +29,7 @@ export function AuthGate({ children }: PropsWithChildren) {
   const client = useMemo(() => getSupabaseClient(), []);
   const pathname = usePathname();
   const router = useRouter();
-  const [state, setState] = useState<GateState>(client ? "loading" : "signedIn");
+  const [state, setState] = useState<GateState>(() => getInitialGateState(client, pathname));
 
   useEffect(() => {
     if (!client) {

@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react-native";
+import { render, screen } from "@testing-library/react-native";
 import { Text } from "react-native";
 
 import { ACTIVE_USER_KEY } from "@/auth/localScope";
@@ -55,7 +55,7 @@ describe("AuthGate startup", () => {
     jest.useRealTimers();
   });
 
-  it("does not keep a returning local user behind the splash when Supabase session lookup stalls", async () => {
+  it("shows the app immediately for a returning local user even when Supabase session lookup stalls", async () => {
     window.localStorage.setItem(ACTIVE_USER_KEY, "returning-user");
     mockGetSession.mockReturnValue(new Promise(() => {}));
 
@@ -64,12 +64,6 @@ describe("AuthGate startup", () => {
         <Text testID="app-ready">ready</Text>
       </AuthGate>
     );
-
-    expect(screen.queryByTestId("app-ready")).toBeNull();
-
-    await act(async () => {
-      jest.advanceTimersByTime(1300);
-    });
 
     expect(screen.getByTestId("app-ready")).toBeOnTheScreen();
     expect(mockReplace).not.toHaveBeenCalledWith("/login");
