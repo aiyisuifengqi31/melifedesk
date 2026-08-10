@@ -18,7 +18,6 @@ import type { UiTokens } from "@/shared/ui/primitives";
 import { EmptyState } from "@/shared/ui/primitives";
 import { HomeCard } from "@/shared/ui/HomeCard";
 import { showUndoToast } from "@/shared/ui/UndoToast";
-import { StatusSticker } from "@/shared/ui/StatusSticker";
 import { MealSpinner } from "./MealSpinner";
 import { NotesPanel } from "./NotesPanel";
 import { TodoPanel } from "@/features/plan/TodoPanel";
@@ -222,8 +221,6 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQui
     if (todos.length > 0) return { text: "今天已清空", icon: "check", onPress: () => setViewState("todos") };
     return { text: "今天很轻松", icon: "dot" };
   }, [pendingCount, pendingPackages, todos.length, onOpenPackages]);
-  const allTodosDone = todos.length > 0 && pendingCount === 0;
-
   const toggleHomeTodo = (todoId: string) => {
     const target = todos.find((todo) => todo.id === todoId);
     if (!target) return;
@@ -453,15 +450,6 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQui
           <Text style={styles.date}>{formatToday()}</Text>
         </View>
         <View style={styles.headerRight}>
-          {allTodosDone ? (
-            <StatusSticker
-              icon={<IconCheck size={16} color={themeTokens.accent} />}
-              label="DONE"
-              storageKey="home-done"
-              sublabel="今日清空"
-              tokens={themeTokens}
-            />
-          ) : null}
           {statusChip ? (
             <PressableScale
               testID="home-status-chip"

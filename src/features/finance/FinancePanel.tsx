@@ -551,13 +551,9 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
         <View pointerEvents="none" style={styles.pageWatermark}>
           <IconWalletCards color="#111827" size={82} />
         </View>
-        <View style={styles.overviewHeader}>
-          <Text style={styles.overviewTitle}>本月总结</Text>
-          <Text style={styles.overviewSubTitle}>收入与支出概览</Text>
-        </View>
         <View testID="finance-summary-panel" style={styles.overviewMetricStack}>
-          <View testID="finance-metric-本月总结" style={styles.balanceMetricWrap}>
-            <BalanceSummaryCard expense={`¥${summary.monthExpense}`} income={`¥${summary.monthIncome}`} title="本月总结" tokens={themeTokens} value={`¥${summary.monthBalance}`} />
+          <View testID="finance-metric-本月结余" style={styles.balanceMetricWrap}>
+            <BalanceSummaryCard expense={`¥${summary.monthExpense}`} income={`¥${summary.monthIncome}`} title="本月结余" tokens={themeTokens} value={`¥${summary.monthBalance}`} />
           </View>
         </View>
       </View> : null}

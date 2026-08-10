@@ -316,10 +316,12 @@ describe("FinancePanel interactions", () => {
   it("shows a single monthly summary balance card instead of separate metric cards", () => {
     render(<FinancePanel storage={makeStorage()} />);
 
-    expect(screen.getAllByText("本月总结").length).toBeGreaterThan(0);
+    expect(screen.queryByText("本月总结")).toBeNull();
+    expect(screen.queryByText("收入与支出概览")).toBeNull();
+    expect(screen.getAllByText("本月结余").length).toBeGreaterThan(0);
     expect(screen.queryByText("今日支出")).toBeNull();
     expect(screen.queryByText("今日收入")).toBeNull();
-    expect(screen.getByTestId("finance-metric-本月总结")).toHaveStyle({ flexBasis: "100%" });
+    expect(screen.getByTestId("finance-metric-本月结余")).toHaveStyle({ flexBasis: "100%" });
     expect(screen.getByTestId("finance-balance-summary")).toHaveStyle({ flexDirection: "row" });
     expect(screen.getAllByText(/收入 ¥0\.00/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/支出 ¥0\.00/).length).toBeGreaterThan(0);

@@ -139,16 +139,19 @@ function createStyles(tokens: UiTokens) {
       backgroundColor: "#1fa8e2"
     },
     ratioBalance: {
-      backgroundColor: "#ffffff"
+      backgroundColor: "#dff3e5"
     },
     ratioEmpty: {
       backgroundColor: "#e3e8ef",
       flex: 1
     },
     ratioTrack: {
+      backgroundColor: "#eef6f0",
+      borderColor: "#d7e9dc",
+      borderWidth: 1,
       borderRadius: 999,
       flexDirection: "row",
-      height: 6,
+      height: 9,
       overflow: "hidden"
     },
     sideText: {
