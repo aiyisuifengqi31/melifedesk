@@ -95,6 +95,7 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const [currentUserName, setCurrentUserName] = useState("我的运动");
   const [activeCoupleId, setActiveCoupleId] = useState<string | null>(null);
   const [partnerUserId, setPartnerUserId] = useState<string | null>(null);
+  const [partnershipResolved, setPartnershipResolved] = useState(false);
   const [partnerLogs, setPartnerLogs] = useState<WorkoutLog[]>([]);
   const [partnerLoading, setPartnerLoading] = useState(false);
   const [partnerRefreshToken, setPartnerRefreshToken] = useState(0);
@@ -174,6 +175,7 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       if (cancelled) return;
       setActiveCoupleId(coupleId);
       setPartnerUserId(partnerId);
+      setPartnershipResolved(true);
       if (!partnerId) {
         setOwnerView("mine");
       }
@@ -223,6 +225,7 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   useEffect(() => {
     let cancelled = false;
     const client = getSupabaseClient();
+    if (ownerView !== "partner") return undefined;
     if (!client || !partnerUserId) {
       setPartnerLogs([]);
       return undefined;
@@ -241,7 +244,7 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
     return () => {
       cancelled = true;
     };
-  }, [partnerRefreshToken, partnerUserId]);
+  }, [ownerView, partnerRefreshToken, partnerUserId]);
 
   useEffect(() => {
     const metricForDate = bodyMetrics.find((metric) => metric.recordDate === bodyDate) ?? latestBodyMetric;
@@ -402,14 +405,16 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
         >
           <Text style={[styles.ownerSwitchText, ownerView === "mine" ? styles.ownerSwitchTextActive : null]}>👤 {currentUserName}</Text>
         </Pressable>
-        {partnerUserId ? (
+        {partnerUserId || !partnershipResolved ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="查看TA的运动"
             onPress={() => {
+              if (!partnerUserId) return;
               setOwnerView("partner");
               setPartnerRefreshToken((value) => value + 1);
             }}
+            disabled={!partnerUserId}
             style={[styles.ownerSwitchItem, ownerView === "partner" ? styles.ownerSwitchItemActive : null]}
           >
             <Text style={[styles.ownerSwitchText, ownerView === "partner" ? styles.ownerSwitchTextActive : null]}>❤️ TA的运动</Text>
@@ -675,7 +680,7 @@ function PartnerWorkoutReadOnly({
     }
   }, [monthOptions, selectedMonth]);
 
-  if (loading) {
+  if (loading && logs.length === 0) {
     return (
       <View style={styles.partnerHintRow}>
         <Text style={styles.partnerHintText}>正在加载TA的运动数据…</Text>
@@ -702,7 +707,7 @@ function PartnerWorkoutReadOnly({
     <>
       <View style={styles.partnerHintRow}>
         <Text style={styles.partnerHintText}>🔒 TA的运动数据 · 只读</Text>
-        <Text style={styles.partnerHintText}>{formatPartnerTodayStatus(todayLogs)}</Text>
+        <Text style={styles.partnerHintText}>{loading ? "正在更新…" : formatPartnerTodayStatus(todayLogs)}</Text>
       </View>
 
       <View style={styles.card}>

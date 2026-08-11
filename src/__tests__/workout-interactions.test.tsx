@@ -14,17 +14,18 @@ import {
 } from "@/features/workout/workoutStorage";
 
 const storageKey = "fanfan-guanguan.workouts.v1";
+const mockRpc = jest.fn(async (name: string) => {
+  if (name === "current_active_partner_id") return { data: "user-b", error: null };
+  if (name === "current_active_couple_id") return { data: "couple-1", error: null };
+  return { data: null, error: null };
+});
 
 jest.mock("@/auth/supabaseClient", () => ({
   getSupabaseClient: jest.fn(() => ({
     auth: {
       getUser: jest.fn(async () => ({ data: { user: { id: "user-a", user_metadata: { display_name: "王凡" } } }, error: null }))
     },
-    rpc: jest.fn(async (name: string) => {
-      if (name === "current_active_partner_id") return { data: "user-b", error: null };
-      if (name === "current_active_couple_id") return { data: "couple-1", error: null };
-      return { data: null, error: null };
-    }),
+    rpc: mockRpc,
     from: jest.fn(() => ({
       insert: jest.fn(() => ({
         select: jest.fn(() => ({
@@ -142,6 +143,11 @@ describe("workout storage", () => {
 describe("WorkoutPanel interactions", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRpc.mockImplementation(async (name: string) => {
+      if (name === "current_active_partner_id") return { data: "user-b", error: null };
+      if (name === "current_active_couple_id") return { data: "couple-1", error: null };
+      return { data: null, error: null };
+    });
   });
 
   it("does not render removed feeling or notes fields", () => {
@@ -223,6 +229,46 @@ describe("WorkoutPanel interactions", () => {
     expect(screen.queryByText("体脂")).toBeNull();
     expect(screen.queryByText("体重")).toBeNull();
     expect(screen.queryByText("•••")).toBeNull();
+  });
+
+  it("keeps the partner tab visible while partnership is still resolving", () => {
+    mockRpc.mockImplementation(() => new Promise(() => undefined));
+
+    render(<WorkoutPanel storage={makeStorage()} />);
+
+    expect(screen.getByRole("button", { name: /我的运动/ })).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: /TA/ })).toBeOnTheScreen();
+  });
+
+  it("keeps existing partner workouts visible while refreshing them", async () => {
+    let resolveSecondLoad: (value: unknown) => void = () => undefined;
+    (listPartnerWorkoutSessions as jest.Mock)
+      .mockResolvedValueOnce({
+        data: [
+          {
+            duration_minutes: 40,
+            id: "partner-visible-session",
+            intensity: "moderate",
+            session_date: "2026-08-10",
+            title: "肩",
+            workout_parts: [{ part: "肩" }]
+          }
+        ],
+        error: null
+      })
+      .mockReturnValueOnce(new Promise((resolve) => {
+        resolveSecondLoad = resolve;
+      }));
+
+    render(<WorkoutPanel storage={makeStorage()} />);
+    fireEvent.press(await screen.findByRole("button", { name: /TA/ }));
+
+    expect(await screen.findByText("本周运动")).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("button", { name: "查看TA的运动" }));
+
+    expect(screen.getByText("本周运动")).toBeOnTheScreen();
+    expect(screen.queryByText("正在加载TA的运动数据…")).toBeNull();
+    resolveSecondLoad({ data: [], error: null });
   });
 
   it("uploads unsynced local workouts as couple-readable sessions when the user is bound", async () => {
@@ -328,7 +374,6 @@ describe("WorkoutPanel interactions", () => {
 
     render(<WorkoutPanel storage={storage} />);
 
-    await waitFor(() => expect(loadLoveSharedValue).toHaveBeenCalled());
     sharedReady = true;
     fireEvent.press(await screen.findByRole("button", { name: "查看TA的运动" }));
 
