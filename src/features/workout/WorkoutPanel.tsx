@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 
 import { getSupabaseClient } from "@/auth/supabaseClient";
 import { getCurrentCoupleId, getCurrentPartnerId } from "@/auth/partnership";
+import { loadLoveSharedValue, saveLoveSharedValue } from "@/features/love/loveSharedCloud";
 import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
 import { CollapsibleSectionFooter, sortByNewest, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import {
@@ -61,6 +62,7 @@ const dataTrendOptions: Array<{ label: string; value: DataTrendType }> = [
   { label: "体脂", value: "fat" }
 ];
 const durationOptions = Array.from({ length: 36 }, (_, index) => (index + 1) * 5);
+const WORKOUT_SHARED_KEY_PREFIX = "fanfan-guanguan.workouts.shared.";
 const logFilterOptions: Array<{ label: string; value: LogFilter }> = [
   { label: "全部", value: "all" },
   { label: "本月", value: "currentMonth" },
@@ -102,6 +104,7 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const bodyDirtyRef = useRef(false);
   const logsSnapshotRef = useRef(JSON.stringify(logs));
   const bodyMetricsSnapshotRef = useRef(JSON.stringify(bodyMetrics));
+  const sharedLogsSnapshotRef = useRef("");
   const workoutSyncingRef = useRef(new Set<string>());
 
   const stats = useMemo(() => buildWorkoutStats(logs), [logs]);
@@ -174,6 +177,13 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
     const client = getSupabaseClient();
     if (!client || !currentUserId || !activeCoupleId) return undefined;
 
+    const sharedLogs = sortWorkoutLogs(logs.filter((log) => log.status === "trained"));
+    const sharedSnapshot = JSON.stringify(sharedLogs);
+    if (sharedSnapshot !== sharedLogsSnapshotRef.current) {
+      sharedLogsSnapshotRef.current = sharedSnapshot;
+      void saveLoveSharedValue(getWorkoutSharedKey(currentUserId), sharedLogs, client).catch(() => undefined);
+    }
+
     const unsyncedLogs = logs.filter((log) => log.status === "trained" && !log.remoteId && !workoutSyncingRef.current.has(log.id));
     if (unsyncedLogs.length === 0) return undefined;
 
@@ -211,13 +221,14 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       return undefined;
     }
     setPartnerLoading(true);
-    void listPartnerWorkoutSessions(client, partnerUserId).then(({ data, error }) => {
+    void Promise.all([
+      listPartnerWorkoutSessions(client, partnerUserId),
+      loadLoveSharedValue<WorkoutLog[]>(getWorkoutSharedKey(partnerUserId), [], client).catch(() => [])
+    ]).then(([{ data, error }, sharedLogs]) => {
       if (cancelled) return;
-      if (error || !Array.isArray(data)) {
-        setPartnerLogs([]);
-      } else {
-        setPartnerLogs(sortWorkoutLogs(data.map((row) => mapPartnerWorkoutRow(row))));
-      }
+      const remoteLogs = error || !Array.isArray(data) ? [] : data.map((row) => mapPartnerWorkoutRow(row));
+      const normalizedSharedLogs = normalizeSharedWorkoutLogs(sharedLogs);
+      setPartnerLogs(mergeWorkoutLogs(remoteLogs, normalizedSharedLogs));
       setPartnerLoading(false);
     });
     return () => {
@@ -823,6 +834,63 @@ async function uploadWorkoutLog(client: NonNullable<ReturnType<typeof getSupabas
   } catch {
     return null;
   }
+}
+
+function getWorkoutSharedKey(userId: string) {
+  return `${WORKOUT_SHARED_KEY_PREFIX}${userId}`;
+}
+
+function normalizeSharedWorkoutLogs(value: unknown): WorkoutLog[] {
+  if (!Array.isArray(value)) return [];
+
+  return sortWorkoutLogs(
+    value
+      .filter((log): log is Partial<WorkoutLog> =>
+        Boolean(
+          log &&
+            typeof log === "object" &&
+            typeof (log as WorkoutLog).id === "string" &&
+            typeof (log as WorkoutLog).sessionDate === "string" &&
+            typeof (log as WorkoutLog).title === "string"
+        )
+      )
+      .map((log): WorkoutLog => {
+        const intensity: WorkoutLog["intensity"] = log.intensity === "easy" || log.intensity === "hard" ? log.intensity : "moderate";
+        const kcalSource: WorkoutLog["kcalSource"] = log.kcalSource === "estimated" ? "estimated" : "manual";
+        const status: WorkoutLog["status"] = log.status === "rest" ? "rest" : "trained";
+        return {
+          createTime: typeof log.createTime === "string" ? log.createTime : new Date().toISOString(),
+          distanceKm: Number(log.distanceKm) > 0 ? Number(log.distanceKm) : undefined,
+          durationMinutes: Math.max(0, Number(log.durationMinutes) || 0),
+          feeling: typeof log.feeling === "string" ? log.feeling : undefined,
+          id: String(log.id),
+          intensity,
+          kcal: Math.max(0, Number(log.kcal) || 0),
+          kcalSource,
+          notes: typeof log.notes === "string" ? log.notes : undefined,
+          parts: Array.isArray(log.parts) ? log.parts.filter((part): part is string => typeof part === "string") : [],
+          remoteId: typeof log.remoteId === "string" ? log.remoteId : null,
+          restType: log.restType === "full" || log.restType === "stretch" || log.restType === "light" ? log.restType : undefined,
+          sessionDate: String(log.sessionDate),
+          sets: Number(log.sets) > 0 ? Number(log.sets) : undefined,
+          status,
+          title: String(log.title),
+          weightKg: Number(log.weightKg) > 0 ? Number(log.weightKg) : undefined
+        };
+      })
+      .filter((log) => log.status === "trained")
+  );
+}
+
+function mergeWorkoutLogs(remoteLogs: WorkoutLog[], sharedLogs: WorkoutLog[]) {
+  const logsById = new Map<string, WorkoutLog>();
+  for (const log of sharedLogs) {
+    logsById.set(log.remoteId || log.id, log);
+  }
+  for (const log of remoteLogs) {
+    logsById.set(log.remoteId || log.id, log);
+  }
+  return sortWorkoutLogs([...logsById.values()]);
 }
 
 function BodyLineChart({

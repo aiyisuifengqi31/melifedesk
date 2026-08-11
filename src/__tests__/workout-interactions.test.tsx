@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import { WorkoutPanel } from "@/features/workout/WorkoutPanel";
+import { loadLoveSharedValue, saveLoveSharedValue } from "@/features/love/loveSharedCloud";
 import { addWorkoutPart, createWorkoutSession, listPartnerWorkoutSessions } from "@/features/workout/workoutRepository";
 import {
   BODY_METRIC_STORAGE_KEY,
@@ -37,6 +38,11 @@ jest.mock("@/auth/supabaseClient", () => ({
 jest.mock("@/features/sync/cloudSync", () => ({
   hydrateFromCloud: jest.fn(async (_key: string, fallback: unknown) => fallback),
   saveCloudValue: jest.fn(async () => undefined)
+}));
+
+jest.mock("@/features/love/loveSharedCloud", () => ({
+  loadLoveSharedValue: jest.fn(async (_key: string, fallback: unknown) => fallback),
+  saveLoveSharedValue: jest.fn(async () => undefined)
 }));
 
 jest.mock("@/features/workout/workoutRepository", () => {
@@ -252,5 +258,52 @@ describe("WorkoutPanel interactions", () => {
     );
     expect(addWorkoutPart).toHaveBeenCalledWith(expect.anything(), "remote-workout-1", "有氧");
     await waitFor(() => expect(loadLocalWorkouts(storage)[0].remoteId).toBe("remote-workout-1"));
+  });
+
+  it("stores own workouts in the couple shared state and reads partner workouts from it", async () => {
+    const storage = makeStorage();
+    const ownLog: WorkoutLog = {
+      createTime: "2026-08-11T08:00:00.000Z",
+      durationMinutes: 35,
+      id: "own-shared-workout",
+      intensity: "moderate",
+      kcal: 0,
+      kcalSource: "manual",
+      parts: ["背"],
+      sessionDate: "2026-08-11",
+      status: "trained",
+      title: "背"
+    };
+    const partnerSharedLog: WorkoutLog = {
+      createTime: "2026-08-10T08:00:00.000Z",
+      durationMinutes: 45,
+      id: "partner-shared-workout",
+      intensity: "moderate",
+      kcal: 0,
+      kcalSource: "manual",
+      parts: ["肩"],
+      sessionDate: "2026-08-10",
+      status: "trained",
+      title: "肩"
+    };
+    saveLocalWorkouts([ownLog], storage);
+    (listPartnerWorkoutSessions as jest.Mock).mockResolvedValueOnce({ data: [], error: null });
+    (loadLoveSharedValue as jest.Mock).mockImplementation(async (key: string, fallback: unknown) =>
+      key === "fanfan-guanguan.workouts.shared.user-b" ? [partnerSharedLog] : fallback
+    );
+
+    render(<WorkoutPanel storage={storage} />);
+
+    await waitFor(() =>
+      expect(saveLoveSharedValue).toHaveBeenCalledWith(
+        "fanfan-guanguan.workouts.shared.user-a",
+        expect.arrayContaining([expect.objectContaining({ id: "own-shared-workout", title: "背" })]),
+        expect.anything()
+      )
+    );
+    fireEvent.press(await screen.findByRole("button", { name: "查看TA的运动" }));
+
+    expect(await screen.findByText("45 分钟")).toBeOnTheScreen();
+    expect(screen.getAllByText("08/10").length).toBeGreaterThan(0);
   });
 });
