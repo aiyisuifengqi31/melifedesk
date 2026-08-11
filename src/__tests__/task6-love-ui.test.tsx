@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen, within } from "@testing-library/react-native";
 
 import { AppShell } from "@/components/AppShell";
 import { ActionChip, ContentCard, EmptyState, FloatingQuickAction, InlineError, PageHeader, PrimaryButton, SecondaryButton, SegmentedTabs, StatCard } from "@/shared/ui/primitives";
@@ -72,6 +72,23 @@ describe("Task 6 love page and UI polish", () => {
     expect(screen.getByTestId("love-dropdown-popover")).toBeOnTheScreen();
     expect(screen.getByRole("button", { name: "选择选择心情：🥰 甜蜜" })).toBeOnTheScreen();
     expect(screen.queryByTestId("love-choice-bottom-sheet")).toBeNull();
+  });
+
+  it("keeps archive filters and diary history inside one compact archive area", async () => {
+    render(<AppShell initialRoute="/love" />);
+
+    fireEvent.changeText(screen.getByPlaceholderText("标题，例如：一起吃饭"), "一起散步");
+    fireEvent.changeText(screen.getByPlaceholderText("今天发生了什么..."), "今天一起散步，很开心");
+    fireEvent.press(screen.getByRole("button", { name: "保存日记" }));
+
+    expect(await screen.findByText(/✓ 已保存/)).toBeOnTheScreen();
+    const archive = screen.getByTestId("love-diary-archive-card");
+    expect(within(archive).getByText("日记档案")).toBeOnTheScreen();
+    for (const label of ["日期", "类型", "文件夹", "排序"]) {
+      expect(within(archive).getByText(label)).toBeOnTheScreen();
+    }
+    expect(within(archive).getAllByText("一起散步").length).toBeGreaterThan(0);
+    expect(screen.queryByTestId("love-diary-history-wrapper")).toBeNull();
   });
 
   it("exports reusable polished UI primitives", () => {

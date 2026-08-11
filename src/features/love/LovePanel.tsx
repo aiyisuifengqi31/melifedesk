@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { createPortal } from "react-dom";
 import { CollapsibleSectionFooter, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
 import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
@@ -97,6 +98,7 @@ const giftDirections = ["我送 TA", "TA 送我"] as const;
 type GiftDirection = (typeof giftDirections)[number];
 const dateFilters = ["全部日期", "今天", "昨天", "本周", "本月"] as const;
 const sortOptions = ["最新优先", "最早优先"] as const;
+const anniversaryFilters = ["全部", "即将到来", "每年重复"] as const;
 const repeatOptions = ["不重复", "每年重复"] as const;
 const reminderOptions = [
   { label: "当天", value: 0 },
@@ -155,7 +157,7 @@ export function LovePanel({
   const [giftDescriptionHeight, setGiftDescriptionHeight] = useState(44);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [selectedPhotoSource, setSelectedPhotoSource] = useState<{ id: string; type: "diary" | "gift" | "anniversary" } | null>(null);
-  const [openPickerId, setOpenPickerId] = useState<string | null>(null);
+  const [pickerPopover, setPickerPopover] = useState<PickerPopoverState | null>(null);
   const [diarySearch, setDiarySearch] = useState("");
   const [diaryDateFilter, setDiaryDateFilter] = useState<(typeof dateFilters)[number]>("全部日期");
   const [diaryTypeFilter, setDiaryTypeFilter] = useState("全部");
@@ -167,6 +169,8 @@ export function LovePanel({
   const [giftDirectionFilter, setGiftDirectionFilter] = useState("全部");
   const [giftFolderFilter, setGiftFolderFilter] = useState<string | null>(null);
   const [giftSort, setGiftSort] = useState<(typeof sortOptions)[number]>("最新优先");
+  const [anniversaryFilter, setAnniversaryFilter] = useState<(typeof anniversaryFilters)[number]>("全部");
+  const [anniversarySort, setAnniversarySort] = useState<(typeof sortOptions)[number]>("最新优先");
   const [newFolderName, setNewFolderName] = useState("");
   const [openDiaryMenuId, setOpenDiaryMenuId] = useState<string | null>(null);
   const [openGiftMenuId, setOpenGiftMenuId] = useState<string | null>(null);
@@ -201,6 +205,17 @@ export function LovePanel({
       cancelled = true;
     };
   }, [loveStorage, partnerId]);
+
+  useEffect(() => {
+    if (!pickerPopover || typeof document === "undefined") return undefined;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPickerPopover(null);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [pickerPopover]);
 
   // 主动从云端重新拉取对方（及自己）的共享内容。PWA 没有浏览器地址栏刷新，
   // 对方写了新内容后必须手动触发才能看到最新的。
@@ -392,13 +407,18 @@ export function LovePanel({
     [gifts, giftDateFilter, giftDirectionFilter, giftFolderFilter, giftSearch, giftSort, giftTypeFilter]
   );
   const sortedAnniversaries = useMemo(() => sortAnniversariesByNextDate(anniversaries), [anniversaries]);
+  const anniversaryArchive = useMemo(
+    () => filterAnniversaries(sortedAnniversaries, { filter: anniversaryFilter, sort: anniversarySort }),
+    [anniversaryFilter, anniversarySort, sortedAnniversaries]
+  );
   // A diary is "mine" (deletable by me) only when I am its owner. Co-edited
   // entries created by the partner stay deletable only by the partner.
   const isOwnEntry = (entry: DiaryEntry) => !entry.ownerUserId || entry.ownerUserId === currentUserId;
   const diaryList = useCollapsibleList(diaryArchive);
   const giftList = useCollapsibleList(giftArchive);
-  const anniversaryList = useCollapsibleList(sortedAnniversaries);
+  const anniversaryList = useCollapsibleList(anniversaryArchive);
   const photoList = useCollapsibleList(groupedPhotos);
+  const openPickerId = pickerPopover?.id ?? null;
 
   const navigateToPhotoSource = () => {
     if (!selectedPhotoSource) return;
@@ -415,7 +435,9 @@ export function LovePanel({
   };
 
   const getFolderName = (folderId?: string | null) => folders.find((folder) => folder.id === folderId)?.name ?? "未分类";
-  const togglePicker = (id: string) => setOpenPickerId((current) => (current === id ? null : id));
+  const togglePicker = (next: PickerPopoverState) => {
+    setPickerPopover((current) => (current?.id === next.id ? null : next));
+  };
   const createFolder = () => {
     const name = newFolderName.trim();
     if (!name) return;
@@ -605,22 +627,22 @@ export function LovePanel({
             {feedback ? <Text nativeID="love-feedback" style={styles.feedback}>{feedback}</Text> : null}
           </View>
 
-          <View style={styles.card}>
+          <View style={styles.card} testID="love-diary-archive-card">
             <View style={styles.archiveHeader}>
               <Text style={styles.cardTitle}>日记档案</Text>
               <Text style={styles.archiveCount}>{diaryArchive.length} 篇</Text>
             </View>
-            <TextInput onChangeText={setDiarySearch} placeholder="搜索标题或正文" style={styles.input} value={diarySearch} />
+            <TextInput onChangeText={setDiarySearch} placeholder="搜索标题或正文" style={[styles.input, styles.searchInput]} value={diarySearch} />
             <View style={styles.filterGrid}>
-              <PickerButton accessibilityLabel="筛选日记日期" grid id="diary-date-filter" label={diaryDateFilter === "全部日期" ? "日期" : diaryDateFilter} onSelect={(value) => setDiaryDateFilter(value as typeof diaryDateFilter)} onToggle={togglePicker} open={openPickerId === "diary-date-filter"} options={dateFilters.map((item) => ({ label: item, value: item }))} selectedValue={diaryDateFilter} />
-              <PickerButton accessibilityLabel="筛选日记类型" grid id="diary-type-filter" label={diaryTypeFilter === "全部" ? "类型" : diaryTypeFilter} onSelect={setDiaryTypeFilter} onToggle={togglePicker} open={openPickerId === "diary-type-filter"} options={["全部", ...diaryCategories].map((item) => ({ label: item, value: item }))} selectedValue={diaryTypeFilter} />
-              <PickerButton accessibilityLabel="筛选日记文件夹" grid id="diary-folder-filter" label={diaryFolderFilter ? getFolderName(diaryFolderFilter) : "文件夹"} onSelect={(value) => setDiaryFolderFilter(value === "__all" ? null : value || null)} onToggle={togglePicker} open={openPickerId === "diary-folder-filter"} options={[{ label: "全部", value: "__all" }, ...folderOptions]} selectedValue={diaryFolderFilter ?? "__all"} />
-              <PickerButton accessibilityLabel="日记排序" grid id="diary-sort" label={diarySort === "最新优先" ? "排序" : diarySort} onSelect={(value) => setDiarySort(value as typeof diarySort)} onToggle={togglePicker} open={openPickerId === "diary-sort"} options={sortOptions.map((item) => ({ label: item, value: item }))} selectedValue={diarySort} />
+              <PickerButton accessibilityLabel="筛选日记日期" active={diaryDateFilter !== "全部日期"} grid id="diary-date-filter" label="日期" onSelect={(value) => setDiaryDateFilter(value as typeof diaryDateFilter)} onToggle={togglePicker} open={openPickerId === "diary-date-filter"} options={dateFilters.map((item) => ({ label: item, value: item }))} selectedValue={diaryDateFilter} />
+              <PickerButton accessibilityLabel="筛选日记类型" active={diaryTypeFilter !== "全部"} grid id="diary-type-filter" label="类型" onSelect={setDiaryTypeFilter} onToggle={togglePicker} open={openPickerId === "diary-type-filter"} options={["全部", ...diaryCategories].map((item) => ({ label: item, value: item }))} selectedValue={diaryTypeFilter} />
+              <PickerButton accessibilityLabel="筛选日记文件夹" active={diaryFolderFilter !== null} grid id="diary-folder-filter" label="文件夹" onSelect={(value) => setDiaryFolderFilter(value === "__all" ? null : value || null)} onToggle={togglePicker} open={openPickerId === "diary-folder-filter"} options={[{ label: "全部", value: "__all" }, ...folderOptions]} selectedValue={diaryFolderFilter ?? "__all"} />
+              <PickerButton accessibilityLabel="日记排序" active={diarySort !== "最新优先"} grid id="diary-sort" label="排序" onSelect={(value) => setDiarySort(value as typeof diarySort)} onToggle={togglePicker} open={openPickerId === "diary-sort"} options={sortOptions.map((item) => ({ label: item, value: item }))} selectedValue={diarySort} />
             </View>
             <View style={styles.folderManager}>
-              <TextInput onChangeText={setNewFolderName} placeholder="新建文件夹" style={[styles.input, styles.folderInput]} value={newFolderName} />
+              <TextInput onChangeText={setNewFolderName} placeholder="新建文件夹" style={[styles.input, styles.folderInput, styles.searchInput]} value={newFolderName} />
               <Pressable accessibilityRole="button" accessibilityLabel="新建文件夹" onPress={createFolder} style={styles.secondaryButton}>
-                <Text style={styles.secondaryText}>新建</Text>
+                <Text style={styles.secondaryText}>+ 新建</Text>
               </Pressable>
             </View>
             {folders.length > 0 ? (
@@ -638,44 +660,43 @@ export function LovePanel({
                 ))}
               </View>
             ) : null}
-          </View>
-
-          {diaryArchive.length === 0 ? (
-            <View style={styles.emptyBox}>
-              <PuppyIllustration color="#9cc39c" scene="generic" size={86} />
-              <Text style={styles.emptyTitle}>{diaries.length === 0 ? "还没有日记" : "没有找到日记"}</Text>
-              <Text style={styles.emptyText}>{diaries.length === 0 ? "记录第一篇日记吧" : "换个关键词或筛选条件试试"}</Text>
-            </View>
-          ) : (
-            <View style={styles.card}>
+            {diaryArchive.length === 0 ? (
+              <View style={styles.compactEmptyBox}>
+                <PuppyIllustration color="#9cc39c" scene="generic" size={72} />
+                <Text style={styles.emptyTitle}>{diaries.length === 0 ? "还没有日记" : "没有找到日记"}</Text>
+                <Text style={styles.emptyText}>{diaries.length === 0 ? "记录第一篇日记吧" : "换个关键词或筛选条件试试"}</Text>
+              </View>
+            ) : (
+              <View style={styles.archiveList}>
               {diaryList.visibleItems.map((entry) => (
-                <Pressable key={entry.id} accessibilityRole="button" accessibilityLabel={`查看日记：${entry.title ?? "恋爱日记"}`} onPress={() => setDetailItem({ item: entry, type: "diary" })} style={styles.diaryCard}>
-                  <View style={styles.diaryMetaRow}>
+                <Pressable key={entry.id} accessibilityRole="button" accessibilityLabel={`查看日记：${entry.title ?? "恋爱日记"}`} onPress={() => setDetailItem({ item: entry, type: "diary" })} style={styles.memoryCard}>
+                  <View style={styles.memoryTopRow}>
                     <Text style={styles.diaryDate}>{entry.date}</Text>
-                    <View style={styles.diaryActions}>
-                      <Text style={styles.archiveCount}>{entry.images?.length ? `${entry.images.length} 图` : getFolderName(entry.folderId)}</Text>
-                      <Pressable accessibilityRole="button" accessibilityLabel={`打开日记菜单：${entry.title ?? "恋爱日记"}`} onPress={() => setOpenDiaryMenuId(openDiaryMenuId === entry.id ? null : entry.id)} style={styles.moreButton}>
-                        <Text style={styles.moreButtonText}>•••</Text>
-                      </Pressable>
+                    <Pressable accessibilityRole="button" accessibilityLabel={`打开日记菜单：${entry.title ?? "恋爱日记"}`} onPress={() => setOpenDiaryMenuId(openDiaryMenuId === entry.id ? null : entry.id)} style={styles.moreButton}>
+                      <Text style={styles.moreButtonText}>•••</Text>
+                    </Pressable>
+                  </View>
+                  <View style={styles.memoryBody}>
+                    <View style={styles.memoryTextArea}>
+                      <Text style={styles.diaryTitle}>{entry.title ?? (entry.content.slice(0, 24) || "恋爱日记")}</Text>
+                      <View style={styles.memoryTagRow}>
+                        <Text style={styles.memoryTag}>{moodIcons[entry.mood]} {entry.mood}</Text>
+                        <Text style={styles.memoryTag}>{entry.category ?? "日常记录"}</Text>
+                        <Text style={styles.memoryFolder}>文件夹：{getFolderName(entry.folderId)}</Text>
+                      </View>
+                      {entry.content ? <Text numberOfLines={2} style={styles.diaryContent}>{entry.content}</Text> : null}
                     </View>
+                    {entry.images && entry.images.length > 0 ? (
+                      <Pressable onPress={() => setExpandedImage(entry.images?.[0] ?? null)} style={styles.memoryThumbWrap}>
+                        <Image source={{ uri: entry.images[0] }} style={styles.memoryThumb} />
+                      </Pressable>
+                    ) : null}
                   </View>
                   {openDiaryMenuId === entry.id ? (
                     <View style={styles.menuRow}>
                       <Pressable accessibilityRole="button" accessibilityLabel={`编辑日记：${entry.title ?? "恋爱日记"}`} onPress={() => editDiary(entry)} style={styles.menuButton}><Text style={styles.menuText}>编辑</Text></Pressable>
                       <PickerButton accessibilityLabel={`移动日记：${entry.title ?? "恋爱日记"}`} id={`diary-move-${entry.id}`} label="移动" onSelect={(value) => moveDiary(entry, value)} onToggle={togglePicker} open={openPickerId === `diary-move-${entry.id}`} options={folderOptions} selectedValue={entry.folderId ?? ""} />
                       {isOwnEntry(entry) ? <Pressable accessibilityRole="button" accessibilityLabel={`删除日记：${entry.title ?? "恋爱日记"}`} onPress={() => deleteDiary(entry.id)} style={styles.menuDelete}><Text style={styles.deleteText}>删除</Text></Pressable> : null}
-                    </View>
-                  ) : null}
-                  <Text style={styles.diaryTitle}>{entry.title ?? (entry.content.slice(0, 24) || "恋爱日记")}</Text>
-                  <Text style={styles.diaryMood}>{moodIcons[entry.mood]} {entry.mood} · {entry.category ?? "日常记录"} · {getFolderName(entry.folderId)}</Text>
-                  <Text numberOfLines={3} style={styles.diaryContent}>{entry.content}</Text>
-                  {entry.images && entry.images.length > 0 ? (
-                    <View style={styles.imageGrid}>
-                      {entry.images.map((image, index) => (
-                        <Pressable key={index} onPress={() => setExpandedImage(image)} style={styles.imageThumbWrap}>
-                          <Image source={{ uri: image }} style={styles.imageThumb} />
-                        </Pressable>
-                      ))}
                     </View>
                   ) : null}
                 </Pressable>
@@ -689,8 +710,9 @@ export function LovePanel({
                 tokens={themeTokens}
                 visible={diaryList.canExpand}
               />
-            </View>
-          )}
+              </View>
+            )}
+          </View>
         </>
       ) : null}
 
@@ -749,36 +771,55 @@ export function LovePanel({
             {feedback ? <Text nativeID="love-feedback" style={styles.feedback}>{feedback}</Text> : null}
           </View>
 
-          <View style={styles.card}>
+          <View style={styles.card} testID="love-gift-archive-card">
             <View style={styles.archiveHeader}>
               <Text style={styles.cardTitle}>礼物档案</Text>
               <Text style={styles.archiveCount}>{giftArchive.length} 件</Text>
             </View>
-            <TextInput onChangeText={setGiftSearch} placeholder="搜索礼物或描述" style={styles.input} value={giftSearch} />
+            <TextInput onChangeText={setGiftSearch} placeholder="搜索礼物或描述" style={[styles.input, styles.searchInput]} value={giftSearch} />
             <View style={styles.filterGrid}>
-              <PickerButton accessibilityLabel="筛选礼物日期" grid id="gift-date-filter" label={giftDateFilter === "全部日期" ? "日期" : giftDateFilter} onSelect={(value) => setGiftDateFilter(value as typeof giftDateFilter)} onToggle={togglePicker} open={openPickerId === "gift-date-filter"} options={dateFilters.map((item) => ({ label: item, value: item }))} selectedValue={giftDateFilter} />
-              <PickerButton accessibilityLabel="筛选礼物类型" grid id="gift-type-filter" label={giftTypeFilter === "全部" ? "类型" : giftTypeFilter} onSelect={setGiftTypeFilter} onToggle={togglePicker} open={openPickerId === "gift-type-filter"} options={["全部", ...giftTags].map((item) => ({ label: item, value: item }))} selectedValue={giftTypeFilter} />
-              <PickerButton accessibilityLabel="筛选送礼方向" grid id="gift-direction-filter" label={giftDirectionFilter === "全部" ? "方向" : giftDirectionFilter} onSelect={setGiftDirectionFilter} onToggle={togglePicker} open={openPickerId === "gift-direction-filter"} options={["全部", ...giftDirections].map((item) => ({ label: item, value: item }))} selectedValue={giftDirectionFilter} />
-              <PickerButton accessibilityLabel="筛选礼物文件夹" grid id="gift-folder-filter" label={giftFolderFilter ? getFolderName(giftFolderFilter) : "文件夹"} onSelect={(value) => setGiftFolderFilter(value === "__all" ? null : value || null)} onToggle={togglePicker} open={openPickerId === "gift-folder-filter"} options={[{ label: "全部", value: "__all" }, ...folderOptions]} selectedValue={giftFolderFilter ?? "__all"} />
-              <PickerButton accessibilityLabel="礼物排序" grid id="gift-sort" label={giftSort === "最新优先" ? "排序" : giftSort} onSelect={(value) => setGiftSort(value as typeof giftSort)} onToggle={togglePicker} open={openPickerId === "gift-sort"} options={sortOptions.map((item) => ({ label: item, value: item }))} selectedValue={giftSort} />
+              <PickerButton accessibilityLabel="筛选礼物日期" active={giftDateFilter !== "全部日期"} grid id="gift-date-filter" label="日期" onSelect={(value) => setGiftDateFilter(value as typeof giftDateFilter)} onToggle={togglePicker} open={openPickerId === "gift-date-filter"} options={dateFilters.map((item) => ({ label: item, value: item }))} selectedValue={giftDateFilter} />
+              <PickerButton accessibilityLabel="筛选礼物类型" active={giftTypeFilter !== "全部"} grid id="gift-type-filter" label="类型" onSelect={setGiftTypeFilter} onToggle={togglePicker} open={openPickerId === "gift-type-filter"} options={["全部", ...giftTags].map((item) => ({ label: item, value: item }))} selectedValue={giftTypeFilter} />
+              <PickerButton accessibilityLabel="筛选送礼方向" active={giftDirectionFilter !== "全部"} grid id="gift-direction-filter" label="方向" onSelect={setGiftDirectionFilter} onToggle={togglePicker} open={openPickerId === "gift-direction-filter"} options={["全部", ...giftDirections].map((item) => ({ label: item, value: item }))} selectedValue={giftDirectionFilter} />
+              <PickerButton accessibilityLabel="礼物排序" active={giftSort !== "最新优先"} grid id="gift-sort" label="排序" onSelect={(value) => setGiftSort(value as typeof giftSort)} onToggle={togglePicker} open={openPickerId === "gift-sort"} options={sortOptions.map((item) => ({ label: item, value: item }))} selectedValue={giftSort} />
             </View>
-          </View>
+            {folders.length > 0 ? (
+              <View style={styles.folderList}>
+                <PickerButton accessibilityLabel="筛选礼物文件夹" active={giftFolderFilter !== null} id="gift-folder-filter" label="全部文件夹" onSelect={(value) => setGiftFolderFilter(value === "__all" ? null : value || null)} onToggle={togglePicker} open={openPickerId === "gift-folder-filter"} options={[{ label: "全部", value: "__all" }, ...folderOptions]} selectedValue={giftFolderFilter ?? "__all"} />
+              </View>
+            ) : null}
 
-          {giftArchive.length === 0 ? (
-            <View style={styles.emptyBox}>
-              <PuppyIllustration color="#9cc39c" scene="gift" size={86} />
-              <Text style={styles.emptyTitle}>{gifts.length === 0 ? "还没有礼物记录" : "没有找到礼物"}</Text>
-              <Text style={styles.emptyText}>{gifts.length === 0 ? "记录你们互赠的礼物" : "换个筛选条件试试"}</Text>
-            </View>
-          ) : (
-            <>
-            {giftList.visibleItems.map((entry) => (
-              <Pressable key={entry.id} accessibilityRole="button" accessibilityLabel={`查看礼物：${entry.name}`} onPress={() => setDetailItem({ item: entry, type: "gift" })} style={styles.giftCard}>
-                <View style={styles.diaryMetaRow}>
+            {giftArchive.length === 0 ? (
+              <View style={styles.compactEmptyBox}>
+                <PuppyIllustration color="#9cc39c" scene="gift" size={72} />
+                <Text style={styles.emptyTitle}>{gifts.length === 0 ? "还没有礼物记录" : "没有找到礼物"}</Text>
+                <Text style={styles.emptyText}>{gifts.length === 0 ? "记录你们互赠的礼物" : "换个筛选条件试试"}</Text>
+              </View>
+            ) : (
+              <View style={styles.archiveList}>
+              {giftList.visibleItems.map((entry) => (
+              <Pressable key={entry.id} accessibilityRole="button" accessibilityLabel={`查看礼物：${entry.name}`} onPress={() => setDetailItem({ item: entry, type: "gift" })} style={styles.memoryCard}>
+                <View style={styles.memoryTopRow}>
                   <Text style={styles.diaryDate}>{entry.date}</Text>
                   <Pressable accessibilityRole="button" accessibilityLabel={`打开礼物菜单：${entry.name}`} onPress={() => setOpenGiftMenuId(openGiftMenuId === entry.id ? null : entry.id)} style={styles.moreButton}>
                     <Text style={styles.moreButtonText}>•••</Text>
                   </Pressable>
+                </View>
+                <View style={styles.memoryBody}>
+                  <View style={styles.memoryTextArea}>
+                    <Text style={styles.diaryTitle}>{entry.name}</Text>
+                    <View style={styles.memoryTagRow}>
+                      <Text style={styles.memoryTag}>{entry.tag}</Text>
+                      <Text style={styles.memoryTag}>{entry.direction ?? "未设置"}</Text>
+                      <Text style={styles.memoryFolder}>文件夹：{getFolderName(entry.folderId)}</Text>
+                    </View>
+                    {entry.description ? <Text numberOfLines={2} style={styles.diaryContent}>{entry.description}</Text> : null}
+                  </View>
+                  {entry.image ? (
+                    <Pressable onPress={() => { setSelectedPhotoSource({ id: entry.id, type: "gift" }); setExpandedImage(entry.image); }} style={styles.memoryThumbWrap}>
+                      <Image source={{ uri: entry.image }} style={styles.memoryThumb} />
+                    </Pressable>
+                  ) : null}
                 </View>
                 {openGiftMenuId === entry.id ? (
                   <View style={styles.menuRow}>
@@ -787,18 +828,6 @@ export function LovePanel({
                     <Pressable accessibilityRole="button" accessibilityLabel={`删除礼物：${entry.name}`} onPress={() => deleteGift(entry.id)} style={styles.menuDelete}><Text style={styles.deleteText}>删除</Text></Pressable>
                   </View>
                 ) : null}
-                <View style={styles.giftBody}>
-                  {entry.image ? (
-                    <Pressable onPress={() => { setSelectedPhotoSource({ id: entry.id, type: "gift" }); setExpandedImage(entry.image); }}>
-                      <Image source={{ uri: entry.image }} style={styles.giftThumb} />
-                    </Pressable>
-                  ) : null}
-                  <View style={styles.giftInfo}>
-                    <Text style={styles.diaryTitle}>{entry.name}</Text>
-                    <Text style={styles.diaryCategory}>{entry.tag} · {entry.direction ?? "未设置"} · {getFolderName(entry.folderId)}</Text>
-                    {entry.description ? <Text numberOfLines={2} style={styles.diaryContent}>{entry.description}</Text> : null}
-                  </View>
-                </View>
               </Pressable>
             ))}
             <CollapsibleSectionFooter
@@ -810,8 +839,9 @@ export function LovePanel({
               tokens={themeTokens}
               visible={giftList.canExpand}
             />
-            </>
-          )}
+              </View>
+            )}
+          </View>
         </>
       ) : null}
 
@@ -860,27 +890,33 @@ export function LovePanel({
             {feedback ? <Text nativeID="love-feedback" style={styles.feedback}>{feedback}</Text> : null}
           </View>
 
-          {anniversaries.length === 0 ? (
-            <View style={styles.emptyBox}>
-              <PuppyIllustration color="#9cc39c" scene="generic" size={86} />
-              <Text style={styles.emptyTitle}>还没有纪念日</Text>
-              <Text style={styles.emptyText}>添加你们的特殊日子</Text>
+          <View style={styles.card} testID="love-anniversary-archive-card">
+            <View style={styles.archiveHeader}>
+              <Text style={styles.cardTitle}>纪念日档案</Text>
+              <Text style={styles.archiveCount}>{anniversaryArchive.length} 个</Text>
             </View>
-          ) : (
-            <>
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>即将到来</Text>
-              {sortedAnniversaries.slice(0, 5).map((entry) => (
-                <AnniversaryCard
-                  entry={entry}
-                  key={`upcoming-${entry.id}`}
-                  onDelete={() => deleteAnniversary(entry.id)}
-                  onImagePress={() => { if (entry.image) { setSelectedPhotoSource({ id: entry.id, type: "anniversary" }); setExpandedImage(entry.image); } }}
-                />
+            <View style={styles.filterGrid}>
+              {anniversaryFilters.map((item) => (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`筛选纪念日：${item}`}
+                  key={item}
+                  onPress={() => setAnniversaryFilter(item)}
+                  style={[styles.anniversaryFilterButton, anniversaryFilter === item ? styles.anniversaryFilterButtonActive : null]}
+                >
+                  <Text style={[styles.anniversaryFilterText, anniversaryFilter === item ? styles.anniversaryFilterTextActive : null]}>{item}</Text>
+                </Pressable>
               ))}
+              <PickerButton accessibilityLabel="纪念日排序" active={anniversarySort !== "最新优先"} grid id="anniversary-sort" label="排序" onSelect={(value) => setAnniversarySort(value as typeof anniversarySort)} onToggle={togglePicker} open={openPickerId === "anniversary-sort"} options={sortOptions.map((item) => ({ label: item, value: item }))} selectedValue={anniversarySort} />
             </View>
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>全部纪念日</Text>
+            {anniversaryArchive.length === 0 ? (
+              <View style={styles.compactEmptyBox}>
+                <PuppyIllustration color="#9cc39c" scene="generic" size={72} />
+                <Text style={styles.emptyTitle}>{anniversaries.length === 0 ? "还没有纪念日" : "没有找到纪念日"}</Text>
+                <Text style={styles.emptyText}>{anniversaries.length === 0 ? "添加你们的特殊日子" : "换个筛选条件试试"}</Text>
+              </View>
+            ) : (
+              <View style={styles.archiveList}>
             {anniversaryList.visibleItems.map((entry) => (
               <AnniversaryCard
                 entry={entry}
@@ -898,9 +934,9 @@ export function LovePanel({
               tokens={themeTokens}
               visible={anniversaryList.canExpand}
             />
+              </View>
+            )}
             </View>
-            </>
-          )}
         </>
       ) : null}
 
@@ -952,7 +988,7 @@ export function LovePanel({
         </View>
       ) : null}
 
-      {openPickerId ? <Pressable accessibilityLabel="关闭选择菜单" onPress={() => setOpenPickerId(null)} style={styles.dropdownBackdrop} testID="love-dropdown-dismiss" /> : null}
+      {pickerPopover ? <AnchoredDropdown onClose={() => setPickerPopover(null)} picker={pickerPopover} /> : null}
 
       {detailItem ? (
         <Pressable onPress={() => setDetailItem(null)} style={styles.lightbox}>
@@ -987,6 +1023,7 @@ export function LovePanel({
 
 function PickerButton({
   accessibilityLabel,
+  active,
   grid,
   id,
   label,
@@ -997,40 +1034,58 @@ function PickerButton({
   selectedValue
 }: {
   accessibilityLabel: string;
+  active?: boolean;
   grid?: boolean;
   id: string;
   label: string;
   onSelect: (value: string) => void;
-  onToggle: (id: string) => void;
+  onToggle: (picker: PickerPopoverState) => void;
   open: boolean;
   options: ChoiceOption[];
   selectedValue: string;
 }) {
   return (
     <View style={[styles.pickerShell, grid ? styles.pickerShellGrid : null, open ? styles.pickerShellOpen : null]}>
-      <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} onPress={() => onToggle(id)} style={styles.pickerButton}>
-        <Text style={styles.pickerText}>{label} ▼</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        onPress={(event) => onToggle({ accessibilityLabel, id, onSelect, options, rect: getPickerRect(event), selectedValue })}
+        style={[styles.pickerButton, open || active ? styles.pickerButtonOpen : null]}
+      >
+        <Text style={styles.pickerText}>{label}</Text>
+        <Text style={styles.pickerChevron}>▼</Text>
       </Pressable>
-      {open ? (
-        <View style={styles.dropdownPopover} testID="love-dropdown-popover">
-          {options.map((option) => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`选择${accessibilityLabel.replace(/^选择日记|^选择礼物|^选择纪念日|^筛选日记|^筛选礼物/, "选择")}：${option.label}`}
-              key={option.value}
-              onPress={() => {
-                onSelect(option.value);
-                onToggle(id);
-              }}
-              style={[styles.dropdownOption, selectedValue === option.value ? styles.dropdownOptionActive : null]}
-            >
-              <Text style={[styles.dropdownOptionText, selectedValue === option.value ? styles.dropdownOptionTextActive : null]}>{option.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
     </View>
   );
+}
+
+function AnchoredDropdown({ onClose, picker }: { onClose: () => void; picker: PickerPopoverState }) {
+  const style = getDropdownPosition(picker.rect, picker.options.length);
+  const menu = (
+    <Pressable accessibilityLabel="关闭选择菜单" onPress={onClose} style={styles.dropdownBackdrop} testID="love-dropdown-dismiss">
+      <View onStartShouldSetResponder={() => true} style={[styles.dropdownPopover, style]} testID="love-dropdown-popover">
+        {picker.options.map((option) => (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`选择${picker.accessibilityLabel.replace(/^选择日记|^选择礼物|^选择纪念日|^筛选日记|^筛选礼物/, "选择")}：${option.label}`}
+            key={option.value}
+            onPress={() => {
+              picker.onSelect(option.value);
+              onClose();
+            }}
+            style={[styles.dropdownOption, picker.selectedValue === option.value ? styles.dropdownOptionActive : null]}
+          >
+            <Text style={[styles.dropdownOptionText, picker.selectedValue === option.value ? styles.dropdownOptionTextActive : null]}>{option.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </Pressable>
+  );
+
+  if (shouldUsePortal()) {
+    return createPortal(menu, document.body);
+  }
+  return menu;
 }
 
 function AnniversaryCard({ entry, onDelete, onImagePress }: { entry: AnniversaryEntry; onDelete: () => void; onImagePress: () => void }) {
@@ -1171,6 +1226,16 @@ function sortAnniversariesByNextDate(entries: AnniversaryEntry[]) {
   return [...entries].sort((left, right) => getAnniversaryInfo(left).days - getAnniversaryInfo(right).days);
 }
 
+function filterAnniversaries(entries: AnniversaryEntry[], filters: { filter: string; sort: string }) {
+  const filtered = entries.filter((entry) => {
+    const info = getAnniversaryInfo(entry);
+    if (filters.filter === anniversaryFilters[1]) return info.days >= 0 && info.days <= 30;
+    if (filters.filter === anniversaryFilters[2]) return entry.repeatYearly;
+    return true;
+  });
+  return sortByLoveDate(filtered, filters.sort, (entry) => [getAnniversaryInfo(entry).next.toISOString(), entry.date]);
+}
+
 function filterDiaries(
   entries: DiaryEntry[],
   filters: { dateFilter: string; folderId: string | null; query: string; sort: string; type: string }
@@ -1242,9 +1307,52 @@ type ChoiceOption = {
   value: string;
 };
 
+type PickerRect = {
+  height: number;
+  left: number;
+  top: number;
+  width: number;
+};
+
+type PickerPopoverState = {
+  accessibilityLabel: string;
+  id: string;
+  onSelect: (value: string) => void;
+  options: ChoiceOption[];
+  rect: PickerRect;
+  selectedValue: string;
+};
+
 type DetailState =
   | { item: DiaryEntry; type: "diary" }
   | { item: GiftEntry; type: "gift" };
+
+function getPickerRect(event: unknown): PickerRect {
+  const target = (event as { currentTarget?: unknown })?.currentTarget;
+  const node = target as { getBoundingClientRect?: () => DOMRect };
+  if (node && typeof node.getBoundingClientRect === "function") {
+    const rect = node.getBoundingClientRect();
+    return { height: rect.height, left: rect.left, top: rect.top, width: rect.width };
+  }
+  return { height: 42, left: 18, top: 180, width: 160 };
+}
+
+function getDropdownPosition(rect: PickerRect, optionCount: number) {
+  const padding = 12;
+  const viewportHeight = typeof window === "undefined" ? 760 : window.innerHeight;
+  const viewportWidth = typeof window === "undefined" ? 390 : window.innerWidth;
+  const estimatedHeight = Math.min(280, Math.max(52, optionCount * 42 + 12));
+  const belowTop = rect.top + rect.height + 8;
+  const top = belowTop + estimatedHeight > viewportHeight - padding ? Math.max(padding, rect.top - estimatedHeight - 8) : belowTop;
+  const minWidth = Math.max(128, rect.width);
+  const maxLeft = Math.max(padding, viewportWidth - minWidth - padding);
+  const left = Math.min(Math.max(padding, rect.left), maxLeft);
+  return { left, maxHeight: 280, minWidth, top };
+}
+
+function shouldUsePortal() {
+  return Platform.OS === "web" && typeof document !== "undefined" && Boolean(document.body) && (typeof process === "undefined" || process.env.NODE_ENV !== "test");
+}
 
 function buildPhotoGroups(diaries: DiaryEntry[], gifts: GiftEntry[], anniversaries: AnniversaryEntry[]): PhotoGroup[] {
   const photos: PhotoItem[] = [];
@@ -1288,6 +1396,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900"
   },
+  anniversaryFilterButton: {
+    alignItems: "center",
+    backgroundColor: "#fffafd",
+    borderColor: "#eadfe5",
+    borderRadius: 12,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 42,
+    minWidth: 0,
+    paddingHorizontal: 6,
+    paddingVertical: 9
+  },
+  anniversaryFilterButtonActive: {
+    backgroundColor: "#fff0f4",
+    borderColor: "#ff8fa3"
+  },
+  anniversaryFilterText: {
+    color: "#776878",
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "center"
+  },
+  anniversaryFilterTextActive: {
+    color: "#c75670"
+  },
   card: {
     backgroundColor: "rgba(255,252,253,0.95)",
     borderColor: "#f3d6df",
@@ -1315,6 +1449,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between"
+  },
+  archiveList: {
+    gap: 8
   },
   dateChevron: {
     color: "#697386",
@@ -1381,7 +1518,7 @@ const styles = StyleSheet.create({
   },
   diaryDate: {
     color: "#697386",
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "800"
   },
   diaryInput: {
@@ -1401,8 +1538,15 @@ const styles = StyleSheet.create({
   },
   diaryTitle: {
     color: "#111827",
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "900"
+  },
+  compactEmptyBox: {
+    alignItems: "center",
+    gap: 6,
+    justifyContent: "center",
+    minHeight: 118,
+    paddingVertical: 12
   },
   emptyBox: {
     alignItems: "center",
@@ -1428,8 +1572,8 @@ const styles = StyleSheet.create({
   },
   filterGrid: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10
+    flexWrap: "nowrap",
+    gap: 6
   },
   floatingTabs: {
     bottom: 10,
@@ -1583,6 +1727,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10
   },
+  searchInput: {
+    minHeight: 42
+  },
   titleField: {
     flex: 1,
     minWidth: 0
@@ -1645,6 +1792,59 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "900"
   },
+  memoryBody: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10
+  },
+  memoryCard: {
+    backgroundColor: "#fffafd",
+    borderColor: "#f1e0e6",
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 6,
+    padding: 11
+  },
+  memoryFolder: {
+    color: "#8b7280",
+    fontSize: 11,
+    fontWeight: "800"
+  },
+  memoryTag: {
+    backgroundColor: "#fff0f4",
+    borderRadius: 999,
+    color: "#8b7280",
+    fontSize: 11,
+    fontWeight: "900",
+    paddingHorizontal: 7,
+    paddingVertical: 3
+  },
+  memoryTagRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5
+  },
+  memoryTextArea: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0
+  },
+  memoryThumb: {
+    backgroundColor: "#eef2f7",
+    borderRadius: 12,
+    height: 62,
+    width: 62
+  },
+  memoryThumbWrap: {
+    borderRadius: 12,
+    overflow: "hidden"
+  },
+  memoryTopRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
   moreButton: {
     alignItems: "center",
     borderRadius: 999,
@@ -1705,9 +1905,8 @@ const styles = StyleSheet.create({
     position: "relative"
   },
   pickerShellGrid: {
-    flexBasis: "47%",
     flexGrow: 1,
-    minWidth: 128
+    minWidth: 0
   },
   pickerShellOpen: {
     elevation: 18,
@@ -1719,10 +1918,21 @@ const styles = StyleSheet.create({
     borderColor: "#eadfe5",
     borderRadius: 12,
     borderWidth: 1,
+    flexDirection: "row",
+    gap: 3,
     justifyContent: "center",
     minHeight: 42,
     paddingHorizontal: 9,
     paddingVertical: 9
+  },
+  pickerButtonOpen: {
+    backgroundColor: "#fff0f4",
+    borderColor: "#ff8fa3"
+  },
+  pickerChevron: {
+    color: "#8b7280",
+    fontSize: 10,
+    fontWeight: "900"
   },
   pickerText: {
     color: "#111827",
@@ -1737,7 +1947,7 @@ const styles = StyleSheet.create({
     position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
     right: 0,
     top: 0,
-    zIndex: 90
+    zIndex: 9998
   },
   dropdownPopover: {
     backgroundColor: "#fffafd",
@@ -1746,16 +1956,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     elevation: 18,
     gap: 4,
-    left: 0,
-    minWidth: "100%",
+    overflow: "scroll",
     padding: 6,
-    position: "absolute",
+    position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
     shadowColor: "#ef7f98",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.16,
     shadowRadius: 18,
-    top: 48,
-    zIndex: 240
+    zIndex: 9999
   },
   dropdownOption: {
     backgroundColor: "#ffffff",
