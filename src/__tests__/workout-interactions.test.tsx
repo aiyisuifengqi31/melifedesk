@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import { WorkoutPanel } from "@/features/workout/WorkoutPanel";
-import { listPartnerWorkoutSessions } from "@/features/workout/workoutRepository";
+import { addWorkoutPart, createWorkoutSession, listPartnerWorkoutSessions } from "@/features/workout/workoutRepository";
 import {
   BODY_METRIC_STORAGE_KEY,
   loadLocalBodyMetrics,
@@ -134,6 +134,10 @@ describe("workout storage", () => {
 });
 
 describe("WorkoutPanel interactions", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it("does not render removed feeling or notes fields", () => {
     render(<WorkoutPanel storage={makeStorage()} />);
 
@@ -213,5 +217,40 @@ describe("WorkoutPanel interactions", () => {
     expect(screen.queryByText("体脂")).toBeNull();
     expect(screen.queryByText("体重")).toBeNull();
     expect(screen.queryByText("•••")).toBeNull();
+  });
+
+  it("uploads unsynced local workouts as couple-readable sessions when the user is bound", async () => {
+    const storage = makeStorage();
+    const localOnlyLog: WorkoutLog = {
+      createTime: "2026-08-11T08:00:00.000Z",
+      durationMinutes: 25,
+      id: "local-only-workout",
+      intensity: "moderate",
+      kcal: 0,
+      kcalSource: "manual",
+      parts: ["有氧"],
+      sessionDate: "2026-08-11",
+      status: "trained",
+      title: "有氧"
+    };
+    saveLocalWorkouts([localOnlyLog], storage);
+
+    render(<WorkoutPanel storage={storage} />);
+
+    await waitFor(() =>
+      expect(createWorkoutSession).toHaveBeenCalledWith(
+        expect.anything(),
+        "user-a",
+        expect.objectContaining({
+          coupleId: "couple-1",
+          durationMinutes: 25,
+          sessionDate: "2026-08-11",
+          title: "有氧",
+          visibility: "couple_read"
+        })
+      )
+    );
+    expect(addWorkoutPart).toHaveBeenCalledWith(expect.anything(), "remote-workout-1", "有氧");
+    await waitFor(() => expect(loadLocalWorkouts(storage)[0].remoteId).toBe("remote-workout-1"));
   });
 });

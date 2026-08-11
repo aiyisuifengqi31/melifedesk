@@ -88,7 +88,9 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("week");
   const [dataTrend, setDataTrend] = useState<DataTrendType>("training");
   const [ownerView, setOwnerView] = useState<WorkoutOwnerView>("mine");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState("我的运动");
+  const [activeCoupleId, setActiveCoupleId] = useState<string | null>(null);
   const [partnerUserId, setPartnerUserId] = useState<string | null>(null);
   const [partnerLogs, setPartnerLogs] = useState<WorkoutLog[]>([]);
   const [partnerLoading, setPartnerLoading] = useState(false);
@@ -100,6 +102,7 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const bodyDirtyRef = useRef(false);
   const logsSnapshotRef = useRef(JSON.stringify(logs));
   const bodyMetricsSnapshotRef = useRef(JSON.stringify(bodyMetrics));
+  const workoutSyncingRef = useRef(new Set<string>());
 
   const stats = useMemo(() => buildWorkoutStats(logs), [logs]);
   const latestBodyMetric = useMemo(() => findLatestBodyMetric(bodyMetrics, todayIso()), [bodyMetrics]);
@@ -147,9 +150,14 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       const user = data.user;
       if (!user || cancelled) return;
       const name = getUserDisplayName(user);
+      setCurrentUserId(user.id);
       setCurrentUserName(name ? `${name} · 我的` : "我的运动");
-      const partnerId = await getCurrentPartnerId(client, user.id);
+      const [coupleId, partnerId] = await Promise.all([
+        getCurrentCoupleId(client, user.id),
+        getCurrentPartnerId(client, user.id)
+      ]);
       if (cancelled) return;
+      setActiveCoupleId(coupleId);
       setPartnerUserId(partnerId);
       if (!partnerId) {
         setOwnerView("mine");
@@ -160,6 +168,40 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const client = getSupabaseClient();
+    if (!client || !currentUserId || !activeCoupleId) return undefined;
+
+    const unsyncedLogs = logs.filter((log) => log.status === "trained" && !log.remoteId && !workoutSyncingRef.current.has(log.id));
+    if (unsyncedLogs.length === 0) return undefined;
+
+    void Promise.all(
+      unsyncedLogs.map(async (log) => {
+        workoutSyncingRef.current.add(log.id);
+        const remoteId = await uploadWorkoutLog(client, currentUserId, activeCoupleId, log);
+        return { localId: log.id, remoteId };
+      })
+    ).then((results) => {
+      if (cancelled) return;
+      const remoteIds = new Map(results.filter((result) => result.remoteId).map((result) => [result.localId, result.remoteId as string]));
+      if (remoteIds.size === 0) return;
+      localDirtyRef.current = true;
+      setLogs((currentLogs) => {
+        const nextLogs = sortWorkoutLogs(currentLogs.map((log) => remoteIds.has(log.id) ? { ...log, remoteId: remoteIds.get(log.id) ?? null } : log));
+        logsSnapshotRef.current = JSON.stringify(nextLogs);
+        saveLocalWorkouts(nextLogs, workoutStorage);
+        return nextLogs;
+      });
+    }).finally(() => {
+      unsyncedLogs.forEach((log) => workoutSyncingRef.current.delete(log.id));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCoupleId, currentUserId, logs, workoutStorage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -299,6 +341,9 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
     const nextLogs = editingLogId
       ? logs.map((item) => (item.id === editingLogId ? { ...item, durationMinutes, parts: [selectedPart], title: selectedPart } : item))
       : [log, ...logs];
+    if (!editingLogId && currentUserId && activeCoupleId) {
+      workoutSyncingRef.current.add(log.id);
+    }
     persistLogs(nextLogs);
     setFeedback(`✓ 已记录：${selectedPart} · ${durationMinutes}分钟`);
     if (editingLogId) {
@@ -307,40 +352,13 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
     }
 
     const client = getSupabaseClient();
-    if (!client) {
-      return;
-    }
-
-    const { data: userData } = await client.auth.getUser();
-    if (!userData.user) {
-      return;
-    }
-
-    const userId = userData.user.id;
-    // When the creator currently has an active partner, mark the session shared
-    // (couple_read) and tag it with the active couple as a historical marker.
-    // The active partner can READ it (RLS); only the owner can edit/delete.
-    const activeCoupleId = await getCurrentCoupleId(client, userId);
-    const isShared = Boolean(activeCoupleId);
-
-    const { data, error } = await createWorkoutSession(client, userId, {
-      coupleId: activeCoupleId,
-      durationMinutes: log.durationMinutes,
-      intensity: log.intensity,
-      kcal: log.kcal,
-      kcalSource: "manual",
-      sessionDate: log.sessionDate,
-      title: log.title,
-      visibility: isShared ? "couple_read" : "private"
-    });
-
-    if (error || !data) {
+    const remoteId = client && currentUserId && activeCoupleId ? await uploadWorkoutLog(client, currentUserId, activeCoupleId, log) : null;
+    if (remoteId) {
+      persistLogs(nextLogs.map((item) => (item.id === log.id ? { ...item, remoteId } : item)));
+    } else if (client && currentUserId) {
       setFeedback("记录已保存在本地，远程同步稍后可重试。");
-      return;
     }
-
-    await Promise.all(log.parts.map((part) => addWorkoutPart(client, (data as { id: string }).id, part)));
-    persistLogs(nextLogs.map((item) => (item.id === log.id ? { ...item, remoteId: (data as { id: string }).id } : item)));
+    workoutSyncingRef.current.delete(log.id);
   };
 
   const deleteWorkout = async (log: WorkoutLog) => {
@@ -782,6 +800,29 @@ function PartnerWorkoutReadOnly({
       </View>
     </>
   );
+}
+
+async function uploadWorkoutLog(client: NonNullable<ReturnType<typeof getSupabaseClient>>, userId: string, activeCoupleId: string, log: WorkoutLog) {
+  try {
+    const { data, error } = await createWorkoutSession(client, userId, {
+      coupleId: activeCoupleId,
+      durationMinutes: log.durationMinutes,
+      intensity: log.intensity,
+      kcal: log.kcal,
+      kcalSource: "manual",
+      sessionDate: log.sessionDate,
+      title: log.title,
+      visibility: "couple_read"
+    });
+
+    if (error || !data) return null;
+
+    const remoteId = (data as { id: string }).id;
+    await Promise.all(log.parts.map((part) => addWorkoutPart(client, remoteId, part)));
+    return remoteId;
+  } catch {
+    return null;
+  }
 }
 
 function BodyLineChart({
