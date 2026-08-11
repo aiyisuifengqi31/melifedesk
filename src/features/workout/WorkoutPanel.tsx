@@ -3,12 +3,14 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } fr
 import { createPortal } from "react-dom";
 
 import { getSupabaseClient } from "@/auth/supabaseClient";
-import { getCurrentCoupleId } from "@/auth/partnership";
+import { getCurrentCoupleId, getCurrentPartnerId } from "@/auth/partnership";
 import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
 import { CollapsibleSectionFooter, sortByNewest, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import {
   addWorkoutPart,
   createWorkoutSession,
+  listPartnerWorkoutSessions,
+  mapPartnerWorkoutRow,
   softDeleteWorkoutSession
 } from "@/features/workout/workoutRepository";
 import {
@@ -36,6 +38,7 @@ type WorkoutPopoverKind = "duration" | "log-filter" | "log-menu" | "part";
 type LogFilter = "all" | "currentMonth" | "lastMonth";
 type AnchorRect = { height: number; left: number; top: number; width: number };
 type DataTrendType = "training" | "weight" | "fat";
+type WorkoutOwnerView = "mine" | "partner";
 
 const WORKOUT_PARTS: Array<{ icon: string; name: string }> = [
   { icon: "❤️", name: "胸" },
@@ -84,6 +87,11 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const [feedback, setFeedback] = useState("");
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("week");
   const [dataTrend, setDataTrend] = useState<DataTrendType>("training");
+  const [ownerView, setOwnerView] = useState<WorkoutOwnerView>("mine");
+  const [currentUserName, setCurrentUserName] = useState("我的运动");
+  const [partnerUserId, setPartnerUserId] = useState<string | null>(null);
+  const [partnerLogs, setPartnerLogs] = useState<WorkoutLog[]>([]);
+  const [partnerLoading, setPartnerLoading] = useState(false);
   const [selectedMetricPoint, setSelectedMetricPoint] = useState<BodyMetricLog | null>(null);
   const [popover, setPopover] = useState<{ kind: WorkoutPopoverKind; logId?: string; rect: AnchorRect } | null>(null);
   const [logFilter, setLogFilter] = useState<LogFilter>("all");
@@ -129,6 +137,51 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       cancelled = true;
     };
   }, [workoutStorage]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const client = getSupabaseClient();
+    if (!client) return undefined;
+
+    void client.auth.getUser().then(async ({ data }) => {
+      const user = data.user;
+      if (!user || cancelled) return;
+      const name = getUserDisplayName(user);
+      setCurrentUserName(name ? `${name} · 我的` : "我的运动");
+      const partnerId = await getCurrentPartnerId(client, user.id);
+      if (cancelled) return;
+      setPartnerUserId(partnerId);
+      if (!partnerId) {
+        setOwnerView("mine");
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const client = getSupabaseClient();
+    if (!client || !partnerUserId) {
+      setPartnerLogs([]);
+      return undefined;
+    }
+    setPartnerLoading(true);
+    void listPartnerWorkoutSessions(client, partnerUserId).then(({ data, error }) => {
+      if (cancelled) return;
+      if (error || !Array.isArray(data)) {
+        setPartnerLogs([]);
+      } else {
+        setPartnerLogs(sortWorkoutLogs(data.map((row) => mapPartnerWorkoutRow(row))));
+      }
+      setPartnerLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [partnerUserId]);
 
   useEffect(() => {
     const metricForDate = bodyMetrics.find((metric) => metric.recordDate === bodyDate) ?? latestBodyMetric;
@@ -303,6 +356,36 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
 
   return (
     <View style={styles.stack}>
+      <View style={styles.ownerSwitch}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="查看我的运动"
+          onPress={() => setOwnerView("mine")}
+          style={[styles.ownerSwitchItem, ownerView === "mine" ? styles.ownerSwitchItemActive : null]}
+        >
+          <Text style={[styles.ownerSwitchText, ownerView === "mine" ? styles.ownerSwitchTextActive : null]}>👤 {currentUserName}</Text>
+        </Pressable>
+        {partnerUserId ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="查看TA的运动"
+            onPress={() => setOwnerView("partner")}
+            style={[styles.ownerSwitchItem, ownerView === "partner" ? styles.ownerSwitchItemActive : null]}
+          >
+            <Text style={[styles.ownerSwitchText, ownerView === "partner" ? styles.ownerSwitchTextActive : null]}>❤️ TA的运动</Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {ownerView === "partner" ? (
+        <PartnerWorkoutReadOnly
+          chartPeriod={chartPeriod}
+          loading={partnerLoading}
+          logs={partnerLogs}
+          onChartPeriodChange={setChartPeriod}
+        />
+      ) : (
+        <>
       <View style={styles.todayStatusRow}>
         <View style={[styles.todayStatusDot, todayLogs.length > 0 ? styles.todayStatusDotTrained : styles.todayStatusDotRest]} />
         <Text style={styles.todayStatusText}>{formatTodayStatus(todayLogs)}</Text>
@@ -515,7 +598,189 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
           selectedPart={selectedPart}
         />
       ) : null}
+        </>
+      )}
     </View>
+  );
+}
+
+function PartnerWorkoutReadOnly({
+  chartPeriod,
+  loading,
+  logs,
+  onChartPeriodChange
+}: {
+  chartPeriod: ChartPeriod;
+  loading: boolean;
+  logs: WorkoutLog[];
+  onChartPeriodChange: (period: ChartPeriod) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const monthOptions = useMemo(() => buildMonthOptions(logs), [logs]);
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const activeMonth = selectedMonth ?? monthOptions[0]?.value ?? null;
+  const stats = useMemo(() => buildWorkoutStats(logs), [logs]);
+  const chartBars = useMemo(() => buildPeriodBars(logs, chartPeriod), [chartPeriod, logs]);
+  const chartTotal = useMemo(() => chartBars.reduce((sum, bar) => sum + bar.minutes, 0), [chartBars]);
+  const distribution = useMemo(() => buildWorkoutDistribution(logs), [logs]);
+  const recentLogs = useMemo(() => sortByNewest(logs, (log) => [log.sessionDate, log.createTime]), [logs]);
+  const visibleLogs = expanded
+    ? recentLogs.filter((log) => (activeMonth ? log.sessionDate.startsWith(activeMonth) : true))
+    : recentLogs.slice(0, 5);
+  const todayLogs = logs.filter((log) => log.sessionDate === todayIso() && log.status === "trained");
+
+  useEffect(() => {
+    if (!selectedMonth && monthOptions[0]) {
+      setSelectedMonth(monthOptions[0].value);
+    }
+  }, [monthOptions, selectedMonth]);
+
+  if (loading) {
+    return (
+      <View style={styles.partnerHintRow}>
+        <Text style={styles.partnerHintText}>正在加载TA的运动数据…</Text>
+      </View>
+    );
+  }
+
+  if (logs.length === 0) {
+    return (
+      <>
+        <View style={styles.partnerHintRow}>
+          <Text style={styles.partnerHintText}>🔒 TA的运动数据 · 只读</Text>
+        </View>
+        <View style={styles.emptyBox}>
+          <PuppyIllustration color="#9cc39c" scene="generic" size={82} />
+          <Text style={styles.empty}>❤️ TA还没有训练记录</Text>
+          <Text style={styles.muted}>等TA记录一次训练后，这里就会出现统计。</Text>
+        </View>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <View style={styles.partnerHintRow}>
+        <Text style={styles.partnerHintText}>🔒 TA的运动数据 · 只读</Text>
+        <Text style={styles.partnerHintText}>{formatPartnerTodayStatus(todayLogs)}</Text>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardTitle}>本周运动</Text>
+          <Text style={styles.weekRange}>{stats.weekRangeLabel}</Text>
+        </View>
+        <View style={styles.weekMetricRow}>
+          <View style={styles.weekMetricCell}>
+            <Text style={styles.weekMetricValue}>{stats.weekCount} 次</Text>
+            <Text style={styles.weekMetricLabel}>训练次数</Text>
+          </View>
+          <View style={styles.weekMetricCell}>
+            <Text style={styles.weekMetricValue}>{stats.weekMinutes} 分钟</Text>
+            <Text style={styles.weekMetricLabel}>总时长</Text>
+          </View>
+          <View style={styles.weekMetricCell}>
+            <Text style={styles.weekMetricValue}>{recentLogs[0] ? formatShortDate(recentLogs[0].sessionDate) : "--"}</Text>
+            <Text style={styles.weekMetricLabel}>最近训练</Text>
+          </View>
+        </View>
+        {stats.weekPartCounts.length > 0 ? (
+          <View style={styles.partStatRow}>
+            {stats.weekPartCounts.map((item) => (
+              <View key={item.part} style={styles.partStatChip}>
+                <Text style={styles.partStatText}>{item.part} ×{item.count}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.chartCard}>
+        <View style={styles.chartHeader}>
+          <Text style={styles.chartTitle}>训练趋势</Text>
+          <Text style={styles.chartTotal}>合计 {chartTotal}分钟</Text>
+        </View>
+        <View style={styles.periodRow}>
+          {chartPeriodOptions.map((option) => {
+            const selected = chartPeriod === option.value;
+            return (
+              <Pressable
+                key={option.value}
+                accessibilityLabel={`查看TA的${option.label}训练趋势`}
+                accessibilityRole="button"
+                onPress={() => onChartPeriodChange(option.value)}
+                style={[styles.periodChip, selected ? styles.periodChipActive : null]}
+              >
+                <Text style={[styles.periodChipText, selected ? styles.periodChipTextActive : null]}>{option.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={[styles.chart, chartPeriod === "week" ? null : styles.chartDense]}>
+          {chartBars.map((bar) => (
+            <View key={bar.key} style={styles.barColumn}>
+              <View style={[styles.barTrack, chartPeriod === "week" ? null : styles.barTrackDense]}>
+                <View style={[styles.barFill, { height: `${bar.height}%` }]} />
+              </View>
+              <Text style={[styles.barLabel, chartPeriod === "year" ? styles.barLabelTiny : null]}>{bar.label}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardTitle}>训练分布</Text>
+          <Text style={styles.weekRange}>近30天</Text>
+        </View>
+        {distribution.length === 0 ? <Text style={styles.empty}>近30天暂无训练记录</Text> : distribution.map((item) => (
+          <View key={item.part} style={styles.distributionRow}>
+            <Text style={styles.distributionPart}>{item.part}</Text>
+            <View style={styles.distributionTrack}>
+              <View style={[styles.distributionFill, { width: `${item.width}%` }]} />
+            </View>
+            <Text style={styles.distributionCount}>{item.count}次</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardTitle}>最近训练</Text>
+          {expanded ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="收起TA的全部训练" onPress={() => setExpanded(false)} style={styles.logFilterButton}>
+              <Text style={styles.logFilterText}>收起</Text>
+            </Pressable>
+          ) : (
+            <Pressable accessibilityRole="button" accessibilityLabel="查看TA的全部训练" onPress={() => setExpanded(true)} style={styles.logFilterButton}>
+              <Text style={styles.logFilterText}>查看全部 ›</Text>
+            </Pressable>
+          )}
+        </View>
+        {expanded && monthOptions.length > 0 ? (
+          <View style={styles.monthChipRow}>
+            {monthOptions.map((option) => (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`筛选TA的${option.label}训练`}
+                key={option.value}
+                onPress={() => setSelectedMonth(option.value)}
+                style={[styles.periodChip, activeMonth === option.value ? styles.periodChipActive : null]}
+              >
+                <Text style={[styles.periodChipText, activeMonth === option.value ? styles.periodChipTextActive : null]}>{option.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        {visibleLogs.map((log) => (
+          <View key={log.id} style={styles.partnerLogItem}>
+            <Text style={styles.logMain}>{getWorkoutPartIcon(log.parts[0])} {log.title}</Text>
+            <Text style={styles.logDate}>{formatShortDate(log.sessionDate)}</Text>
+            <Text style={styles.logDuration}>{log.durationMinutes}分钟</Text>
+          </View>
+        ))}
+      </View>
+    </>
   );
 }
 
@@ -598,6 +863,50 @@ function buildWorkoutStats(logs: WorkoutLog[]) {
     weekPartCounts: [...partCounts.entries()].map(([part, count]) => ({ part, count })).sort((left, right) => right.count - left.count),
     weekRangeLabel: `${formatMonthDay(weekStartIso)} - ${formatMonthDay(weekEndIso)}`
   };
+}
+
+function buildWorkoutDistribution(logs: WorkoutLog[]) {
+  const today = new Date();
+  const startIso = toLocalIso(shiftDate(today, -29));
+  const todayKey = todayIso();
+  const counts = new Map<string, number>();
+
+  for (const log of logs) {
+    if (log.sessionDate < startIso || log.sessionDate > todayKey || log.status !== "trained") continue;
+    for (const part of log.parts.length ? log.parts : [log.title]) {
+      counts.set(part, (counts.get(part) ?? 0) + 1);
+    }
+  }
+
+  const max = Math.max(1, ...counts.values());
+  return [...counts.entries()]
+    .map(([part, count]) => ({ count, part, width: Math.max(10, Math.round((count / max) * 100)) }))
+    .sort((left, right) => right.count - left.count)
+    .slice(0, 6);
+}
+
+function buildMonthOptions(logs: WorkoutLog[]) {
+  const monthSet = new Set(logs.map((log) => log.sessionDate.slice(0, 7)));
+  return [...monthSet].sort((left, right) => right.localeCompare(left)).map((value) => {
+    const [year, month] = value.split("-");
+    return { label: `${year}年${Number(month)}月`, value };
+  });
+}
+
+function formatPartnerTodayStatus(todayLogs: WorkoutLog[]) {
+  if (todayLogs.length === 0) return "今日暂无训练记录";
+  const totalMinutes = todayLogs.reduce((sum, log) => sum + log.durationMinutes, 0);
+  if (todayLogs.length === 1) {
+    const log = todayLogs[0];
+    return `今日已训练 · ${log.parts[0] ?? log.title} · ${log.durationMinutes}分钟`;
+  }
+  return `今日已训练 ${todayLogs.length}次 · 共${totalMinutes}分钟`;
+}
+
+function getUserDisplayName(user: unknown) {
+  const metadata = (user as { user_metadata?: Record<string, unknown> })?.user_metadata ?? {};
+  const name = metadata.display_name ?? metadata.full_name ?? metadata.name;
+  return typeof name === "string" && name.trim() ? name.trim() : "";
 }
 
 function buildBodyTrendPoints(metrics: BodyMetricLog[], period: ChartPeriod, trendType: DataTrendType) {
@@ -1178,6 +1487,41 @@ const styles = StyleSheet.create({
   durationWheel: {
     maxHeight: 240
   },
+  distributionCount: {
+    color: "#5a8a5a",
+    fontSize: 12,
+    fontWeight: "900",
+    minWidth: 34,
+    textAlign: "right"
+  },
+  distributionFill: {
+    backgroundColor: "#7cb87c",
+    borderRadius: 999,
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    top: 0
+  },
+  distributionPart: {
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: "900",
+    minWidth: 42
+  },
+  distributionRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 28
+  },
+  distributionTrack: {
+    backgroundColor: "#eef4f0",
+    borderRadius: 999,
+    flex: 1,
+    height: 9,
+    overflow: "hidden",
+    position: "relative"
+  },
   empty: {
     color: "#697386",
     fontSize: 15,
@@ -1426,10 +1770,46 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginTop: 2
   },
+  monthChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6
+  },
   muted: {
     color: "#697386",
     fontSize: 12,
     lineHeight: 18
+  },
+  ownerSwitch: {
+    backgroundColor: "rgba(255,255,255,0.88)",
+    borderColor: "#e3e8ef",
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 4,
+    minHeight: 46,
+    padding: 4
+  },
+  ownerSwitchItem: {
+    alignItems: "center",
+    borderRadius: 12,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 36,
+    paddingHorizontal: 8
+  },
+  ownerSwitchItemActive: {
+    backgroundColor: "#e2f2e2"
+  },
+  ownerSwitchText: {
+    color: "#697386",
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "center"
+  },
+  ownerSwitchTextActive: {
+    color: "#5a8a5a",
+    fontWeight: "900"
   },
   moreText: {
     color: "#697386",
@@ -1474,6 +1854,36 @@ const styles = StyleSheet.create({
   },
   partTextActive: {
     color: "#5a8a5a"
+  },
+  partnerHintRow: {
+    alignItems: "center",
+    backgroundColor: "#f7faf7",
+    borderColor: "#e3ebe3",
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    justifyContent: "space-between",
+    minHeight: 38,
+    paddingHorizontal: 12,
+    paddingVertical: 7
+  },
+  partnerHintText: {
+    color: "#5a8a5a",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  partnerLogItem: {
+    alignItems: "center",
+    borderColor: "#e3e8ef",
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    minHeight: 52,
+    paddingHorizontal: 10,
+    paddingVertical: 7
   },
   popoverBackdrop: {
     bottom: 0,

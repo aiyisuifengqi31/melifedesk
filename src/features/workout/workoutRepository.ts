@@ -70,7 +70,6 @@ export type PartnerWorkoutRow = {
   duration_minutes: number | null;
   id: string;
   intensity: string | null;
-  name: string | null;
   session_date: string;
   title: string;
   workout_parts: Array<{ part: string }> | null;

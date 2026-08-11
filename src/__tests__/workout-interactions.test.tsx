@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import { WorkoutPanel } from "@/features/workout/WorkoutPanel";
+import { listPartnerWorkoutSessions } from "@/features/workout/workoutRepository";
 import {
   BODY_METRIC_STORAGE_KEY,
   loadLocalBodyMetrics,
@@ -12,6 +13,62 @@ import {
 } from "@/features/workout/workoutStorage";
 
 const storageKey = "fanfan-guanguan.workouts.v1";
+
+jest.mock("@/auth/supabaseClient", () => ({
+  getSupabaseClient: jest.fn(() => ({
+    auth: {
+      getUser: jest.fn(async () => ({ data: { user: { id: "user-a", user_metadata: { display_name: "王凡" } } }, error: null }))
+    },
+    rpc: jest.fn(async (name: string) => {
+      if (name === "current_active_partner_id") return { data: "user-b", error: null };
+      if (name === "current_active_couple_id") return { data: "couple-1", error: null };
+      return { data: null, error: null };
+    }),
+    from: jest.fn(() => ({
+      insert: jest.fn(() => ({
+        select: jest.fn(() => ({
+          single: jest.fn(async () => ({ data: { id: "remote-workout-1" }, error: null }))
+        }))
+      }))
+    }))
+  }))
+}));
+
+jest.mock("@/features/sync/cloudSync", () => ({
+  hydrateFromCloud: jest.fn(async (_key: string, fallback: unknown) => fallback),
+  saveCloudValue: jest.fn(async () => undefined)
+}));
+
+jest.mock("@/features/workout/workoutRepository", () => {
+  const actual = jest.requireActual("@/features/workout/workoutRepository");
+  return {
+    ...actual,
+    addWorkoutPart: jest.fn(async () => ({ data: { id: "part-1" }, error: null })),
+    createWorkoutSession: jest.fn(async () => ({ data: { id: "remote-workout-1" }, error: null })),
+    listPartnerWorkoutSessions: jest.fn(async () => ({
+      data: [
+        {
+          duration_minutes: 40,
+          id: "partner-session-1",
+          intensity: "moderate",
+          session_date: "2026-08-10",
+          title: "肩",
+          workout_parts: [{ part: "肩" }]
+        },
+        {
+          duration_minutes: 30,
+          id: "partner-session-2",
+          intensity: "moderate",
+          session_date: "2026-08-11",
+          title: "有氧",
+          workout_parts: [{ part: "有氧" }]
+        }
+      ],
+      error: null
+    })),
+    softDeleteWorkoutSession: jest.fn(async () => ({ data: "remote-workout-1", error: null }))
+  };
+});
 
 function makeStorage() {
   const data = new Map<string, string>();
@@ -130,5 +187,31 @@ describe("WorkoutPanel interactions", () => {
 
     fireEvent.press(screen.getByRole("button", { name: "查看体脂趋势" }));
     expect(screen.getByText("最新 18.6%")).toBeOnTheScreen();
+  });
+
+  it("shows partner workout stats as read-only without body data or write actions", async () => {
+    render(<WorkoutPanel storage={makeStorage()} />);
+
+    expect(await screen.findByRole("button", { name: "查看TA的运动" })).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("button", { name: "查看TA的运动" }));
+
+    expect(await screen.findByText("🔒 TA的运动数据 · 只读")).toBeOnTheScreen();
+    expect(listPartnerWorkoutSessions).toHaveBeenCalledWith(expect.anything(), "user-b");
+    expect(screen.getByText("本周运动")).toBeOnTheScreen();
+    expect(screen.getByText("2 次")).toBeOnTheScreen();
+    expect(screen.getByText("70 分钟")).toBeOnTheScreen();
+    expect(screen.getAllByText("08/10").length).toBeGreaterThan(0);
+    expect(screen.getByText("训练分布")).toBeOnTheScreen();
+    expect(screen.getAllByText("最近训练").length).toBeGreaterThan(0);
+
+    expect(screen.queryByText("身体记录")).toBeNull();
+    expect(screen.queryByText("记录训练")).toBeNull();
+    expect(screen.queryByPlaceholderText("体重")).toBeNull();
+    expect(screen.queryByPlaceholderText("体脂率")).toBeNull();
+    expect(screen.queryByRole("button", { name: "保存身体数据" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "保存记录" })).toBeNull();
+    expect(screen.queryByText("体脂")).toBeNull();
+    expect(screen.queryByText("体重")).toBeNull();
+    expect(screen.queryByText("•••")).toBeNull();
   });
 });
