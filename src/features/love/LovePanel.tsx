@@ -172,6 +172,7 @@ export function LovePanel({
   const [anniversaryFilter, setAnniversaryFilter] = useState<(typeof anniversaryFilters)[number]>("全部");
   const [anniversarySort, setAnniversarySort] = useState<(typeof sortOptions)[number]>("最新优先");
   const [newFolderName, setNewFolderName] = useState("");
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [openDiaryMenuId, setOpenDiaryMenuId] = useState<string | null>(null);
   const [openGiftMenuId, setOpenGiftMenuId] = useState<string | null>(null);
   const [detailItem, setDetailItem] = useState<DetailState | null>(null);
@@ -445,6 +446,7 @@ export function LovePanel({
     setFolders(nextFolders);
     saveFolders(nextFolders, loveStorage);
     setNewFolderName("");
+    setFolderDialogOpen(false);
     setFeedback("✓ 文件夹已保存");
   };
   const renameFolder = (folderId: string) => {
@@ -553,9 +555,10 @@ export function LovePanel({
               style={[styles.input, styles.diaryInput, { height: Math.min(Math.max(44, diaryHeight), 168) }]}
               value={content}
             />
-            <View style={styles.inlineRow}>
+            <View style={styles.choiceGridThree}>
               <PickerButton
                 accessibilityLabel="选择日记类型"
+                compact
                 id="diary-type"
                 label={category}
                 onSelect={setCategory}
@@ -566,6 +569,7 @@ export function LovePanel({
               />
               <PickerButton
                 accessibilityLabel="选择日记心情"
+                compact
                 id="diary-mood"
                 label={`${moodIcons[mood]} ${mood}`}
                 onSelect={setMood}
@@ -574,17 +578,18 @@ export function LovePanel({
                 options={moods.map((item) => ({ label: `${moodIcons[item]} ${item}`, value: item }))}
                 selectedValue={mood}
               />
+              <PickerButton
+                accessibilityLabel="选择日记文件夹"
+                compact
+                id="diary-folder"
+                label={diaryFolderId ? getFolderName(diaryFolderId) : "文件夹"}
+                onSelect={(value) => setDiaryFolderId(value || null)}
+                onToggle={togglePicker}
+                open={openPickerId === "diary-folder"}
+                options={folderOptions}
+                selectedValue={diaryFolderId ?? ""}
+              />
             </View>
-            <PickerButton
-              accessibilityLabel="选择日记文件夹"
-              id="diary-folder"
-              label={getFolderName(diaryFolderId)}
-              onSelect={(value) => setDiaryFolderId(value || null)}
-              onToggle={togglePicker}
-              open={openPickerId === "diary-folder"}
-              options={folderOptions}
-              selectedValue={diaryFolderId ?? ""}
-            />
 
             {diaryImages.length > 0 ? (
               <View style={styles.imageGrid}>
@@ -632,18 +637,17 @@ export function LovePanel({
               <Text style={styles.cardTitle}>日记档案</Text>
               <Text style={styles.archiveCount}>{diaryArchive.length} 篇</Text>
             </View>
-            <TextInput onChangeText={setDiarySearch} placeholder="搜索标题或正文" style={[styles.input, styles.searchInput]} value={diarySearch} />
+            <View style={styles.searchCreateRow}>
+              <TextInput onChangeText={setDiarySearch} placeholder="搜索日记" style={[styles.input, styles.searchInput, styles.searchField]} value={diarySearch} />
+              <Pressable accessibilityRole="button" accessibilityLabel="打开新建文件夹" onPress={() => setFolderDialogOpen(true)} style={styles.folderCreateButton}>
+                <Text style={styles.folderCreateText}>+ 文件夹</Text>
+              </Pressable>
+            </View>
             <View style={styles.filterGrid}>
               <PickerButton accessibilityLabel="筛选日记日期" active={diaryDateFilter !== "全部日期"} grid id="diary-date-filter" label="日期" onSelect={(value) => setDiaryDateFilter(value as typeof diaryDateFilter)} onToggle={togglePicker} open={openPickerId === "diary-date-filter"} options={dateFilters.map((item) => ({ label: item, value: item }))} selectedValue={diaryDateFilter} />
               <PickerButton accessibilityLabel="筛选日记类型" active={diaryTypeFilter !== "全部"} grid id="diary-type-filter" label="类型" onSelect={setDiaryTypeFilter} onToggle={togglePicker} open={openPickerId === "diary-type-filter"} options={["全部", ...diaryCategories].map((item) => ({ label: item, value: item }))} selectedValue={diaryTypeFilter} />
               <PickerButton accessibilityLabel="筛选日记文件夹" active={diaryFolderFilter !== null} grid id="diary-folder-filter" label="文件夹" onSelect={(value) => setDiaryFolderFilter(value === "__all" ? null : value || null)} onToggle={togglePicker} open={openPickerId === "diary-folder-filter"} options={[{ label: "全部", value: "__all" }, ...folderOptions]} selectedValue={diaryFolderFilter ?? "__all"} />
               <PickerButton accessibilityLabel="日记排序" active={diarySort !== "最新优先"} grid id="diary-sort" label="排序" onSelect={(value) => setDiarySort(value as typeof diarySort)} onToggle={togglePicker} open={openPickerId === "diary-sort"} options={sortOptions.map((item) => ({ label: item, value: item }))} selectedValue={diarySort} />
-            </View>
-            <View style={styles.folderManager}>
-              <TextInput onChangeText={setNewFolderName} placeholder="新建文件夹" style={[styles.input, styles.folderInput, styles.searchInput]} value={newFolderName} />
-              <Pressable accessibilityRole="button" accessibilityLabel="新建文件夹" onPress={createFolder} style={styles.secondaryButton}>
-                <Text style={styles.secondaryText}>+ 新建</Text>
-              </Pressable>
             </View>
             {folders.length > 0 ? (
               <View style={styles.folderList}>
@@ -668,10 +672,10 @@ export function LovePanel({
               </View>
             ) : (
               <View style={styles.archiveList}>
-              {diaryList.visibleItems.map((entry) => (
+                  {diaryList.visibleItems.map((entry) => (
                 <Pressable key={entry.id} accessibilityRole="button" accessibilityLabel={`查看日记：${entry.title ?? "恋爱日记"}`} onPress={() => setDetailItem({ item: entry, type: "diary" })} style={styles.memoryCard}>
                   <View style={styles.memoryTopRow}>
-                    <Text style={styles.diaryDate}>{entry.date}</Text>
+                    <Text style={styles.diaryDate}>{formatChineseDate(entry.date)}</Text>
                     <Pressable accessibilityRole="button" accessibilityLabel={`打开日记菜单：${entry.title ?? "恋爱日记"}`} onPress={() => setOpenDiaryMenuId(openDiaryMenuId === entry.id ? null : entry.id)} style={styles.moreButton}>
                       <Text style={styles.moreButtonText}>•••</Text>
                     </Pressable>
@@ -679,12 +683,12 @@ export function LovePanel({
                   <View style={styles.memoryBody}>
                     <View style={styles.memoryTextArea}>
                       <Text style={styles.diaryTitle}>{entry.title ?? (entry.content.slice(0, 24) || "恋爱日记")}</Text>
+                      {entry.content ? <Text numberOfLines={2} style={styles.diaryContent}>{entry.content}</Text> : null}
                       <View style={styles.memoryTagRow}>
                         <Text style={styles.memoryTag}>{moodIcons[entry.mood]} {entry.mood}</Text>
                         <Text style={styles.memoryTag}>{entry.category ?? "日常记录"}</Text>
-                        <Text style={styles.memoryFolder}>文件夹：{getFolderName(entry.folderId)}</Text>
+                        {entry.folderId ? <Text style={styles.memoryFolder}>📁 {getFolderName(entry.folderId)}</Text> : null}
                       </View>
-                      {entry.content ? <Text numberOfLines={2} style={styles.diaryContent}>{entry.content}</Text> : null}
                     </View>
                     {entry.images && entry.images.length > 0 ? (
                       <Pressable onPress={() => setExpandedImage(entry.images?.[0] ?? null)} style={styles.memoryThumbWrap}>
@@ -726,9 +730,10 @@ export function LovePanel({
                 <Text style={styles.dateValue}>{giftDate.replaceAll("-", "/")}</Text>
               </Pressable>
             </View>
-            <View style={styles.inlineRow}>
-              <PickerButton accessibilityLabel="选择礼物类型" id="gift-type" label={giftTag} onSelect={setGiftTag} onToggle={togglePicker} open={openPickerId === "gift-type"} options={giftTags.map((item) => ({ label: item, value: item }))} selectedValue={giftTag} />
-              <PickerButton accessibilityLabel="选择送礼方向" id="gift-direction" label={giftDirection} onSelect={(value) => setGiftDirection(value as GiftDirection)} onToggle={togglePicker} open={openPickerId === "gift-direction"} options={giftDirections.map((item) => ({ label: item, value: item }))} selectedValue={giftDirection} />
+            <View style={styles.choiceGridThree}>
+              <PickerButton accessibilityLabel="选择礼物类型" compact id="gift-type" label={giftTag} onSelect={setGiftTag} onToggle={togglePicker} open={openPickerId === "gift-type"} options={giftTags.map((item) => ({ label: item, value: item }))} selectedValue={giftTag} />
+              <PickerButton accessibilityLabel="选择送礼方向" compact id="gift-direction" label={giftDirection} onSelect={(value) => setGiftDirection(value as GiftDirection)} onToggle={togglePicker} open={openPickerId === "gift-direction"} options={giftDirections.map((item) => ({ label: item, value: item }))} selectedValue={giftDirection} />
+              <PickerButton accessibilityLabel="选择礼物文件夹" compact id="gift-folder" label={giftFolderId ? getFolderName(giftFolderId) : "文件夹"} onSelect={(value) => setGiftFolderId(value || null)} onToggle={togglePicker} open={openPickerId === "gift-folder"} options={folderOptions} selectedValue={giftFolderId ?? ""} />
             </View>
             <TextInput
               scrollEnabled
@@ -756,7 +761,6 @@ export function LovePanel({
                 <Text style={styles.secondaryText}>图片</Text>
               </Pressable>
               <input accept="image/*" onChange={handleSingleImagePick(setGiftImage)} ref={giftFileInputRef} style={{ display: "none" }} type="file" />
-              <PickerButton accessibilityLabel="选择礼物文件夹" id="gift-folder" label={getFolderName(giftFolderId)} onSelect={(value) => setGiftFolderId(value || null)} onToggle={togglePicker} open={openPickerId === "gift-folder"} options={folderOptions} selectedValue={giftFolderId ?? ""} />
               <Pressable accessibilityRole="button" accessibilityLabel="保存礼物" onPress={saveGift} style={styles.primaryButton}>
                 <Text style={styles.primaryText}>{editingGiftId ? "更新" : "保存"}</Text>
               </Pressable>
@@ -776,7 +780,12 @@ export function LovePanel({
               <Text style={styles.cardTitle}>礼物档案</Text>
               <Text style={styles.archiveCount}>{giftArchive.length} 件</Text>
             </View>
-            <TextInput onChangeText={setGiftSearch} placeholder="搜索礼物或描述" style={[styles.input, styles.searchInput]} value={giftSearch} />
+            <View style={styles.searchCreateRow}>
+              <TextInput onChangeText={setGiftSearch} placeholder="搜索礼物" style={[styles.input, styles.searchInput, styles.searchField]} value={giftSearch} />
+              <Pressable accessibilityRole="button" accessibilityLabel="打开新建礼物文件夹" onPress={() => setFolderDialogOpen(true)} style={styles.folderCreateButton}>
+                <Text style={styles.folderCreateText}>+ 文件夹</Text>
+              </Pressable>
+            </View>
             <View style={styles.filterGrid}>
               <PickerButton accessibilityLabel="筛选礼物日期" active={giftDateFilter !== "全部日期"} grid id="gift-date-filter" label="日期" onSelect={(value) => setGiftDateFilter(value as typeof giftDateFilter)} onToggle={togglePicker} open={openPickerId === "gift-date-filter"} options={dateFilters.map((item) => ({ label: item, value: item }))} selectedValue={giftDateFilter} />
               <PickerButton accessibilityLabel="筛选礼物类型" active={giftTypeFilter !== "全部"} grid id="gift-type-filter" label="类型" onSelect={setGiftTypeFilter} onToggle={togglePicker} open={openPickerId === "gift-type-filter"} options={["全部", ...giftTags].map((item) => ({ label: item, value: item }))} selectedValue={giftTypeFilter} />
@@ -990,6 +999,29 @@ export function LovePanel({
 
       {pickerPopover ? <AnchoredDropdown onClose={() => setPickerPopover(null)} picker={pickerPopover} /> : null}
 
+      {folderDialogOpen ? (
+        <Pressable accessibilityLabel="关闭新建文件夹弹窗" onPress={() => setFolderDialogOpen(false)} style={styles.folderDialogBackdrop}>
+          <View onStartShouldSetResponder={() => true} style={styles.folderDialogCard}>
+            <Text style={styles.folderDialogTitle}>新建文件夹</Text>
+            <TextInput
+              autoFocus
+              onChangeText={setNewFolderName}
+              placeholder="文件夹名称"
+              style={[styles.input, styles.searchInput]}
+              value={newFolderName}
+            />
+            <View style={styles.folderDialogActions}>
+              <Pressable accessibilityRole="button" accessibilityLabel="取消新建文件夹" onPress={() => { setFolderDialogOpen(false); setNewFolderName(""); }} style={styles.secondaryButton}>
+                <Text style={styles.secondaryText}>取消</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="创建文件夹" onPress={createFolder} style={styles.primaryButton}>
+                <Text style={styles.primaryText}>创建</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      ) : null}
+
       {detailItem ? (
         <Pressable onPress={() => setDetailItem(null)} style={styles.lightbox}>
           <View style={styles.detailCard}>
@@ -1024,6 +1056,7 @@ export function LovePanel({
 function PickerButton({
   accessibilityLabel,
   active,
+  compact,
   grid,
   id,
   label,
@@ -1035,6 +1068,7 @@ function PickerButton({
 }: {
   accessibilityLabel: string;
   active?: boolean;
+  compact?: boolean;
   grid?: boolean;
   id: string;
   label: string;
@@ -1050,7 +1084,7 @@ function PickerButton({
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         onPress={(event) => onToggle({ accessibilityLabel, id, onSelect, options, rect: getPickerRect(event), selectedValue })}
-        style={[styles.pickerButton, open || active ? styles.pickerButtonOpen : null]}
+        style={[styles.pickerButton, compact ? styles.pickerButtonCompact : null, open || active ? styles.pickerButtonOpen : null]}
       >
         <Text style={styles.pickerText}>{label}</Text>
         <Text style={styles.pickerChevron}>▼</Text>
@@ -1277,6 +1311,12 @@ function matchesDateFilter(date: string, filter: string) {
   return true;
 }
 
+function formatChineseDate(value: string) {
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return `${year}年${Number(month)}月${Number(day)}日`;
+}
+
 function sortByLoveDate<T>(entries: T[], sort: string, getKeys: (entry: T) => string[]) {
   return [...entries].sort((left, right) => {
     const leftKey = getKeys(left).join(" ");
@@ -1428,8 +1468,8 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     borderWidth: 1,
     elevation: 2,
-    gap: 12,
-    padding: 15,
+    gap: 10,
+    padding: 14,
     shadowColor: "#ef7f98",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.08,
@@ -1476,10 +1516,10 @@ const styles = StyleSheet.create({
     flexGrow: 0,
     flexShrink: 0,
     justifyContent: "center",
-    minHeight: 44,
-    minWidth: 132,
+    minHeight: 42,
+    minWidth: 118,
     paddingHorizontal: 8,
-    width: 138
+    width: 128
   },
   deleteButton: {
     backgroundColor: "#fee2e2",
@@ -1501,10 +1541,10 @@ const styles = StyleSheet.create({
     padding: 14
   },
   diaryContent: {
-    color: "#111827",
-    fontSize: 15,
+    color: "#697386",
+    fontSize: 13,
     fontWeight: "700",
-    lineHeight: 22
+    lineHeight: 19
   },
   diaryActions: {
     alignItems: "center",
@@ -1523,7 +1563,7 @@ const styles = StyleSheet.create({
   },
   diaryInput: {
     minHeight: 44,
-    paddingVertical: 10,
+    paddingVertical: 9,
     textAlignVertical: "top"
   },
   diaryMetaRow: {
@@ -1538,7 +1578,7 @@ const styles = StyleSheet.create({
   },
   diaryTitle: {
     color: "#111827",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "900"
   },
   compactEmptyBox: {
@@ -1619,6 +1659,50 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8
   },
+  folderCreateButton: {
+    alignItems: "center",
+    backgroundColor: "#fff0f4",
+    borderRadius: 12,
+    justifyContent: "center",
+    minHeight: 42,
+    paddingHorizontal: 12
+  },
+  folderCreateText: {
+    color: "#111827",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  folderDialogActions: {
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "flex-end"
+  },
+  folderDialogBackdrop: {
+    alignItems: "center",
+    backgroundColor: "rgba(17,24,39,0.32)",
+    bottom: 0,
+    justifyContent: "center",
+    left: 0,
+    position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
+    right: 0,
+    top: 0,
+    zIndex: 10020
+  },
+  folderDialogCard: {
+    backgroundColor: "#fffafd",
+    borderColor: "#f3d6df",
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 12,
+    maxWidth: 340,
+    padding: 16,
+    width: "78%"
+  },
+  folderDialogTitle: {
+    color: "#111827",
+    fontSize: 16,
+    fontWeight: "900"
+  },
   folderInput: {
     flex: 1
   },
@@ -1651,6 +1735,11 @@ const styles = StyleSheet.create({
   inlineRow: {
     flexDirection: "row",
     gap: 10,
+    overflow: "visible"
+  },
+  choiceGridThree: {
+    flexDirection: "row",
+    gap: 8,
     overflow: "visible"
   },
   hero: {
@@ -1725,10 +1814,19 @@ const styles = StyleSheet.create({
     color: "#111827",
     fontSize: 14,
     paddingHorizontal: 12,
-    paddingVertical: 10
+    paddingVertical: 9
   },
   searchInput: {
     minHeight: 42
+  },
+  searchCreateRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8
+  },
+  searchField: {
+    flex: 1,
+    minWidth: 0
   },
   titleField: {
     flex: 1,
@@ -1802,8 +1900,9 @@ const styles = StyleSheet.create({
     borderColor: "#f1e0e6",
     borderRadius: 16,
     borderWidth: 1,
-    gap: 6,
-    padding: 11
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 9
   },
   memoryFolder: {
     color: "#8b7280",
@@ -1811,13 +1910,10 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
   memoryTag: {
-    backgroundColor: "#fff0f4",
-    borderRadius: 999,
     color: "#8b7280",
     fontSize: 11,
     fontWeight: "900",
-    paddingHorizontal: 7,
-    paddingVertical: 3
+    paddingVertical: 1
   },
   memoryTagRow: {
     alignItems: "center",
@@ -1849,8 +1945,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 999,
     justifyContent: "center",
-    minHeight: 32,
-    minWidth: 34,
+    minHeight: 28,
+    minWidth: 30,
     paddingHorizontal: 6
   },
   moreButtonText: {
@@ -1921,9 +2017,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 3,
     justifyContent: "center",
-    minHeight: 42,
-    paddingHorizontal: 9,
-    paddingVertical: 9
+    minHeight: 40,
+    paddingHorizontal: 6,
+    paddingVertical: 8
+  },
+  pickerButtonCompact: {
+    paddingHorizontal: 4
   },
   pickerButtonOpen: {
     backgroundColor: "#fff0f4",
@@ -1936,7 +2035,7 @@ const styles = StyleSheet.create({
   },
   pickerText: {
     color: "#111827",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "900",
     lineHeight: 17,
     textAlign: "center"
@@ -2035,13 +2134,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "rgba(255,252,253,0.96)",
     borderColor: "#f3d6df",
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
     gap: 10,
     justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingVertical: 10
+    minHeight: 54,
+    paddingHorizontal: 12,
+    paddingVertical: 7
   },
   syncStatus: {
     flex: 1,
@@ -2049,7 +2149,7 @@ const styles = StyleSheet.create({
   },
   syncStatusText: {
     color: "#111827",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "900"
   },
   syncTimeText: {
@@ -2061,9 +2161,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#ff8fa3",
     borderRadius: 999,
-    height: 34,
+    height: 32,
     justifyContent: "center",
-    minWidth: 34,
+    minWidth: 32,
     paddingHorizontal: 10
   },
   refreshButtonBusy: {

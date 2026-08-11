@@ -57,7 +57,7 @@ describe("Task 6 love page and UI polish", () => {
     expect(screen.getByText("一起散步")).toBeOnTheScreen();
     expect(screen.getByText("今天一起散步，很开心")).toBeOnTheScreen();
     expect(screen.getByText("日记档案")).toBeOnTheScreen();
-    expect(screen.getByPlaceholderText("搜索标题或正文")).toBeOnTheScreen();
+    expect(screen.getByPlaceholderText("搜索日记")).toBeOnTheScreen();
     expect(screen.queryByText("共享")).toBeNull();
     expect(screen.queryByText(/最后由/)).toBeNull();
     expect(screen.queryByText("还没有日记")).toBeNull();
