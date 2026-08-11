@@ -1,18 +1,14 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View, type NativeSyntheticEvent, type TextInputChangeEventData } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { createPortal } from "react-dom";
 
 import { getSupabaseClient } from "@/auth/supabaseClient";
-import { getCurrentCoupleId, getCurrentPartnerId } from "@/auth/partnership";
+import { getCurrentCoupleId } from "@/auth/partnership";
 import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
-import { StatusSticker } from "@/shared/ui/StatusSticker";
-import { IconDumbbell } from "@/shared/ui/lineIcons";
-import type { UiTokens } from "@/shared/ui/primitives";
 import { CollapsibleSectionFooter, sortByNewest, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import {
   addWorkoutPart,
   createWorkoutSession,
-  listPartnerWorkoutSessions,
-  mapPartnerWorkoutRow,
   softDeleteWorkoutSession
 } from "@/features/workout/workoutRepository";
 import {
@@ -30,19 +26,9 @@ type WorkoutPanelProps = {
   storage?: WorkoutStorage;
 };
 
-const workoutTokens: UiTokens = {
-  accent: "#7cb87c",
-  accentSoft: "#eaf6ea",
-  background: "#f5fbf7",
-  border: "#e6ebf2",
-  danger: "#ef4444",
-  success: "#2f9e44",
-  surface: "#ffffff",
-  surfaceMuted: "#f8fafc",
-  text: "#111827",
-  textMuted: "#697386",
-  warning: "#f59e0b"
-};
+type WorkoutPopoverKind = "duration" | "log-filter" | "log-menu" | "part";
+type LogFilter = "all" | "currentMonth" | "lastMonth";
+type AnchorRect = { height: number; left: number; top: number; width: number };
 
 const WORKOUT_PARTS: Array<{ icon: string; name: string }> = [
   { icon: "❤️", name: "胸" },
@@ -59,12 +45,12 @@ const chartPeriodOptions: Array<{ label: string; value: ChartPeriod }> = [
   { label: "近一月", value: "month" },
   { label: "近一年", value: "year" }
 ];
-const chartPeriodTitle: Record<ChartPeriod, string> = {
-  month: "近一个月训练时长",
-  week: "近7天训练时长",
-  year: "近一年训练时长"
-};
-const durationInputWebProps = { id: "workout-duration-input" } as object;
+const durationOptions = Array.from({ length: 36 }, (_, index) => (index + 1) * 5);
+const logFilterOptions: Array<{ label: string; value: LogFilter }> = [
+  { label: "全部", value: "all" },
+  { label: "本月", value: "currentMonth" },
+  { label: "上月", value: "lastMonth" }
+];
 
 const toLocalIso = (date: Date) => {
   const year = date.getFullYear();
@@ -77,24 +63,23 @@ const todayIso = () => toLocalIso(new Date());
 export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const workoutStorage = useMemo(() => storage ?? getDefaultWorkoutStorage(), [storage]);
   const [logs, setLogs] = useState<WorkoutLog[]>(() => sortWorkoutLogs(loadLocalWorkouts(workoutStorage)));
-  const [selectedParts, setSelectedParts] = useState<string[]>(["背"]);
-  const [duration, setDuration] = useState("10");
-  const [feedback, setFeedback] = useState("选择训练部位并填写时长后保存记录。");
+  const [selectedPart, setSelectedPart] = useState<string | null>(null);
+  const [durationMinutes, setDurationMinutes] = useState(40);
+  const [feedback, setFeedback] = useState("");
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("week");
-  const [partnerId, setPartnerId] = useState<string | null>(null);
-  const [partnerWorkouts, setPartnerWorkouts] = useState<WorkoutLog[]>([]);
-  const [partnerLoading, setPartnerLoading] = useState(false);
+  const [popover, setPopover] = useState<{ kind: WorkoutPopoverKind; logId?: string; rect: AnchorRect } | null>(null);
+  const [logFilter, setLogFilter] = useState<LogFilter>("all");
+  const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const localDirtyRef = useRef(false);
 
   const stats = useMemo(() => buildWorkoutStats(logs), [logs]);
-  const weekStickerKey = useMemo(() => startOfWeek(new Date()).toISOString().slice(0, 10), []);
   const chartBars = useMemo(() => buildPeriodBars(logs, chartPeriod), [chartPeriod, logs]);
   const chartTotal = useMemo(() => chartBars.reduce((sum, bar) => sum + bar.minutes, 0), [chartBars]);
-  const sortedLogs = useMemo(() => sortByNewest(logs, (log) => [log.sessionDate, log.createTime]), [logs]);
-  const logList = useCollapsibleList(sortedLogs);
+  const sortedLogs = useMemo(() => filterWorkoutLogs(sortByNewest(logs, (log) => [log.sessionDate, log.createTime]), logFilter), [logFilter, logs]);
+  const logList = useCollapsibleList(sortedLogs, 5);
   const todayKey = todayIso();
-  const todayTrainedLog = useMemo(
-    () => logs.find((log) => log.sessionDate === todayKey && log.status === "trained"),
+  const todayLogs = useMemo(
+    () => logs.filter((log) => log.sessionDate === todayKey && log.status === "trained"),
     [logs, todayKey]
   );
 
@@ -110,38 +95,11 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
     };
   }, [workoutStorage]);
 
-  // Read-only view of the active partner's workouts. Access is enforced by RLS:
-  // only an active partner's shared sessions are returned; everything else is
-  // invisible. The viewer can never edit or delete the partner's records here.
   useEffect(() => {
-    let cancelled = false;
-    void getCurrentPartnerId().then((pid) => {
-      if (cancelled) return;
-      setPartnerId(pid);
-      if (!pid) {
-        setPartnerWorkouts([]);
-        setPartnerLoading(false);
-        return;
-      }
-      void (async () => {
-        const client = getSupabaseClient();
-        if (!client) {
-          setPartnerLoading(false);
-          return;
-        }
-        setPartnerLoading(true);
-        const { data } = await listPartnerWorkoutSessions(client, pid);
-        if (cancelled) return;
-        if (Array.isArray(data)) {
-          setPartnerWorkouts(data.map((row) => mapPartnerWorkoutRow(row as never)));
-        }
-        setPartnerLoading(false);
-      })();
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [partnerId]);
+    if (!feedback) return undefined;
+    const timer = globalThis.setTimeout(() => setFeedback(""), 2200);
+    return () => globalThis.clearTimeout(timer);
+  }, [feedback]);
 
   const persistLogs = (nextLogs: WorkoutLog[]) => {
     localDirtyRef.current = true;
@@ -150,23 +108,28 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
     saveLocalWorkouts(sorted, workoutStorage);
   };
 
-  const togglePart = (part: string) => {
-    setSelectedParts((current) => {
-      return current.includes(part) ? current.filter((item) => item !== part) : [...current, part];
-    });
+  const openPopover = (kind: WorkoutPopoverKind, event: unknown, logId?: string) => {
+    setPopover({ kind, logId, rect: getAnchorRect(event) });
+  };
+
+  const closePopover = () => setPopover(null);
+
+  const editWorkout = (log: WorkoutLog) => {
+    setSelectedPart(log.parts[0] ?? null);
+    setDurationMinutes(log.durationMinutes || 40);
+    setEditingLogId(log.id);
+    closePopover();
+    setFeedback("正在编辑这条训练记录。");
   };
 
   const saveWorkout = async () => {
-    const parts = selectedParts;
-    const durationMinutes = toNonNegativeInt(readWebInputValue("workout-duration-input") || duration);
-
-    if (parts.length === 0) {
-      setFeedback("请至少选择一个训练部位。");
+    if (!selectedPart) {
+      setFeedback("请先选择训练部位。");
       return;
     }
 
     if (durationMinutes <= 0) {
-      setFeedback("请填写大于 0 的训练时长。");
+      setFeedback("请选择训练时长。");
       return;
     }
 
@@ -177,15 +140,21 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       intensity: "moderate",
       kcal: 0,
       kcalSource: "manual",
-      parts,
+      parts: [selectedPart],
       sessionDate: todayIso(),
       status: "trained",
-      title: parts.join("、")
+      title: selectedPart
     };
 
-    const nextLogs = [log, ...logs];
+    const nextLogs = editingLogId
+      ? logs.map((item) => (item.id === editingLogId ? { ...item, durationMinutes, parts: [selectedPart], title: selectedPart } : item))
+      : [log, ...logs];
     persistLogs(nextLogs);
-    setFeedback("训练记录已保存。");
+    setFeedback(`✓ 已记录：${selectedPart} · ${durationMinutes}分钟`);
+    if (editingLogId) {
+      setEditingLogId(null);
+      return;
+    }
 
     const client = getSupabaseClient();
     if (!client) {
@@ -227,6 +196,7 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const deleteWorkout = async (log: WorkoutLog) => {
     persistLogs(logs.filter((item) => item.id !== log.id));
     setFeedback("训练记录已删除。");
+    closePopover();
 
     const client = getSupabaseClient();
     if (client && log.remoteId) {
@@ -236,73 +206,63 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
 
   return (
     <View style={styles.stack}>
-      <View style={styles.card}>
-        <View pointerEvents="none" style={styles.pageWatermark}>
-          <IconDumbbell color="#111827" size={82} />
-        </View>
-        <View style={styles.todayStatusRow}>
-          <View style={[styles.todayStatusDot, todayTrainedLog ? styles.todayStatusDotTrained : styles.todayStatusDotRest]} />
-          <Text style={styles.todayStatusText}>
-            {todayTrainedLog ? `今天已训练 ${todayTrainedLog.durationMinutes} 分钟` : "今天休息 · 未记录训练"}
-          </Text>
-        </View>
-
-        <Text style={styles.sectionLabel}>训练部位</Text>
-        <View style={styles.partGrid}>
-          {WORKOUT_PARTS.map((part) => {
-            const selected = selectedParts.includes(part.name);
-            return (
-              <Pressable key={part.name} accessibilityRole="button" accessibilityLabel={`选择${part.name}`} onPress={() => togglePart(part.name)} style={[styles.partButton, selected ? styles.partButtonActive : null]}>
-                <Text style={styles.partIcon}>{part.icon}</Text>
-                <Text style={[styles.partText, selected ? styles.partTextActive : null]}>{part.name}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <View style={styles.durationRow}>
-          <Text style={styles.sectionLabel}>训练时间</Text>
-          <View style={styles.durationInputWrap}>
-            <TextInput {...durationInputWebProps} keyboardType="numeric" nativeID="workout-duration-input" onChange={makeTextInputChangeHandler(setDuration)} onChangeText={setDuration} placeholder="45" style={[styles.input, styles.durationInput]} value={duration} />
-            <Text style={styles.durationUnit}>分钟</Text>
-          </View>
-        </View>
-
-        <Pressable accessibilityRole="button" accessibilityLabel="保存记录" nativeID="workout-save-button" onPress={saveWorkout} style={styles.saveButton}>
-          <Text style={styles.saveText}>保存记录</Text>
-        </Pressable>
-        <Text nativeID="workout-feedback" style={styles.feedback}>{feedback}</Text>
+      <View style={styles.todayStatusRow}>
+        <View style={[styles.todayStatusDot, todayLogs.length > 0 ? styles.todayStatusDotTrained : styles.todayStatusDotRest]} />
+        <Text style={styles.todayStatusText}>{formatTodayStatus(todayLogs)}</Text>
       </View>
 
       <View style={styles.card}>
-        <View style={styles.cardTitleStickerRow}>
-          <Text style={styles.cardTitle}>本周训练统计</Text>
-          {stats.weekCount >= 3 ? (
-            <StatusSticker
-              icon={<IconDumbbell color={workoutTokens.accent} size={16} />}
-              label="本周 3 次"
-              storageKey={`workout-week3-${weekStickerKey}`}
-              sublabel="状态在线"
-              tokens={workoutTokens}
-            />
-          ) : null}
+        <View style={styles.todayStatusRow}>
+          <Text style={styles.cardTitle}>记录训练</Text>
         </View>
-        <Text style={styles.statLine}>本周训练 {stats.weekCount} 次</Text>
-        <View style={styles.partStatRow}>
-          {stats.weekPartCounts.map((item) => (
-            <View key={item.part} style={styles.partStatChip}>
-              <Text style={styles.partStatText}>{item.part} {item.count}</Text>
-            </View>
-          ))}
+        <Pressable accessibilityRole="button" accessibilityLabel="选择训练部位" onPress={(event) => openPopover("part", event)} style={styles.selectButton}>
+          <Text style={styles.selectButtonText}>{selectedPart ? `${getWorkoutPartIcon(selectedPart)} ${selectedPart}` : "选择训练部位"}</Text>
+          <Text style={styles.selectChevron}>▼</Text>
+        </Pressable>
+        <View style={styles.recordActionRow}>
+          <Pressable accessibilityRole="button" accessibilityLabel="选择训练时长" onPress={(event) => openPopover("duration", event)} style={styles.durationSelect}>
+            <Text style={styles.selectButtonText}>{durationMinutes}分钟</Text>
+            <Text style={styles.selectChevron}>▼</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="保存记录" nativeID="workout-save-button" onPress={saveWorkout} style={styles.saveButton}>
+            <Text style={styles.saveText}>{editingLogId ? "更新记录" : "保存记录"}</Text>
+          </Pressable>
         </View>
+        {feedback ? <Text nativeID="workout-feedback" style={styles.feedback}>{feedback}</Text> : null}
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardTitle}>本周训练</Text>
+          <Text style={styles.weekRange}>{stats.weekRangeLabel}</Text>
+        </View>
+        <View style={styles.weekMetricRow}>
+          <View>
+            <Text style={styles.weekMetricValue}>{stats.weekCount} 次</Text>
+            <Text style={styles.weekMetricLabel}>训练次数</Text>
+          </View>
+          <View>
+            <Text style={styles.weekMetricValue}>{stats.weekMinutes} 分钟</Text>
+            <Text style={styles.weekMetricLabel}>总时长</Text>
+          </View>
+        </View>
+        {stats.weekPartCounts.length > 0 ? (
+          <View style={styles.partStatRow}>
+            {stats.weekPartCounts.map((item) => (
+              <View key={item.part} style={styles.partStatChip}>
+                <Text style={styles.partStatText}>{item.part} ×{item.count}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.chartCard}>
         <View style={styles.chartHeader}>
           <View style={styles.cardTitleRow}>
-            <Text style={styles.chartTitle}>{chartPeriodTitle[chartPeriod]}</Text>
+            <Text style={styles.chartTitle}>训练趋势</Text>
           </View>
-          <Text style={styles.chartTotal}>合计 {chartTotal} 分钟</Text>
+          <Text style={styles.chartTotal}>本周期合计 {chartTotal}分钟</Text>
         </View>
         <View style={styles.periodRow}>
           {chartPeriodOptions.map((option) => {
@@ -333,7 +293,15 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>训练日志（{logList.total}）</Text>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardTitle}>训练日志</Text>
+          <View style={styles.logHeaderActions}>
+            <Text style={styles.logCount}>{logList.total}条</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="筛选训练日志" onPress={(event) => openPopover("log-filter", event)} style={styles.logFilterButton}>
+              <Text style={styles.logFilterText}>{getLogFilterLabel(logFilter)}▼</Text>
+            </Pressable>
+          </View>
+        </View>
         {logs.length === 0 ? (
           <View style={styles.emptyBox}>
             <PuppyIllustration color="#9cc39c" scene="generic" size={78} />
@@ -343,16 +311,11 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
           <>
           {logList.visibleItems.map((log) => (
             <View key={log.id} style={styles.logItem}>
-              <View style={styles.logBadge}>
-                <Text style={styles.logBadgeText}>{log.parts[0] ?? "训"}</Text>
-              </View>
-              <View style={styles.logBody}>
-                <Text style={styles.logDate}>{formatChineseDate(log.sessionDate)}</Text>
-                <Text style={styles.logTitle}>{log.title}</Text>
-                <Text style={styles.logMeta}>{log.durationMinutes}分钟</Text>
-              </View>
-              <Pressable accessibilityRole="button" accessibilityLabel={`删除训练记录：${log.title}`} onPress={() => deleteWorkout(log)} style={styles.deleteButton}>
-                <Text style={styles.deleteText}>删除</Text>
+              <Text style={styles.logMain}>{getWorkoutPartIcon(log.parts[0])} {log.title}</Text>
+              <Text style={styles.logDate}>{formatShortDate(log.sessionDate)}</Text>
+              <Text style={styles.logDuration}>{log.durationMinutes}分钟</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel={`打开训练记录菜单：${log.title}`} onPress={(event) => openPopover("log-menu", event, log.id)} style={styles.logMenuButton}>
+                <Text style={styles.moreText}>•••</Text>
               </Pressable>
             </View>
           ))}
@@ -368,60 +331,22 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
         )}
       </View>
 
-      {partnerId ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>TA 的运动（只读）</Text>
-          {partnerLoading ? (
-            <Text style={styles.empty}>正在加载对方的运动记录…</Text>
-          ) : partnerWorkouts.length === 0 ? (
-            <Text style={styles.empty}>对方还没有可共享的运动记录。</Text>
-          ) : (
-            partnerWorkouts.map((log) => (
-              <View key={log.id} style={[styles.logItem, styles.logItemReadOnly]}>
-                <View style={styles.logBadge}>
-                  <Text style={styles.logBadgeText}>{log.parts[0] ?? "训"}</Text>
-                </View>
-                <View style={styles.logBody}>
-                  <Text style={styles.logDate}>{formatChineseDate(log.sessionDate)}</Text>
-                  <Text style={styles.logTitle}>{log.title}</Text>
-                  <Text style={styles.logMeta}>{log.durationMinutes}分钟</Text>
-                </View>
-                <Text style={styles.readOnlyTag}>只读</Text>
-              </View>
-            ))
-          )}
-        </View>
+      {popover ? (
+        <WorkoutPopover
+          durationMinutes={durationMinutes}
+          kind={popover.kind}
+          log={popover.logId ? logs.find((item) => item.id === popover.logId) : undefined}
+          logFilter={logFilter}
+          onClose={closePopover}
+          onDelete={deleteWorkout}
+          onDurationChange={setDurationMinutes}
+          onEdit={editWorkout}
+          onLogFilterChange={setLogFilter}
+          onPartChange={setSelectedPart}
+          rect={popover.rect}
+          selectedPart={selectedPart}
+        />
       ) : null}
-
-      <View style={styles.metricRow}>
-        <Metric title="最近30天" unit="次" value={String(stats.monthCount)} />
-        <Metric title="连续训练" unit="天" value={String(stats.streakDays)} />
-        <Metric title="高频部位" unit="" value={stats.topPart} />
-      </View>
-    </View>
-  );
-}
-
-function Metric({ compact = false, title, unit, value }: { compact?: boolean; title: string; unit: string; value: string }) {
-  return (
-    <View style={[styles.metric, compact ? styles.metricCompact : null]}>
-      <Text style={[styles.metricTitle, compact ? styles.metricTitleCompact : null]}>{title}</Text>
-      <Text style={[styles.metricValue, compact ? styles.metricValueCompact : null]}>
-        {value}
-        <Text style={[styles.metricUnit, compact ? styles.metricUnitCompact : null]}> {unit}</Text>
-      </Text>
-    </View>
-  );
-}
-
-function LabeledInput({ children, label, styles: viewStyles, unit }: { children: React.ReactNode; label: string; styles: typeof styles; unit: string }) {
-  return (
-    <View style={viewStyles.labeledInput}>
-      <View style={viewStyles.inputLabelRow}>
-        <Text style={viewStyles.inputLabel}>{label}</Text>
-        <Text style={viewStyles.inputUnit}>{unit}</Text>
-      </View>
-      {children}
     </View>
   );
 }
@@ -429,25 +354,24 @@ function LabeledInput({ children, label, styles: viewStyles, unit }: { children:
 function buildWorkoutStats(logs: WorkoutLog[]) {
   const now = new Date();
   const weekStart = startOfWeek(now);
-  const thirtyDaysAgo = toLocalIso(shiftDate(now, -29));
-  const weekLogs = logs.filter((log) => new Date(`${log.sessionDate}T00:00:00`).getTime() >= weekStart.getTime() && log.status === "trained");
-  const monthLogs = logs.filter((log) => log.sessionDate >= thirtyDaysAgo && log.status === "trained");
+  const weekEnd = shiftDate(weekStart, 6);
+  weekEnd.setHours(23, 59, 59, 999);
+  const weekStartIso = toLocalIso(weekStart);
+  const weekEndIso = toLocalIso(weekEnd);
+  const weekLogs = logs.filter((log) => log.sessionDate >= weekStartIso && log.sessionDate <= weekEndIso && log.status === "trained");
   const partCounts = new Map<string, number>();
 
-  for (const log of monthLogs) {
+  for (const log of weekLogs) {
     for (const part of log.parts.filter((item) => item !== "休息")) {
       partCounts.set(part, (partCounts.get(part) ?? 0) + 1);
     }
   }
 
-  const topPart = [...partCounts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? "暂无";
-
   return {
-    monthCount: monthLogs.length,
-    streakDays: countStreakDays(logs),
-    topPart,
     weekCount: weekLogs.length,
-    weekPartCounts: [...partCounts.entries()].map(([part, count]) => ({ part, count })).sort((left, right) => right.count - left.count)
+    weekMinutes: weekLogs.reduce((sum, log) => sum + log.durationMinutes, 0),
+    weekPartCounts: [...partCounts.entries()].map(([part, count]) => ({ part, count })).sort((left, right) => right.count - left.count),
+    weekRangeLabel: `${formatMonthDay(weekStartIso)} - ${formatMonthDay(weekEndIso)}`
   };
 }
 
@@ -502,22 +426,40 @@ function buildPeriodBars(logs: WorkoutLog[], period: ChartPeriod) {
   }));
 }
 
-function countStreakDays(logs: WorkoutLog[]) {
-  const trainedDates = new Set(logs.filter((log) => log.status === "trained").map((log) => log.sessionDate));
-  let streak = 0;
-  let cursor = new Date();
-
-  while (trainedDates.has(toLocalIso(cursor))) {
-    streak += 1;
-    cursor = shiftDate(cursor, -1);
-  }
-
-  return streak;
+function formatShortDate(dateText: string) {
+  const [, month, day] = dateText.split("-");
+  return `${month}/${day}`;
 }
 
-function formatChineseDate(dateText: string) {
-  const [year, month, day] = dateText.split("-");
-  return `${year}年${Number(month)}月${Number(day)}日`;
+function formatMonthDay(dateText: string) {
+  const [, month, day] = dateText.split("-");
+  return `${Number(month)}.${Number(day)}`;
+}
+
+function formatTodayStatus(todayLogs: WorkoutLog[]) {
+  if (todayLogs.length === 0) return "今天休息 · 未记录训练";
+  const totalMinutes = todayLogs.reduce((sum, log) => sum + log.durationMinutes, 0);
+  if (todayLogs.length === 1) {
+    const log = todayLogs[0];
+    return `今天已训练 · ${log.parts[0] ?? log.title} · ${log.durationMinutes}分钟`;
+  }
+  return `今天已训练 · ${todayLogs.length}次 · 共${totalMinutes}分钟`;
+}
+
+function getWorkoutPartIcon(part?: string | null) {
+  return WORKOUT_PARTS.find((item) => item.name === part)?.icon ?? "🏋️";
+}
+
+function getLogFilterLabel(filter: LogFilter) {
+  return logFilterOptions.find((item) => item.value === filter)?.label ?? "全部";
+}
+
+function filterWorkoutLogs(logs: WorkoutLog[], filter: LogFilter) {
+  if (filter === "all") return logs;
+  const now = new Date();
+  const target = filter === "currentMonth" ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prefix = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}`;
+  return logs.filter((log) => log.sessionDate.startsWith(prefix));
 }
 
 function shiftDate(date: Date, days: number) {
@@ -534,28 +476,120 @@ function startOfWeek(date: Date) {
   return next;
 }
 
-function toNonNegativeInt(value: string) {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-}
-
-function readWebInputValue(id: string) {
-  if (typeof document === "undefined") {
-    return "";
+function getAnchorRect(event: unknown): AnchorRect {
+  const target = (event as { currentTarget?: unknown })?.currentTarget as { getBoundingClientRect?: () => DOMRect } | undefined;
+  if (target && typeof target.getBoundingClientRect === "function") {
+    const rect = target.getBoundingClientRect();
+    return { height: rect.height, left: rect.left, top: rect.top, width: rect.width };
   }
-
-  const input = document.getElementById(id) as HTMLInputElement | null;
-  return input?.value ?? "";
+  return { height: 42, left: 120, top: 180, width: 180 };
 }
 
-function makeTextInputChangeHandler(setValue: (value: string) => void) {
-  return (event: NativeSyntheticEvent<TextInputChangeEventData>) => {
-    const webEvent = event as unknown as { currentTarget?: { value?: string }; target?: { value?: string } };
-    const nextValue = event.nativeEvent.text ?? webEvent.currentTarget?.value ?? webEvent.target?.value;
-    if (typeof nextValue === "string") {
-      setValue(nextValue);
-    }
-  };
+function getPopoverStyle(rect: AnchorRect, estimatedHeight = 220) {
+  const padding = 12;
+  const viewportHeight = typeof window === "undefined" ? 760 : window.innerHeight;
+  const viewportWidth = typeof window === "undefined" ? 390 : window.innerWidth;
+  const topBelow = rect.top + rect.height + 8;
+  const top = topBelow + estimatedHeight > viewportHeight - padding ? Math.max(padding, rect.top - estimatedHeight - 8) : topBelow;
+  const minWidth = Math.max(150, rect.width);
+  const maxLeft = Math.max(padding, viewportWidth - minWidth - padding);
+  return { left: Math.min(Math.max(padding, rect.left), maxLeft), minWidth, top };
+}
+
+function shouldUsePortal() {
+  return Platform.OS === "web" && typeof document !== "undefined" && Boolean(document.body) && (typeof process === "undefined" || process.env.NODE_ENV !== "test");
+}
+
+function WorkoutPopover({
+  durationMinutes,
+  kind,
+  log,
+  logFilter,
+  onClose,
+  onDelete,
+  onDurationChange,
+  onEdit,
+  onLogFilterChange,
+  onPartChange,
+  rect,
+  selectedPart
+}: {
+  durationMinutes: number;
+  kind: WorkoutPopoverKind;
+  log?: WorkoutLog;
+  logFilter: LogFilter;
+  onClose: () => void;
+  onDelete: (log: WorkoutLog) => void;
+  onDurationChange: (value: number) => void;
+  onEdit: (log: WorkoutLog) => void;
+  onLogFilterChange: (value: LogFilter) => void;
+  onPartChange: (value: string) => void;
+  rect: AnchorRect;
+  selectedPart: string | null;
+}) {
+  const menu = (
+    <Pressable accessibilityLabel="关闭运动选择菜单" onPress={onClose} style={styles.popoverBackdrop} testID="workout-popover-dismiss">
+      <View onStartShouldSetResponder={() => true} style={[styles.popoverCard, getPopoverStyle(rect, kind === "duration" ? 260 : 220)]} testID="workout-popover">
+        {kind === "part" ? WORKOUT_PARTS.map((part) => (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`选择训练部位：${part.name}`}
+            key={part.name}
+            onPress={() => { onPartChange(part.name); onClose(); }}
+            style={[styles.popoverOption, selectedPart === part.name ? styles.popoverOptionActive : null]}
+          >
+            <Text style={styles.popoverOptionText}>{part.icon} {part.name}</Text>
+          </Pressable>
+        )) : null}
+        {kind === "duration" ? (
+          <ScrollView style={styles.durationWheel}>
+            {durationOptions.map((value) => (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`选择训练时长：${value}分钟`}
+                key={value}
+                onPress={() => { onDurationChange(value); onClose(); }}
+                style={[styles.durationOption, durationMinutes === value ? styles.durationOptionActive : null]}
+              >
+                <Text style={[styles.durationOptionText, durationMinutes === value ? styles.durationOptionTextActive : null]}>{value} 分钟</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
+        {kind === "log-filter" ? logFilterOptions.map((option) => (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`筛选训练日志：${option.label}`}
+            key={option.value}
+            onPress={() => { onLogFilterChange(option.value); onClose(); }}
+            style={[styles.popoverOption, logFilter === option.value ? styles.popoverOptionActive : null]}
+          >
+            <Text style={styles.popoverOptionText}>{option.label}</Text>
+          </Pressable>
+        )) : null}
+        {kind === "log-menu" && log ? (
+          <>
+            <Pressable accessibilityRole="button" accessibilityLabel={`编辑训练记录：${log.title}`} onPress={() => onEdit(log)} style={styles.popoverOption}>
+              <Text style={styles.popoverOptionText}>编辑</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`删除训练记录：${log.title}`}
+              onPress={() => {
+                if (typeof window !== "undefined" && typeof window.confirm === "function" && !window.confirm("确认删除这条训练记录吗？")) return;
+                onDelete(log);
+              }}
+              style={styles.popoverOption}
+            >
+              <Text style={[styles.popoverOptionText, styles.popoverDeleteText]}>删除</Text>
+            </Pressable>
+          </>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+  if (shouldUsePortal()) return createPortal(menu, document.body);
+  return menu;
 }
 
 const styles = StyleSheet.create({
@@ -638,6 +672,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
+    justifyContent: "space-between"
+  },
+  cardHeaderRow: {
+    alignItems: "center",
+    flexDirection: "row",
     justifyContent: "space-between"
   },
   chart: {
@@ -733,6 +772,40 @@ const styles = StyleSheet.create({
     color: "#697386",
     fontWeight: "800"
   },
+  durationOption: {
+    alignItems: "center",
+    borderRadius: 12,
+    paddingVertical: 9
+  },
+  durationOptionActive: {
+    backgroundColor: "#e2f2e2"
+  },
+  durationOptionText: {
+    color: "#697386",
+    fontSize: 15,
+    fontWeight: "800"
+  },
+  durationOptionTextActive: {
+    color: "#5a8a5a",
+    fontSize: 17,
+    fontWeight: "900"
+  },
+  durationSelect: {
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderColor: "#e3e8ef",
+    borderRadius: 12,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: "row",
+    gap: 4,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 10
+  },
+  durationWheel: {
+    maxHeight: 240
+  },
   empty: {
     color: "#697386",
     fontSize: 15,
@@ -740,7 +813,7 @@ const styles = StyleSheet.create({
     textAlign: "center"
   },
   feedback: {
-    color: "#697386",
+    color: "#5a8a5a",
     fontSize: 13,
     fontWeight: "800"
   },
@@ -818,6 +891,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900"
   },
+  logCount: {
+    color: "#697386",
+    fontSize: 12,
+    fontWeight: "800"
+  },
   logBody: {
     flex: 1,
     gap: 4
@@ -825,42 +903,57 @@ const styles = StyleSheet.create({
   logDate: {
     color: "#697386",
     fontSize: 12,
-    fontWeight: "700"
+    fontWeight: "800"
+  },
+  logDuration: {
+    color: "#5a8a5a",
+    fontSize: 13,
+    fontWeight: "900",
+    minWidth: 50,
+    textAlign: "right"
+  },
+  logFilterButton: {
+    backgroundColor: "#f8fafc",
+    borderColor: "#e3e8ef",
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
+  logFilterText: {
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  logHeaderActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8
   },
   logItem: {
     alignItems: "center",
     borderColor: "#e3e8ef",
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    padding: 10
-  },
-  logItemReadOnly: {
-    backgroundColor: "#f8fafc",
-    borderStyle: "dashed"
-  },
-  logMeta: {
-    color: "#697386",
-    fontSize: 12,
-    fontWeight: "700",
-    lineHeight: 17
-  },
-  readOnlyTag: {
-    backgroundColor: "#eef2f7",
-    borderRadius: 999,
-    color: "#697386",
-    fontSize: 12,
-    fontWeight: "800",
+    gap: 8,
+    minHeight: 56,
     paddingHorizontal: 10,
-    paddingVertical: 4
+    paddingVertical: 8
   },
-  logTitle: {
+  logMain: {
     color: "#111827",
     fontSize: 15,
     fontWeight: "900",
+    flex: 1,
     lineHeight: 20
+  },
+  logMenuButton: {
+    alignItems: "center",
+    borderRadius: 999,
+    justifyContent: "center",
+    minHeight: 32,
+    minWidth: 32
   },
   metric: {
     backgroundColor: "#f0f7f0",
@@ -912,6 +1005,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18
   },
+  moreText: {
+    color: "#697386",
+    fontSize: 16,
+    fontWeight: "900"
+  },
   partButton: {
     alignItems: "center",
     backgroundColor: "#f8fafc",
@@ -951,11 +1049,60 @@ const styles = StyleSheet.create({
   partTextActive: {
     color: "#5a8a5a"
   },
+  popoverBackdrop: {
+    bottom: 0,
+    left: 0,
+    position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
+    right: 0,
+    top: 0,
+    zIndex: 9998
+  },
+  popoverCard: {
+    backgroundColor: "#ffffff",
+    borderColor: "#d8e8d8",
+    borderRadius: 16,
+    borderWidth: 1,
+    elevation: 18,
+    gap: 4,
+    maxHeight: 280,
+    overflow: "hidden",
+    padding: 6,
+    position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
+    shadowColor: "#7cb87c",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    zIndex: 9999
+  },
+  popoverDeleteText: {
+    color: "#ef4444"
+  },
+  popoverOption: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
+  popoverOptionActive: {
+    backgroundColor: "#e2f2e2"
+  },
+  popoverOptionText: {
+    color: "#334155",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  recordActionRow: {
+    flexDirection: "row",
+    gap: 10
+  },
   saveButton: {
     alignItems: "center",
     backgroundColor: "#7cb87c",
     borderRadius: 12,
-    paddingVertical: 12
+    flex: 1.2,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 10
   },
   saveText: {
     color: "#ffffff",
@@ -967,6 +1114,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "900"
   },
+  selectButton: {
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderColor: "#e3e8ef",
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 4,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 12
+  },
+  selectButtonText: {
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  selectChevron: {
+    color: "#697386",
+    fontSize: 10,
+    fontWeight: "900"
+  },
   todayStatusRow: {
     alignItems: "center",
     backgroundColor: "#f7faf7",
@@ -975,8 +1144,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     gap: 8,
+    minHeight: 42,
     paddingHorizontal: 12,
-    paddingVertical: 10
+    paddingVertical: 8
   },
   todayStatusDot: {
     borderRadius: 999,
@@ -991,7 +1161,7 @@ const styles = StyleSheet.create({
   },
   todayStatusText: {
     color: "#334155",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800"
   },
   durationRow: {
@@ -1016,6 +1186,26 @@ const styles = StyleSheet.create({
   statLine: {
     color: "#111827",
     fontSize: 16,
+    fontWeight: "900"
+  },
+  weekMetricLabel: {
+    color: "#697386",
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 2
+  },
+  weekMetricRow: {
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  weekMetricValue: {
+    color: "#5a8a5a",
+    fontSize: 22,
+    fontWeight: "900"
+  },
+  weekRange: {
+    color: "#697386",
+    fontSize: 12,
     fontWeight: "900"
   },
   partStatRow: {

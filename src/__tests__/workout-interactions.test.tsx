@@ -49,26 +49,31 @@ describe("WorkoutPanel interactions", () => {
 
     expect(screen.queryByPlaceholderText("自我感受")).toBeNull();
     expect(screen.queryByPlaceholderText("备注")).toBeNull();
-    expect(screen.getByRole("button", { name: "选择背" })).toHaveStyle({
+    expect(screen.getByRole("button", { name: "选择训练部位" })).toHaveStyle({
       flexDirection: "row"
     });
+    expect(screen.queryByText("最近30天")).toBeNull();
+    expect(screen.queryByText("连续训练")).toBeNull();
+    expect(screen.queryByText("高频部位")).toBeNull();
   });
 
   it("creates, persists, and deletes a real workout log", async () => {
     const storage = makeStorage();
     const { rerender } = render(<WorkoutPanel storage={storage} />);
 
-    // 默认已选中「背」且时长为 10 分钟，直接保存训练记录
+    fireEvent.press(screen.getByRole("button", { name: "选择训练部位" }));
+    fireEvent.press(screen.getByRole("button", { name: "选择训练部位：背" }));
     fireEvent.press(screen.getByRole("button", { name: "保存记录" }));
 
-    expect(await screen.findByText("10分钟")).toBeOnTheScreen();
-    expect(screen.getByText("训练记录已保存。")).toBeOnTheScreen();
+    expect(await screen.findAllByText("40分钟")).toHaveLength(2);
+    expect(screen.getByText("✓ 已记录：背 · 40分钟")).toBeOnTheScreen();
 
     rerender(<WorkoutPanel storage={storage} />);
-    expect(await screen.findByText("10分钟")).toBeOnTheScreen();
+    expect(await screen.findAllByText("40分钟")).toHaveLength(2);
 
+    fireEvent.press(screen.getByRole("button", { name: "打开训练记录菜单：背" }));
     fireEvent.press(screen.getByRole("button", { name: "删除训练记录：背" }));
-    await waitFor(() => expect(screen.queryByText("10分钟")).toBeNull());
+    await waitFor(() => expect(screen.queryAllByText("40分钟")).toHaveLength(1));
     expect(screen.getByText("训练记录已删除。")).toBeOnTheScreen();
   });
 });
