@@ -8,12 +8,10 @@ jest.mock("@/auth/partnership", () => ({
   getCurrentPartnerId: jest.fn(async () => "partner-b")
 }));
 
-jest.mock("@/features/love/loveDiaryCloud", () => ({
-  deleteDiaryFromCloud: jest.fn(async () => undefined),
-  getActiveLoveCoupleId: jest.fn(async () => "couple-1"),
+jest.mock("@/features/love/loveSharedCloud", () => ({
   getCurrentLoveUserId: jest.fn(async () => "user-a"),
-  loadDiariesFromCloud: jest.fn(async (localDiaries: unknown[]) => localDiaries),
-  saveDiariesToCloud: jest.fn(async () => undefined)
+  hydrateLoveSharedValue: jest.fn(async (_key: string, localValue: unknown) => localValue),
+  saveLoveSharedValue: jest.fn(async () => undefined)
 }));
 
 const tokens = {
@@ -37,6 +35,7 @@ describe("Task 6 love page and UI polish", () => {
     expect(screen.getAllByText("礼物").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("纪念日").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("照片墙").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByTestId("love-decor-stickers")).toBeOnTheScreen();
     expect(screen.queryByText("生理周期")).toBeNull();
     expect(screen.getByText("写日记")).toBeOnTheScreen();
     expect(screen.getByPlaceholderText("标题，例如：一起吃饭")).toBeOnTheScreen();

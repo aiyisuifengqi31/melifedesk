@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import Svg, { Ellipse, Path } from "react-native-svg";
 import { CollapsibleSectionFooter, sortByNewest, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
 import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
@@ -357,6 +358,9 @@ export function LovePanel({
       <View style={styles.hero}>
         <View pointerEvents="none" style={styles.pageWatermark}>
           <IconHeart color="#111827" size={84} />
+        </View>
+        <View pointerEvents="none" style={styles.decorStickers} testID="love-decor-stickers">
+          <LoveDecorStickers />
         </View>
         <Text style={styles.heroTitle}>恋爱日记</Text>
         <Text style={styles.heroSub}>记录每一个甜蜜瞬间</Text>
@@ -754,6 +758,29 @@ export function LovePanel({
   );
 }
 
+function LoveDecorStickers() {
+  return (
+    <Svg height={132} viewBox="0 0 136 132" width={136}>
+      <Path
+        d="M30 24c-7-9-24-5-24 9 0 15 24 26 24 26s24-11 24-26c0-14-17-18-24-9z"
+        fill="#ff6f86"
+        opacity={0.92}
+      />
+      <Path
+        d="M85 38c-4-5-13-3-13 5 0 8 13 14 13 14s13-6 13-14c0-8-9-10-13-5z"
+        fill="#ff9aad"
+        opacity={0.85}
+      />
+      <Path d="M92 60c-6 18-10 34-7 56" fill="none" stroke="#9f7a65" strokeLinecap="round" strokeWidth={4} />
+      <Path d="M88 84c-14-6-19-16-14-24 13 2 19 10 14 24z" fill="#f5657a" opacity={0.95} />
+      <Path d="M93 75c13-10 24-9 29 0-9 11-22 12-29 0z" fill="#ff889b" opacity={0.95} />
+      <Ellipse cx={73} cy={113} fill="#b98a73" opacity={0.9} rx={8} ry={18} transform="rotate(-45 73 113)" />
+      <Ellipse cx={104} cy={103} fill="#b98a73" opacity={0.82} rx={7} ry={16} transform="rotate(34 104 103)" />
+      <Path d="M103 56c7-7 15-8 21-2" fill="none" stroke="#db4f65" strokeLinecap="round" strokeWidth={3} />
+    </Svg>
+  );
+}
+
 function TabButton({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={[styles.tab, active ? styles.tabActive : null]}>
@@ -825,11 +852,12 @@ function createLoveId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
   }
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (token) => {
+  const fallbackId = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (token) => {
     const value = Math.floor(Math.random() * 16);
     const hex = token === "x" ? value : (value & 0x3) | 0x8;
     return hex.toString(16);
   });
+  return `${prefix}-${fallbackId}`;
 }
 
 export function clearLoveMemoryForTests() {
@@ -909,17 +937,17 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   card: {
-    backgroundColor: "rgba(255,255,255,0.92)",
-    borderColor: "#e6ebf2",
-    borderRadius: 20,
+    backgroundColor: "rgba(255,252,253,0.95)",
+    borderColor: "#f3d6df",
+    borderRadius: 22,
     borderWidth: 1,
     elevation: 2,
     gap: 12,
-    padding: 14,
-    shadowColor: "#000000",
+    padding: 15,
+    shadowColor: "#ef7f98",
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12
+    shadowOpacity: 0.08,
+    shadowRadius: 14
   },
   cardTitle: {
     color: "#111827",
@@ -956,9 +984,9 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   diaryCard: {
-    backgroundColor: "#f8fafc",
-    borderColor: "#e3e8ef",
-    borderRadius: 16,
+    backgroundColor: "#fff7f9",
+    borderColor: "#f5d6de",
+    borderRadius: 18,
     borderWidth: 1,
     gap: 8,
     padding: 14
@@ -1007,8 +1035,9 @@ const styles = StyleSheet.create({
   emptyBox: {
     alignItems: "center",
     gap: 8,
-    minHeight: 230,
-    justifyContent: "center"
+    justifyContent: "center",
+    minHeight: 210,
+    paddingVertical: 18
   },
   emptyText: {
     color: "#697386",
@@ -1042,9 +1071,9 @@ const styles = StyleSheet.create({
     gap: 12
   },
   giftCard: {
-    backgroundColor: "#f8fafc",
-    borderColor: "#e3e8ef",
-    borderRadius: 16,
+    backgroundColor: "#fff7f9",
+    borderColor: "#f5d6de",
+    borderRadius: 18,
     borderWidth: 1,
     gap: 8,
     padding: 14
@@ -1061,12 +1090,21 @@ const styles = StyleSheet.create({
   },
   hero: {
     gap: 6,
+    minHeight: 92,
     overflow: "hidden",
+    paddingRight: 112,
     position: "relative"
+  },
+  decorStickers: {
+    opacity: 0.9,
+    position: "absolute",
+    right: -18,
+    top: -18,
+    zIndex: 1
   },
   pageWatermark: {
     bottom: -14,
-    opacity: 0.05,
+    opacity: 0.035,
     position: "absolute",
     right: 4,
     top: -14
@@ -1074,12 +1112,14 @@ const styles = StyleSheet.create({
   heroSub: {
     color: "#697386",
     fontSize: 15,
-    fontWeight: "700"
+    fontWeight: "700",
+    zIndex: 2
   },
   heroTitle: {
     color: "#111827",
     fontSize: 26,
-    fontWeight: "900"
+    fontWeight: "900",
+    zIndex: 2
   },
   imageGrid: {
     flexDirection: "row",
@@ -1113,8 +1153,8 @@ const styles = StyleSheet.create({
     position: "relative"
   },
   input: {
-    backgroundColor: "#f8fafc",
-    borderColor: "#e3e8ef",
+    backgroundColor: "#fffafd",
+    borderColor: "#eadfe5",
     borderRadius: 12,
     borderWidth: 1,
     color: "#111827",
@@ -1162,8 +1202,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8
   },
   moodChipActive: {
-    backgroundColor: "#eaf6ff",
-    borderColor: "#1fa8e2"
+    backgroundColor: "#fff0f4",
+    borderColor: "#f08aa0"
   },
   moodGrid: {
     flexDirection: "row",
@@ -1193,7 +1233,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     alignItems: "center",
-    backgroundColor: "#7acbf0",
+    backgroundColor: "#ff8fa3",
     borderRadius: 12,
     minWidth: 96,
     paddingHorizontal: 18,
@@ -1222,7 +1262,7 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     alignItems: "center",
-    backgroundColor: "#eef2f7",
+    backgroundColor: "#fff0f4",
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 11
@@ -1233,16 +1273,16 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   sharedHint: {
-    color: "#0f79ad",
+    color: "#c75670",
     fontSize: 12,
     fontWeight: "800",
     lineHeight: 18
   },
   syncBar: {
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.92)",
-    borderColor: "#e6ebf2",
-    borderRadius: 16,
+    backgroundColor: "rgba(255,252,253,0.96)",
+    borderColor: "#f3d6df",
+    borderRadius: 18,
     borderWidth: 1,
     flexDirection: "row",
     gap: 10,
@@ -1266,7 +1306,7 @@ const styles = StyleSheet.create({
   },
   refreshButton: {
     alignItems: "center",
-    backgroundColor: "#1fa8e2",
+    backgroundColor: "#ff8fa3",
     borderRadius: 12,
     minWidth: 88,
     paddingHorizontal: 14,

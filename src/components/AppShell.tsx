@@ -53,8 +53,8 @@ type ShortcutRequest = {
 };
 
 const app = getPublicAppConfig();
-const PRIMARY_ROUTE_KEYS: RouteKey[] = ["home", "plan", "finance", "exam"];
-const MORE_ROUTE_KEYS: RouteKey[] = ["love", "workout", "fun"];
+const PRIMARY_ROUTE_KEYS: RouteKey[] = ["home", "plan", "finance", "love", "exam"];
+const MORE_ROUTE_KEYS: RouteKey[] = ["workout", "fun"];
 const navItemByKey = (key: RouteKey) => NAV_ITEMS.find((item) => item.key === key);
 const PRIMARY_NAV_ITEMS = PRIMARY_ROUTE_KEYS.map(navItemByKey).filter((item): item is NavItem => Boolean(item));
 const MORE_NAV_ITEMS = MORE_ROUTE_KEYS.map(navItemByKey).filter((item): item is NavItem => Boolean(item));
@@ -173,7 +173,6 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const handleNavigate = (href: NavItem["href"]) => {
     setQuickMenuOpen(false);
     setShortcutRequest(null);
-    const nextKey = routeToKey(href);
     setManualMoreOpen(null);
     if (onNavigate) {
       onNavigate(href);
@@ -815,17 +814,18 @@ function createStyles(
       color: tokens.accent
     },
     morePanel: {
-      alignItems: "flex-start",
-      gap: 4,
-      paddingLeft: compactSidebar ? 18 : 24,
+      alignItems: "center",
+      alignSelf: "center",
+      gap: 5,
+      paddingLeft: 0,
       paddingTop: 4,
       position: "relative",
-      width: "100%"
+      width: compactSidebar ? 54 : "80%"
     },
     moreConnector: {
       backgroundColor: tokens.border,
       bottom: 6,
-      left: compactSidebar ? 8 : 11,
+      left: compactSidebar ? 5 : 8,
       position: "absolute",
       top: 6,
       width: 1,
@@ -841,16 +841,16 @@ function createStyles(
       paddingHorizontal: 4,
       paddingVertical: 5,
       position: "relative",
-      width: compactSidebar ? 48 : "74%",
+      width: "100%",
       zIndex: 1
     },
     navSubTick: {
       backgroundColor: tokens.border,
       height: 1,
-      left: compactSidebar ? -10 : -13,
+      left: compactSidebar ? -5 : -7,
       position: "absolute",
       top: "50%",
-      width: compactSidebar ? 10 : 13,
+      width: compactSidebar ? 5 : 7,
       zIndex: 0
     },
     navSubItemSelected: {
