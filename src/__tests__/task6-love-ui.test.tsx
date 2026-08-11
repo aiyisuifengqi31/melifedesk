@@ -63,6 +63,17 @@ describe("Task 6 love page and UI polish", () => {
     expect(screen.queryByText("还没有日记")).toBeNull();
   });
 
+  it("opens love selectors as anchored dropdowns instead of a bottom sheet", async () => {
+    render(<AppShell initialRoute="/love" />);
+
+    expect(await screen.findByText("❤️ 已绑定")).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("button", { name: "选择日记心情" }));
+
+    expect(screen.getByTestId("love-dropdown-popover")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "选择选择心情：🥰 甜蜜" })).toBeOnTheScreen();
+    expect(screen.queryByTestId("love-choice-bottom-sheet")).toBeNull();
+  });
+
   it("exports reusable polished UI primitives", () => {
     render(
       <ContentCard tokens={tokens}>
