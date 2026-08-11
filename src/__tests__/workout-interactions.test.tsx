@@ -303,7 +303,35 @@ describe("WorkoutPanel interactions", () => {
     );
     fireEvent.press(await screen.findByRole("button", { name: "查看TA的运动" }));
 
-    expect(await screen.findByText("45 分钟")).toBeOnTheScreen();
-    expect(screen.getAllByText("08/10").length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getAllByText("08/10").length).toBeGreaterThan(1));
+  });
+
+  it("reloads partner workouts from couple shared state when opening the partner tab", async () => {
+    const storage = makeStorage();
+    const partnerSharedLog: WorkoutLog = {
+      createTime: "2026-08-11T08:00:00.000Z",
+      durationMinutes: 80,
+      id: "partner-late-shared-workout",
+      intensity: "moderate",
+      kcal: 0,
+      kcalSource: "manual",
+      parts: ["胸"],
+      sessionDate: "2026-08-11",
+      status: "trained",
+      title: "胸"
+    };
+    let sharedReady = false;
+    (listPartnerWorkoutSessions as jest.Mock).mockResolvedValue({ data: [], error: null });
+    (loadLoveSharedValue as jest.Mock).mockImplementation(async (key: string, fallback: unknown) =>
+      sharedReady && key === "fanfan-guanguan.workouts.shared.user-b" ? [partnerSharedLog] : fallback
+    );
+
+    render(<WorkoutPanel storage={storage} />);
+
+    await waitFor(() => expect(loadLoveSharedValue).toHaveBeenCalled());
+    sharedReady = true;
+    fireEvent.press(await screen.findByRole("button", { name: "查看TA的运动" }));
+
+    expect(await screen.findByText("80 分钟")).toBeOnTheScreen();
   });
 });

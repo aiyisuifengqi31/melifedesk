@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback } from "react";
 import { createPortal } from "react-dom";
 
 import { getSupabaseClient } from "@/auth/supabaseClient";
@@ -96,6 +97,7 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const [partnerUserId, setPartnerUserId] = useState<string | null>(null);
   const [partnerLogs, setPartnerLogs] = useState<WorkoutLog[]>([]);
   const [partnerLoading, setPartnerLoading] = useState(false);
+  const [partnerRefreshToken, setPartnerRefreshToken] = useState(0);
   const [selectedMetricPoint, setSelectedMetricPoint] = useState<BodyMetricLog | null>(null);
   const [popover, setPopover] = useState<{ kind: WorkoutPopoverKind; logId?: string; rect: AnchorRect } | null>(null);
   const [logFilter, setLogFilter] = useState<LogFilter>("all");
@@ -120,6 +122,16 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
     () => logs.filter((log) => log.sessionDate === todayKey && log.status === "trained"),
     [logs, todayKey]
   );
+
+  const syncWorkoutLogsToCoupleState = useCallback((nextLogs: WorkoutLog[]) => {
+    const client = getSupabaseClient();
+    if (!client || !currentUserId || !activeCoupleId) return;
+    const sharedLogs = sortWorkoutLogs(nextLogs.filter((log) => log.status === "trained"));
+    const sharedSnapshot = JSON.stringify(sharedLogs);
+    if (sharedSnapshot === sharedLogsSnapshotRef.current) return;
+    sharedLogsSnapshotRef.current = sharedSnapshot;
+    void saveLoveSharedValue(getWorkoutSharedKey(currentUserId), sharedLogs, client).catch(() => undefined);
+  }, [activeCoupleId, currentUserId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -177,12 +189,7 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
     const client = getSupabaseClient();
     if (!client || !currentUserId || !activeCoupleId) return undefined;
 
-    const sharedLogs = sortWorkoutLogs(logs.filter((log) => log.status === "trained"));
-    const sharedSnapshot = JSON.stringify(sharedLogs);
-    if (sharedSnapshot !== sharedLogsSnapshotRef.current) {
-      sharedLogsSnapshotRef.current = sharedSnapshot;
-      void saveLoveSharedValue(getWorkoutSharedKey(currentUserId), sharedLogs, client).catch(() => undefined);
-    }
+    syncWorkoutLogsToCoupleState(logs);
 
     const unsyncedLogs = logs.filter((log) => log.status === "trained" && !log.remoteId && !workoutSyncingRef.current.has(log.id));
     if (unsyncedLogs.length === 0) return undefined;
@@ -211,7 +218,7 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
     return () => {
       cancelled = true;
     };
-  }, [activeCoupleId, currentUserId, logs, workoutStorage]);
+  }, [activeCoupleId, currentUserId, logs, syncWorkoutLogsToCoupleState, workoutStorage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -234,7 +241,7 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
     return () => {
       cancelled = true;
     };
-  }, [partnerUserId]);
+  }, [partnerRefreshToken, partnerUserId]);
 
   useEffect(() => {
     const metricForDate = bodyMetrics.find((metric) => metric.recordDate === bodyDate) ?? latestBodyMetric;
@@ -259,6 +266,7 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
     logsSnapshotRef.current = JSON.stringify(sorted);
     setLogs(sorted);
     saveLocalWorkouts(sorted, workoutStorage);
+    syncWorkoutLogsToCoupleState(sorted);
   };
 
   const persistBodyMetrics = (nextMetrics: BodyMetricLog[]) => {
@@ -398,7 +406,10 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="查看TA的运动"
-            onPress={() => setOwnerView("partner")}
+            onPress={() => {
+              setOwnerView("partner");
+              setPartnerRefreshToken((value) => value + 1);
+            }}
             style={[styles.ownerSwitchItem, ownerView === "partner" ? styles.ownerSwitchItemActive : null]}
           >
             <Text style={[styles.ownerSwitchText, ownerView === "partner" ? styles.ownerSwitchTextActive : null]}>❤️ TA的运动</Text>
