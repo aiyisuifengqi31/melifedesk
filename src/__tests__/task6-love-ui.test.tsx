@@ -26,22 +26,24 @@ const tokens = {
 };
 
 describe("Task 6 love page and UI polish", () => {
-  it("renders the love diary workspace areas and disclaimer", () => {
+  it("renders the compact love diary workspace without long-lived explanatory copy", async () => {
     render(<AppShell initialRoute="/love" />);
 
-    expect(screen.getAllByText("恋爱日记").length).toBeGreaterThan(0);
-    expect(screen.getByText("记录每一个甜蜜瞬间")).toBeOnTheScreen();
+    expect(screen.queryByText("记录每一个甜蜜瞬间")).toBeNull();
+    expect(await screen.findByText("❤️ 已绑定")).toBeOnTheScreen();
     expect(screen.getAllByText("日记本").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("礼物").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("纪念日").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("照片墙").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByTestId("love-decor-stickers")).toBeOnTheScreen();
     expect(screen.queryByText("生理周期")).toBeNull();
     expect(screen.getByText("写日记")).toBeOnTheScreen();
     expect(screen.getByPlaceholderText("标题，例如：一起吃饭")).toBeOnTheScreen();
     expect(screen.getByPlaceholderText("今天发生了什么...")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "选择日记类型" })).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "选择日记心情" })).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "选择日记文件夹" })).toBeOnTheScreen();
     expect(screen.queryByRole("button", { name: "仅自己可见" })).toBeNull();
-    expect(screen.getByText("恋爱空间内容会保存到双方共享空间，双方都可以查看和编辑。")).toBeOnTheScreen();
+    expect(screen.queryByText("恋爱空间内容会保存到双方共享空间，双方都可以查看和编辑。")).toBeNull();
   });
 
   it("saves a diary directly into shared couple space", async () => {
@@ -49,13 +51,15 @@ describe("Task 6 love page and UI polish", () => {
 
     fireEvent.changeText(screen.getByPlaceholderText("标题，例如：一起吃饭"), "一起散步");
     fireEvent.changeText(screen.getByPlaceholderText("今天发生了什么..."), "今天一起散步，很开心");
-    fireEvent.press(screen.getByRole("button", { name: "选择心情：甜蜜" }));
     fireEvent.press(screen.getByRole("button", { name: "保存日记" }));
 
-    expect(await screen.findByText(/日记已保存/)).toBeOnTheScreen();
+    expect(await screen.findByText(/✓ 已保存/)).toBeOnTheScreen();
     expect(screen.getByText("一起散步")).toBeOnTheScreen();
     expect(screen.getByText("今天一起散步，很开心")).toBeOnTheScreen();
-    expect(screen.getByText("共享")).toBeOnTheScreen();
+    expect(screen.getByText("日记档案")).toBeOnTheScreen();
+    expect(screen.getByPlaceholderText("搜索标题或正文")).toBeOnTheScreen();
+    expect(screen.queryByText("共享")).toBeNull();
+    expect(screen.queryByText(/最后由/)).toBeNull();
     expect(screen.queryByText("还没有日记")).toBeNull();
   });
 
