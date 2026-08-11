@@ -7,8 +7,7 @@ import { IconHeart } from "@/shared/ui/lineIcons";
 import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { getCurrentPartnerId } from "@/auth/partnership";
-import { hydrateFromCloud, saveCloudValue } from "@/features/sync/cloudSync";
-import { deleteDiaryFromCloud, getCurrentLoveUserId, loadDiariesFromCloud, saveDiariesToCloud } from "./loveDiaryCloud";
+import { getCurrentLoveUserId, hydrateLoveSharedValue, saveLoveSharedValue } from "./loveSharedCloud";
 
 export type LoveTab = "diary" | "gifts" | "anniversary" | "photos";
 type DiaryVisibility = "private" | "couple_read" | "couple_edit";
@@ -209,7 +208,7 @@ export function LovePanel({
     };
     const nextEntries = [entry, ...diaries];
     try {
-      await saveDiariesToCloud(nextEntries);
+      await saveLoveSharedValue(DIARY_KEY, nextEntries);
     } catch {
       setFeedback("云端共享保存失败，请检查登录和伴侣绑定状态后重试。");
       return;
@@ -281,7 +280,6 @@ export function LovePanel({
     setDiaries(nextEntries);
     localDirtyRef.current = true;
     saveDiaries(nextEntries, loveStorage);
-    void deleteDiaryFromCloud(id);
     setFeedback("日记已删除。");
   };
 
@@ -786,17 +784,17 @@ function loadArray<T>(storage: LoveStorage, key: string) {
 
 export function saveDiaries(entries: DiaryEntry[], storage: LoveStorage = getDefaultLoveStorage()) {
   storage.setItem(DIARY_KEY, JSON.stringify(entries));
-  void saveDiariesToCloud(entries).catch(() => undefined);
+  void saveLoveSharedValue(DIARY_KEY, entries).catch(() => undefined);
 }
 
 export function saveAnniversaries(entries: AnniversaryEntry[], storage: LoveStorage = getDefaultLoveStorage()) {
   storage.setItem(ANNIVERSARY_KEY, JSON.stringify(entries));
-  void saveCloudValue(ANNIVERSARY_KEY, entries);
+  void saveLoveSharedValue(ANNIVERSARY_KEY, entries).catch(() => undefined);
 }
 
 export function saveGifts(entries: GiftEntry[], storage: LoveStorage = getDefaultLoveStorage()) {
   storage.setItem(GIFT_KEY, JSON.stringify(entries));
-  void saveCloudValue(GIFT_KEY, entries);
+  void saveLoveSharedValue(GIFT_KEY, entries).catch(() => undefined);
 }
 
 export async function hydrateLoveFromCloud(storage: LoveStorage = getDefaultLoveStorage()): Promise<{ anniversaries: AnniversaryEntry[]; diaries: DiaryEntry[]; gifts: GiftEntry[] }> {
@@ -804,15 +802,23 @@ export async function hydrateLoveFromCloud(storage: LoveStorage = getDefaultLove
   const localAnniversaries = loadArray<AnniversaryEntry>(storage, ANNIVERSARY_KEY);
   const localGifts = loadArray<GiftEntry>(storage, GIFT_KEY);
   const [diaries, anniversaries, gifts] = await Promise.all([
-    loadDiariesFromCloud(localDiaries, (value) => writeDiariesLocal(value, storage)),
-    hydrateFromCloud<AnniversaryEntry[]>(ANNIVERSARY_KEY, localAnniversaries, (value) => saveAnniversaries(value, storage)),
-    hydrateFromCloud<GiftEntry[]>(GIFT_KEY, localGifts, (value) => saveGifts(value, storage))
+    hydrateLoveSharedValue<DiaryEntry[]>(DIARY_KEY, localDiaries, (value) => writeDiariesLocal(value, storage)),
+    hydrateLoveSharedValue<AnniversaryEntry[]>(ANNIVERSARY_KEY, localAnniversaries, (value) => writeAnniversariesLocal(value, storage)),
+    hydrateLoveSharedValue<GiftEntry[]>(GIFT_KEY, localGifts, (value) => writeGiftsLocal(value, storage))
   ]);
   return { anniversaries, diaries, gifts };
 }
 
 function writeDiariesLocal(entries: DiaryEntry[], storage: LoveStorage) {
   storage.setItem(DIARY_KEY, JSON.stringify(entries));
+}
+
+function writeAnniversariesLocal(entries: AnniversaryEntry[], storage: LoveStorage) {
+  storage.setItem(ANNIVERSARY_KEY, JSON.stringify(entries));
+}
+
+function writeGiftsLocal(entries: GiftEntry[], storage: LoveStorage) {
+  storage.setItem(GIFT_KEY, JSON.stringify(entries));
 }
 
 function createLoveId(prefix: string) {

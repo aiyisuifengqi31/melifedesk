@@ -14,12 +14,16 @@ import {
 import {
   ANNIVERSARY_KEY,
   DIARY_KEY,
+  GIFT_KEY,
   hydrateLoveFromCloud,
   saveAnniversaries,
   saveDiaries,
+  saveGifts,
   type AnniversaryEntry,
-  type DiaryEntry
+  type DiaryEntry,
+  type GiftEntry
 } from "@/features/love/LovePanel";
+import { hydrateLoveSharedValue, saveLoveSharedValue } from "@/features/love/loveSharedCloud";
 import {
   hydrateIdiomCheckinFromCloud,
   IDIOM_CHECKIN_KEY,
@@ -35,6 +39,11 @@ import {
 jest.mock("@/features/sync/cloudSync", () => ({
   hydrateFromCloud: jest.fn(async (_key: string, localValue: unknown) => localValue),
   saveCloudValue: jest.fn(async () => undefined)
+}));
+
+jest.mock("@/features/love/loveSharedCloud", () => ({
+  hydrateLoveSharedValue: jest.fn(async (_key: string, localValue: unknown) => localValue),
+  saveLoveSharedValue: jest.fn(async () => undefined)
 }));
 
 function makeStorage() {
@@ -62,7 +71,7 @@ describe("cloud backed storage", () => {
     const storage = makeStorage();
     const transaction: FinanceTransaction = {
       amount: "88.00",
-      categoryName: "餐饮",
+      categoryName: "food",
       createTime: "2026-08-02T08:00:00.000Z",
       id: "finance-cloud",
       localDate: "2026-08-02",
@@ -86,10 +95,10 @@ describe("cloud backed storage", () => {
       intensity: "moderate",
       kcal: 200,
       kcalSource: "manual",
-      parts: ["背"],
+      parts: ["back"],
       sessionDate: "2026-08-02",
       status: "trained",
-      title: "背部训练"
+      title: "back training"
     };
 
     saveLocalWorkouts([log], storage);
@@ -99,31 +108,49 @@ describe("cloud backed storage", () => {
     expect(hydrateFromCloud).toHaveBeenCalledWith(WORKOUT_STORAGE_KEY, [log], expect.any(Function));
   });
 
-  it("keeps love anniversaries in the key-value store while diaries use the shared diary table", async () => {
+  it("syncs all love tabs through the couple shared store instead of user key-value rows", async () => {
     const storage = makeStorage();
     const diary: DiaryEntry = {
-      content: "今天一起散步",
+      content: "walk together",
       createTime: "2026-08-02T08:00:00.000Z",
       date: "2026-08-02",
       id: "diary-cloud",
-      mood: "开心",
-      visibility: "couple_read"
+      mood: "happy",
+      visibility: "couple_edit"
     };
     const anniversary: AnniversaryEntry = {
       date: "2026-08-02",
       id: "anniversary-cloud",
       repeatYearly: true,
-      title: "第一次旅行"
+      title: "first trip"
+    };
+    const gift: GiftEntry = {
+      createTime: "2026-08-02T08:00:00.000Z",
+      date: "2026-08-02",
+      description: "",
+      id: "gift-cloud",
+      image: null,
+      name: "flowers",
+      tag: "daily"
     };
 
     saveDiaries([diary], storage);
     saveAnniversaries([anniversary], storage);
+    saveGifts([gift], storage);
     await hydrateLoveFromCloud(storage);
 
-    expect(saveCloudValue).toHaveBeenCalledWith(ANNIVERSARY_KEY, [anniversary]);
     expect(saveCloudValue).not.toHaveBeenCalledWith(DIARY_KEY, [diary]);
+    expect(saveCloudValue).not.toHaveBeenCalledWith(ANNIVERSARY_KEY, [anniversary]);
+    expect(saveCloudValue).not.toHaveBeenCalledWith(GIFT_KEY, [gift]);
+    expect(saveLoveSharedValue).toHaveBeenCalledWith(DIARY_KEY, [diary]);
+    expect(saveLoveSharedValue).toHaveBeenCalledWith(ANNIVERSARY_KEY, [anniversary]);
+    expect(saveLoveSharedValue).toHaveBeenCalledWith(GIFT_KEY, [gift]);
     expect(hydrateFromCloud).not.toHaveBeenCalledWith(DIARY_KEY, [diary], expect.any(Function));
-    expect(hydrateFromCloud).toHaveBeenCalledWith(ANNIVERSARY_KEY, [anniversary], expect.any(Function));
+    expect(hydrateFromCloud).not.toHaveBeenCalledWith(ANNIVERSARY_KEY, [anniversary], expect.any(Function));
+    expect(hydrateFromCloud).not.toHaveBeenCalledWith(GIFT_KEY, [gift], expect.any(Function));
+    expect(hydrateLoveSharedValue).toHaveBeenCalledWith(DIARY_KEY, [diary], expect.any(Function));
+    expect(hydrateLoveSharedValue).toHaveBeenCalledWith(ANNIVERSARY_KEY, [anniversary], expect.any(Function));
+    expect(hydrateLoveSharedValue).toHaveBeenCalledWith(GIFT_KEY, [gift], expect.any(Function));
   });
 
   it("syncs idiom check-ins through the cloud key-value store", async () => {
