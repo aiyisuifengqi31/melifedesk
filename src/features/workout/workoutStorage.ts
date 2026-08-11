@@ -29,21 +29,27 @@ export type WorkoutStorage = {
   setItem: (key: string, value: string) => void;
 };
 
-export const WORKOUT_STORAGE_KEY = "fanfan-guanguan.workouts.v1";
+export type BodyMetricLog = {
+  bodyFatPercent?: number | null;
+  createTime: string;
+  id: string;
+  recordDate: string;
+  updateTime: string;
+  weightKg: number;
+};
 
-let memoryWorkouts: string | null = null;
+export const WORKOUT_STORAGE_KEY = "fanfan-guanguan.workouts.v1";
+export const BODY_METRIC_STORAGE_KEY = "fanfan-guanguan.body-metrics.v1";
+
+const memoryValues = new Map<string, string>();
 
 const memoryStorage: WorkoutStorage = {
-  getItem: (key) => (key === WORKOUT_STORAGE_KEY ? memoryWorkouts : null),
+  getItem: (key) => memoryValues.get(key) ?? null,
   removeItem: (key) => {
-    if (key === WORKOUT_STORAGE_KEY) {
-      memoryWorkouts = null;
-    }
+    memoryValues.delete(key);
   },
   setItem: (key, value) => {
-    if (key === WORKOUT_STORAGE_KEY) {
-      memoryWorkouts = value;
-    }
+    memoryValues.set(key, value);
   }
 };
 
@@ -95,7 +101,7 @@ export async function hydrateWorkoutsFromCloud(storage: WorkoutStorage = getDefa
 
 export function clearLocalWorkoutsForTests(storage: WorkoutStorage = memoryStorage) {
   storage.removeItem(WORKOUT_STORAGE_KEY);
-  memoryWorkouts = null;
+  memoryValues.delete(WORKOUT_STORAGE_KEY);
 }
 
 export function createWorkoutId() {
@@ -109,6 +115,64 @@ export function sortWorkoutLogs(logs: WorkoutLog[]) {
   return [...logs].sort((left, right) => {
     const dateCompare = right.sessionDate.localeCompare(left.sessionDate);
     return dateCompare === 0 ? right.createTime.localeCompare(left.createTime) : dateCompare;
+  });
+}
+
+export function loadLocalBodyMetrics(storage: WorkoutStorage = getDefaultWorkoutStorage()): BodyMetricLog[] {
+  const raw = storage.getItem(BODY_METRIC_STORAGE_KEY);
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as BodyMetricLog[];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return sortBodyMetrics(
+      parsed
+        .filter((log) => typeof log.id === "string" && typeof log.recordDate === "string" && Number(log.weightKg) > 0)
+        .map((log) => ({
+          bodyFatPercent: Number(log.bodyFatPercent) > 0 && Number(log.bodyFatPercent) < 100 ? Number(log.bodyFatPercent) : null,
+          createTime: typeof log.createTime === "string" ? log.createTime : new Date().toISOString(),
+          id: log.id,
+          recordDate: log.recordDate,
+          updateTime: typeof log.updateTime === "string" ? log.updateTime : typeof log.createTime === "string" ? log.createTime : new Date().toISOString(),
+          weightKg: Number(log.weightKg)
+        }))
+    );
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalBodyMetrics(metrics: BodyMetricLog[], storage: WorkoutStorage = getDefaultWorkoutStorage()) {
+  const byDate = new Map<string, BodyMetricLog>();
+  for (const metric of metrics) {
+    byDate.set(metric.recordDate, metric);
+  }
+  const sorted = sortBodyMetrics([...byDate.values()]);
+  storage.setItem(BODY_METRIC_STORAGE_KEY, JSON.stringify(sorted));
+  void saveCloudValue(BODY_METRIC_STORAGE_KEY, sorted);
+}
+
+export async function hydrateBodyMetricsFromCloud(storage: WorkoutStorage = getDefaultWorkoutStorage()): Promise<BodyMetricLog[]> {
+  const local = loadLocalBodyMetrics(storage);
+  return hydrateFromCloud<BodyMetricLog[]>(BODY_METRIC_STORAGE_KEY, local, (value) => saveLocalBodyMetrics(value, storage));
+}
+
+export function createBodyMetricId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `body-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+export function sortBodyMetrics(metrics: BodyMetricLog[]) {
+  return [...metrics].sort((left, right) => {
+    const dateCompare = right.recordDate.localeCompare(left.recordDate);
+    return dateCompare === 0 ? right.updateTime.localeCompare(left.updateTime) : dateCompare;
   });
 }
 

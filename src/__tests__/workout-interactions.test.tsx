@@ -1,7 +1,15 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import { WorkoutPanel } from "@/features/workout/WorkoutPanel";
-import { loadLocalWorkouts, saveLocalWorkouts, type WorkoutLog } from "@/features/workout/workoutStorage";
+import {
+  BODY_METRIC_STORAGE_KEY,
+  loadLocalBodyMetrics,
+  loadLocalWorkouts,
+  saveLocalBodyMetrics,
+  saveLocalWorkouts,
+  type BodyMetricLog,
+  type WorkoutLog
+} from "@/features/workout/workoutStorage";
 
 const storageKey = "fanfan-guanguan.workouts.v1";
 
@@ -41,6 +49,31 @@ describe("workout storage", () => {
     expect(storage.setItem).toHaveBeenCalledWith(storageKey, JSON.stringify([log]));
     expect(loadLocalWorkouts(storage)).toEqual([log]);
   });
+
+  it("saves and loads body metrics from localStorage-compatible storage", () => {
+    const storage = makeStorage();
+    const first: BodyMetricLog = {
+      bodyFatPercent: 18.6,
+      createTime: "2026-08-10T09:00:00.000Z",
+      id: "body-1",
+      recordDate: "2026-08-10",
+      updateTime: "2026-08-10T09:00:00.000Z",
+      weightKg: 72.4
+    };
+    const second: BodyMetricLog = {
+      bodyFatPercent: null,
+      createTime: "2026-08-11T09:00:00.000Z",
+      id: "body-2",
+      recordDate: "2026-08-11",
+      updateTime: "2026-08-11T09:00:00.000Z",
+      weightKg: 72.2
+    };
+
+    saveLocalBodyMetrics([first, second], storage);
+
+    expect(storage.setItem).toHaveBeenCalledWith(BODY_METRIC_STORAGE_KEY, JSON.stringify([second, first]));
+    expect(loadLocalBodyMetrics(storage)).toEqual([second, first]);
+  });
 });
 
 describe("WorkoutPanel interactions", () => {
@@ -75,5 +108,27 @@ describe("WorkoutPanel interactions", () => {
     fireEvent.press(screen.getByRole("button", { name: "删除训练记录：背" }));
     await waitFor(() => expect(screen.queryAllByText("40分钟")).toHaveLength(1));
     expect(screen.getByText("训练记录已删除。")).toBeOnTheScreen();
+  });
+
+  it("records body metrics, persists the latest weight, and switches data trends", async () => {
+    const storage = makeStorage();
+    const { rerender } = render(<WorkoutPanel storage={storage} />);
+
+    fireEvent.changeText(screen.getByPlaceholderText("体重"), "72.4");
+    fireEvent.changeText(screen.getByPlaceholderText("体脂率"), "18.6");
+    fireEvent.press(screen.getByRole("button", { name: "保存身体数据" }));
+
+    expect(await screen.findByText("✓ 身体数据已记录")).toBeOnTheScreen();
+    expect(screen.getByText("72.4 kg")).toBeOnTheScreen();
+
+    rerender(<WorkoutPanel storage={storage} />);
+    expect(screen.getByText("72.4 kg")).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole("button", { name: "查看体重趋势" }));
+    expect(screen.getByText("最新 72.4kg")).toBeOnTheScreen();
+    expect(screen.getByText("较区间开始 0kg")).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole("button", { name: "查看体脂趋势" }));
+    expect(screen.getByText("最新 18.6%")).toBeOnTheScreen();
   });
 });

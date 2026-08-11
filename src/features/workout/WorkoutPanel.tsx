@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { createPortal } from "react-dom";
 
 import { getSupabaseClient } from "@/auth/supabaseClient";
@@ -12,12 +12,18 @@ import {
   softDeleteWorkoutSession
 } from "@/features/workout/workoutRepository";
 import {
+  createBodyMetricId,
   createWorkoutId,
   getDefaultWorkoutStorage,
+  hydrateBodyMetricsFromCloud,
   hydrateWorkoutsFromCloud,
+  loadLocalBodyMetrics,
   loadLocalWorkouts,
+  saveLocalBodyMetrics,
   saveLocalWorkouts,
+  sortBodyMetrics,
   sortWorkoutLogs,
+  type BodyMetricLog,
   type WorkoutLog,
   type WorkoutStorage
 } from "@/features/workout/workoutStorage";
@@ -29,6 +35,7 @@ type WorkoutPanelProps = {
 type WorkoutPopoverKind = "duration" | "log-filter" | "log-menu" | "part";
 type LogFilter = "all" | "currentMonth" | "lastMonth";
 type AnchorRect = { height: number; left: number; top: number; width: number };
+type DataTrendType = "training" | "weight" | "fat";
 
 const WORKOUT_PARTS: Array<{ icon: string; name: string }> = [
   { icon: "❤️", name: "胸" },
@@ -41,9 +48,14 @@ const WORKOUT_PARTS: Array<{ icon: string; name: string }> = [
 type ChartPeriod = "month" | "week" | "year";
 
 const chartPeriodOptions: Array<{ label: string; value: ChartPeriod }> = [
-  { label: "近7天", value: "week" },
-  { label: "近一月", value: "month" },
-  { label: "近一年", value: "year" }
+  { label: "7天", value: "week" },
+  { label: "1月", value: "month" },
+  { label: "1年", value: "year" }
+];
+const dataTrendOptions: Array<{ label: string; value: DataTrendType }> = [
+  { label: "训练", value: "training" },
+  { label: "体重", value: "weight" },
+  { label: "体脂", value: "fat" }
 ];
 const durationOptions = Array.from({ length: 36 }, (_, index) => (index + 1) * 5);
 const logFilterOptions: Array<{ label: string; value: LogFilter }> = [
@@ -63,18 +75,30 @@ const todayIso = () => toLocalIso(new Date());
 export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const workoutStorage = useMemo(() => storage ?? getDefaultWorkoutStorage(), [storage]);
   const [logs, setLogs] = useState<WorkoutLog[]>(() => sortWorkoutLogs(loadLocalWorkouts(workoutStorage)));
+  const [bodyMetrics, setBodyMetrics] = useState<BodyMetricLog[]>(() => sortBodyMetrics(loadLocalBodyMetrics(workoutStorage)));
+  const [bodyDate, setBodyDate] = useState(todayIso());
+  const [weightInput, setWeightInput] = useState("");
+  const [bodyFatInput, setBodyFatInput] = useState("");
   const [selectedPart, setSelectedPart] = useState<string | null>(null);
   const [durationMinutes, setDurationMinutes] = useState(40);
   const [feedback, setFeedback] = useState("");
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("week");
+  const [dataTrend, setDataTrend] = useState<DataTrendType>("training");
+  const [selectedMetricPoint, setSelectedMetricPoint] = useState<BodyMetricLog | null>(null);
   const [popover, setPopover] = useState<{ kind: WorkoutPopoverKind; logId?: string; rect: AnchorRect } | null>(null);
   const [logFilter, setLogFilter] = useState<LogFilter>("all");
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const localDirtyRef = useRef(false);
+  const bodyDirtyRef = useRef(false);
+  const logsSnapshotRef = useRef(JSON.stringify(logs));
+  const bodyMetricsSnapshotRef = useRef(JSON.stringify(bodyMetrics));
 
   const stats = useMemo(() => buildWorkoutStats(logs), [logs]);
+  const latestBodyMetric = useMemo(() => findLatestBodyMetric(bodyMetrics, todayIso()), [bodyMetrics]);
   const chartBars = useMemo(() => buildPeriodBars(logs, chartPeriod), [chartPeriod, logs]);
   const chartTotal = useMemo(() => chartBars.reduce((sum, bar) => sum + bar.minutes, 0), [chartBars]);
+  const bodyTrendPoints = useMemo(() => buildBodyTrendPoints(bodyMetrics, chartPeriod, dataTrend), [bodyMetrics, chartPeriod, dataTrend]);
+  const bodyTrendSummary = useMemo(() => buildBodyTrendSummary(bodyTrendPoints, dataTrend), [bodyTrendPoints, dataTrend]);
   const sortedLogs = useMemo(() => filterWorkoutLogs(sortByNewest(logs, (log) => [log.sessionDate, log.createTime]), logFilter), [logFilter, logs]);
   const logList = useCollapsibleList(sortedLogs, 5);
   const todayKey = todayIso();
@@ -86,14 +110,36 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   useEffect(() => {
     let cancelled = false;
     void hydrateWorkoutsFromCloud(workoutStorage).then((next) => {
-      if (!cancelled && !localDirtyRef.current) {
-        setLogs(sortWorkoutLogs(next));
+      const sorted = sortWorkoutLogs(next);
+      const snapshot = JSON.stringify(sorted);
+      if (!cancelled && !localDirtyRef.current && snapshot !== logsSnapshotRef.current) {
+        logsSnapshotRef.current = snapshot;
+        setLogs(sorted);
+      }
+    });
+    void hydrateBodyMetricsFromCloud(workoutStorage).then((next) => {
+      const sorted = sortBodyMetrics(next);
+      const snapshot = JSON.stringify(sorted);
+      if (!cancelled && !bodyDirtyRef.current && snapshot !== bodyMetricsSnapshotRef.current) {
+        bodyMetricsSnapshotRef.current = snapshot;
+        setBodyMetrics(sorted);
       }
     });
     return () => {
       cancelled = true;
     };
   }, [workoutStorage]);
+
+  useEffect(() => {
+    const metricForDate = bodyMetrics.find((metric) => metric.recordDate === bodyDate) ?? latestBodyMetric;
+    if (!metricForDate) {
+      setWeightInput("");
+      setBodyFatInput("");
+      return;
+    }
+    setWeightInput(formatDecimalInput(metricForDate.weightKg));
+    setBodyFatInput(metricForDate.bodyFatPercent ? formatDecimalInput(metricForDate.bodyFatPercent) : "");
+  }, [bodyDate, bodyMetrics, latestBodyMetric]);
 
   useEffect(() => {
     if (!feedback) return undefined;
@@ -104,8 +150,17 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const persistLogs = (nextLogs: WorkoutLog[]) => {
     localDirtyRef.current = true;
     const sorted = sortWorkoutLogs(nextLogs);
+    logsSnapshotRef.current = JSON.stringify(sorted);
     setLogs(sorted);
     saveLocalWorkouts(sorted, workoutStorage);
+  };
+
+  const persistBodyMetrics = (nextMetrics: BodyMetricLog[]) => {
+    bodyDirtyRef.current = true;
+    const sorted = sortBodyMetrics(nextMetrics);
+    bodyMetricsSnapshotRef.current = JSON.stringify(sorted);
+    setBodyMetrics(sorted);
+    saveLocalBodyMetrics(sorted, workoutStorage);
   };
 
   const openPopover = (kind: WorkoutPopoverKind, event: unknown, logId?: string) => {
@@ -113,6 +168,48 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   };
 
   const closePopover = () => setPopover(null);
+
+  const changeBodyDate = () => {
+    if (typeof window === "undefined" || typeof window.prompt !== "function") return;
+    const nextDate = window.prompt("记录日期（YYYY-MM-DD）", bodyDate);
+    if (!nextDate) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) {
+      setFeedback("请输入正确日期，例如 2026-08-11");
+      return;
+    }
+    setBodyDate(nextDate);
+  };
+
+  const saveBodyMetric = () => {
+    const weightKg = Number(weightInput);
+    const bodyFatPercent = bodyFatInput.trim() ? Number(bodyFatInput) : null;
+
+    if (!Number.isFinite(weightKg) || weightKg <= 0) {
+      setFeedback("请输入有效体重");
+      return;
+    }
+
+    if (bodyFatPercent !== null && (!Number.isFinite(bodyFatPercent) || bodyFatPercent <= 0 || bodyFatPercent >= 100)) {
+      setFeedback("请输入有效体脂率");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const existing = bodyMetrics.find((metric) => metric.recordDate === bodyDate);
+    const nextMetric: BodyMetricLog = {
+      bodyFatPercent,
+      createTime: existing?.createTime ?? now,
+      id: existing?.id ?? createBodyMetricId(),
+      recordDate: bodyDate,
+      updateTime: now,
+      weightKg: normalizeBodyNumber(weightKg)
+    };
+    persistBodyMetrics([nextMetric, ...bodyMetrics.filter((metric) => metric.recordDate !== bodyDate)]);
+    setWeightInput(formatDecimalInput(nextMetric.weightKg));
+    setBodyFatInput(nextMetric.bodyFatPercent ? formatDecimalInput(nextMetric.bodyFatPercent) : "");
+    setSelectedMetricPoint(nextMetric);
+    setFeedback("✓ 身体数据已记录");
+  };
 
   const editWorkout = (log: WorkoutLog) => {
     setSelectedPart(log.parts[0] ?? null);
@@ -211,6 +308,44 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
         <Text style={styles.todayStatusText}>{formatTodayStatus(todayLogs)}</Text>
       </View>
 
+      <View style={styles.bodyRecordCard}>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.chartTitle}>身体记录</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="修改身体记录日期" onPress={changeBodyDate} style={styles.bodyDateButton}>
+            <Text style={styles.bodyDateText}>{formatMonthDay(bodyDate)}</Text>
+          </Pressable>
+        </View>
+        <View style={styles.bodyRecordRow}>
+          <View style={styles.bodyInputWrap}>
+            <TextInput
+              accessibilityLabel="体重"
+              inputMode="decimal"
+              keyboardType="decimal-pad"
+              onChangeText={setWeightInput}
+              placeholder="体重"
+              style={styles.bodyInput}
+              value={weightInput}
+            />
+            <Text style={styles.bodyUnit}>kg</Text>
+          </View>
+          <View style={styles.bodyInputWrap}>
+            <TextInput
+              accessibilityLabel="体脂率"
+              inputMode="decimal"
+              keyboardType="decimal-pad"
+              onChangeText={setBodyFatInput}
+              placeholder="体脂率"
+              style={styles.bodyInput}
+              value={bodyFatInput}
+            />
+            <Text style={styles.bodyUnit}>%</Text>
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="保存身体数据" onPress={saveBodyMetric} style={styles.bodySaveButton}>
+            <Text style={styles.bodySaveText}>保存</Text>
+          </Pressable>
+        </View>
+      </View>
+
       <View style={styles.card}>
         <View style={styles.todayStatusRow}>
           <Text style={styles.cardTitle}>记录训练</Text>
@@ -237,13 +372,17 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
           <Text style={styles.weekRange}>{stats.weekRangeLabel}</Text>
         </View>
         <View style={styles.weekMetricRow}>
-          <View>
+          <View style={styles.weekMetricCell}>
             <Text style={styles.weekMetricValue}>{stats.weekCount} 次</Text>
             <Text style={styles.weekMetricLabel}>训练次数</Text>
           </View>
-          <View>
+          <View style={styles.weekMetricCell}>
             <Text style={styles.weekMetricValue}>{stats.weekMinutes} 分钟</Text>
             <Text style={styles.weekMetricLabel}>总时长</Text>
+          </View>
+          <View style={styles.weekMetricCell}>
+            <Text style={styles.weekMetricValue}>{latestBodyMetric ? `${formatDecimalInput(latestBodyMetric.weightKg)} kg` : "-- kg"}</Text>
+            <Text style={styles.weekMetricLabel}>最新体重</Text>
           </View>
         </View>
         {stats.weekPartCounts.length > 0 ? (
@@ -260,9 +399,25 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       <View style={styles.chartCard}>
         <View style={styles.chartHeader}>
           <View style={styles.cardTitleRow}>
-            <Text style={styles.chartTitle}>训练趋势</Text>
+            <Text style={styles.chartTitle}>数据趋势</Text>
           </View>
-          <Text style={styles.chartTotal}>本周期合计 {chartTotal}分钟</Text>
+          <Text style={styles.chartTotal}>{dataTrend === "training" ? `合计 ${chartTotal}分钟` : bodyTrendSummary.latestLabel}</Text>
+        </View>
+        <View style={styles.trendTypeRow}>
+          {dataTrendOptions.map((option) => {
+            const selected = dataTrend === option.value;
+            return (
+              <Pressable
+                key={option.value}
+                accessibilityLabel={`查看${option.label}趋势`}
+                accessibilityRole="button"
+                onPress={() => { setDataTrend(option.value); setSelectedMetricPoint(null); }}
+                style={[styles.trendTypeChip, selected ? styles.trendTypeChipActive : null]}
+              >
+                <Text style={[styles.trendTypeText, selected ? styles.trendTypeTextActive : null]}>{option.label}</Text>
+              </Pressable>
+            );
+          })}
         </View>
         <View style={styles.periodRow}>
           {chartPeriodOptions.map((option) => {
@@ -270,9 +425,9 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
             return (
               <Pressable
                 key={option.value}
-                accessibilityLabel={`查看${option.label}训练时长`}
+                accessibilityLabel={`查看${option.label}数据趋势`}
                 accessibilityRole="button"
-                onPress={() => setChartPeriod(option.value)}
+                onPress={() => { setChartPeriod(option.value); setSelectedMetricPoint(null); }}
                 style={[styles.periodChip, selected ? styles.periodChipActive : null]}
               >
                 <Text style={[styles.periodChipText, selected ? styles.periodChipTextActive : null]}>{option.label}</Text>
@@ -280,16 +435,29 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
             );
           })}
         </View>
-        <View style={[styles.chart, chartPeriod === "week" ? null : styles.chartDense]}>
-          {chartBars.map((bar) => (
-            <View key={bar.key} style={styles.barColumn}>
-              <View style={[styles.barTrack, chartPeriod === "week" ? null : styles.barTrackDense]}>
-                <View style={[styles.barFill, { height: `${bar.height}%` }]} />
+        {dataTrend === "training" ? (
+          <View style={[styles.chart, chartPeriod === "week" ? null : styles.chartDense]}>
+            {chartBars.map((bar) => (
+              <View key={bar.key} style={styles.barColumn}>
+                <View style={[styles.barTrack, chartPeriod === "week" ? null : styles.barTrackDense]}>
+                  <View style={[styles.barFill, { height: `${bar.height}%` }]} />
+                </View>
+                <Text style={[styles.barLabel, chartPeriod === "year" ? styles.barLabelTiny : null]}>{bar.label}</Text>
               </View>
-              <Text style={[styles.barLabel, chartPeriod === "year" ? styles.barLabelTiny : null]}>{bar.label}</Text>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        ) : (
+          <>
+            <Text style={styles.trendDelta}>{bodyTrendSummary.deltaLabel}</Text>
+            <BodyLineChart
+              metricType={dataTrend}
+              onPointPress={setSelectedMetricPoint}
+              period={chartPeriod}
+              points={bodyTrendPoints}
+              selectedPoint={selectedMetricPoint}
+            />
+          </>
+        )}
       </View>
 
       <View style={styles.card}>
@@ -351,6 +519,63 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   );
 }
 
+function BodyLineChart({
+  metricType,
+  onPointPress,
+  period,
+  points,
+  selectedPoint
+}: {
+  metricType: DataTrendType;
+  onPointPress: (point: BodyMetricLog) => void;
+  period: ChartPeriod;
+  points: Array<BodyMetricLog & { trendValue: number }>;
+  selectedPoint: BodyMetricLog | null;
+}) {
+  if (points.length === 0) {
+    return (
+      <View style={styles.lineEmpty}>
+        <Text style={styles.empty}>暂无记录</Text>
+      </View>
+    );
+  }
+
+  const values = points.map((point) => point.trendValue);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const range = Math.max(0.1, maxValue - minValue);
+
+  return (
+    <View style={styles.lineChartWrap}>
+      <View style={styles.lineChart}>
+        {points.map((point, index) => {
+          const top = 8 + ((maxValue - point.trendValue) / range) * 72;
+          const selected = selectedPoint?.id === point.id;
+          return (
+            <View key={`${point.id}-${point.recordDate}`} style={styles.linePointColumn}>
+              {index > 0 ? <View style={[styles.lineSegment, { top: top + 5 }]} /> : null}
+              <Pressable
+                accessibilityLabel={`查看${metricType === "weight" ? "体重" : "体脂"}记录：${formatMonthDay(point.recordDate)}`}
+                accessibilityRole="button"
+                onPress={() => onPointPress(point)}
+                style={[styles.linePoint, { marginTop: top }, selected ? styles.linePointActive : null]}
+              />
+              <Text style={[styles.barLabel, period === "year" ? styles.barLabelTiny : null]}>{formatTrendLabel(point.recordDate, period)}</Text>
+            </View>
+          );
+        })}
+      </View>
+      {selectedPoint ? (
+        <View style={styles.metricTooltip}>
+          <Text style={styles.metricTooltipText}>{selectedPoint.recordDate.split("-").join("/")}</Text>
+          <Text style={styles.metricTooltipText}>体重：{formatDecimalInput(selectedPoint.weightKg)}kg</Text>
+          {selectedPoint.bodyFatPercent ? <Text style={styles.metricTooltipText}>体脂：{formatDecimalInput(selectedPoint.bodyFatPercent)}%</Text> : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function buildWorkoutStats(logs: WorkoutLog[]) {
   const now = new Date();
   const weekStart = startOfWeek(now);
@@ -373,6 +598,52 @@ function buildWorkoutStats(logs: WorkoutLog[]) {
     weekPartCounts: [...partCounts.entries()].map(([part, count]) => ({ part, count })).sort((left, right) => right.count - left.count),
     weekRangeLabel: `${formatMonthDay(weekStartIso)} - ${formatMonthDay(weekEndIso)}`
   };
+}
+
+function buildBodyTrendPoints(metrics: BodyMetricLog[], period: ChartPeriod, trendType: DataTrendType) {
+  if (trendType === "training") return [];
+  const today = new Date();
+  const start = period === "week" ? shiftDate(today, -6) : period === "month" ? shiftDate(today, -29) : shiftDate(today, -364);
+  const startIso = toLocalIso(start);
+  const todayKey = todayIso();
+  return sortBodyMetrics(metrics)
+    .filter((metric) => metric.recordDate >= startIso && metric.recordDate <= todayKey)
+    .filter((metric) => trendType === "weight" || metric.bodyFatPercent != null)
+    .sort((left, right) => left.recordDate.localeCompare(right.recordDate))
+    .map((metric) => ({
+      ...metric,
+      trendValue: trendType === "weight" ? metric.weightKg : Number(metric.bodyFatPercent)
+    }));
+}
+
+function buildBodyTrendSummary(points: Array<BodyMetricLog & { trendValue: number }>, trendType: DataTrendType) {
+  if (trendType === "training") {
+    return { deltaLabel: "", latestLabel: "" };
+  }
+  if (points.length === 0) {
+    return { deltaLabel: "暂无记录", latestLabel: "暂无记录" };
+  }
+  const unit = trendType === "weight" ? "kg" : "%";
+  const latest = points[points.length - 1].trendValue;
+  const first = points[0].trendValue;
+  const diff = normalizeBodyNumber(latest - first);
+  const sign = diff > 0 ? "+" : "";
+  return {
+    deltaLabel: `较区间开始 ${sign}${formatDecimalInput(diff)}${unit}`,
+    latestLabel: `最新 ${formatDecimalInput(latest)}${unit}`
+  };
+}
+
+function findLatestBodyMetric(metrics: BodyMetricLog[], maxDate: string) {
+  return sortBodyMetrics(metrics).find((metric) => metric.recordDate <= maxDate) ?? null;
+}
+
+function normalizeBodyNumber(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function formatDecimalInput(value: number) {
+  return Number.isInteger(value) ? String(value) : String(normalizeBodyNumber(value));
 }
 
 function buildPeriodBars(logs: WorkoutLog[], period: ChartPeriod) {
@@ -434,6 +705,11 @@ function formatShortDate(dateText: string) {
 function formatMonthDay(dateText: string) {
   const [, month, day] = dateText.split("-");
   return `${Number(month)}.${Number(day)}`;
+}
+
+function formatTrendLabel(dateText: string, period: ChartPeriod) {
+  if (period === "year") return dateText.slice(5, 7);
+  return dateText.slice(5).replace("-", "/");
 }
 
 function formatTodayStatus(todayLogs: WorkoutLog[]) {
@@ -628,6 +904,70 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     width: "84%"
   },
+  bodyDateButton: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3
+  },
+  bodyDateText: {
+    color: "#697386",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  bodyInput: {
+    color: "#111827",
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "900",
+    minWidth: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 0
+  },
+  bodyInputWrap: {
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderColor: "#e3e8ef",
+    borderRadius: 12,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: "row",
+    height: 42,
+    minWidth: 0,
+    overflow: "hidden"
+  },
+  bodyRecordCard: {
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderColor: "#e6ebf2",
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
+  bodyRecordRow: {
+    flexDirection: "row",
+    gap: 8
+  },
+  bodySaveButton: {
+    alignItems: "center",
+    backgroundColor: "#7cb87c",
+    borderRadius: 12,
+    height: 42,
+    justifyContent: "center",
+    minWidth: 62,
+    paddingHorizontal: 12
+  },
+  bodySaveText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  bodyUnit: {
+    color: "#697386",
+    fontSize: 11,
+    fontWeight: "900",
+    paddingRight: 9
+  },
   card: {
     backgroundColor: "rgba(255,255,255,0.92)",
     borderColor: "#e6ebf2",
@@ -741,6 +1081,38 @@ const styles = StyleSheet.create({
   periodRow: {
     flexDirection: "row",
     gap: 6
+  },
+  trendDelta: {
+    color: "#697386",
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  trendTypeChip: {
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderColor: "#e3e8ef",
+    borderRadius: 999,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 30,
+    paddingHorizontal: 6
+  },
+  trendTypeChipActive: {
+    backgroundColor: "#e2f2e2",
+    borderColor: "#7cb87c"
+  },
+  trendTypeRow: {
+    flexDirection: "row",
+    gap: 6
+  },
+  trendTypeText: {
+    color: "#697386",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  trendTypeTextActive: {
+    color: "#5a8a5a"
   },
   chip: {
     backgroundColor: "#f8fafc",
@@ -948,6 +1320,45 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 20
   },
+  lineChart: {
+    flexDirection: "row",
+    minHeight: 112,
+    overflow: "hidden"
+  },
+  lineChartWrap: {
+    gap: 8
+  },
+  lineEmpty: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 96
+  },
+  linePoint: {
+    backgroundColor: "#ffffff",
+    borderColor: "#7cb87c",
+    borderRadius: 999,
+    borderWidth: 3,
+    height: 13,
+    width: 13,
+    zIndex: 2
+  },
+  linePointActive: {
+    backgroundColor: "#7cb87c",
+    borderColor: "#5a8a5a"
+  },
+  linePointColumn: {
+    alignItems: "center",
+    flex: 1,
+    position: "relative"
+  },
+  lineSegment: {
+    backgroundColor: "#a7d3a7",
+    height: 3,
+    left: "-50%",
+    position: "absolute",
+    width: "100%",
+    zIndex: 1
+  },
   logMenuButton: {
     alignItems: "center",
     borderRadius: 999,
@@ -978,6 +1389,21 @@ const styles = StyleSheet.create({
   metricTitle: {
     color: "#697386",
     fontSize: 16,
+    fontWeight: "800"
+  },
+  metricTooltip: {
+    alignSelf: "flex-start",
+    backgroundColor: "#f0f7f0",
+    borderColor: "#d8e8d8",
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  metricTooltipText: {
+    color: "#334155",
+    fontSize: 12,
     fontWeight: "800"
   },
   metricTitleCompact: {
@@ -1194,13 +1620,18 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginTop: 2
   },
+  weekMetricCell: {
+    alignItems: "center",
+    flex: 1
+  },
   weekMetricRow: {
     flexDirection: "row",
+    gap: 6,
     justifyContent: "space-between"
   },
   weekMetricValue: {
     color: "#5a8a5a",
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "900"
   },
   weekRange: {
