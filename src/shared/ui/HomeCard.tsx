@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
 import type { UiTokens } from "@/shared/ui/primitives";
 import { frostedCard, RADIUS } from "@/shared/ui/tokens";
@@ -27,6 +27,8 @@ type HomeCardProps = {
   accentSurface?: boolean;
   tokens: UiTokens;
   testID?: string;
+  /** 外层容器额外样式（如双列布局中拉伸等高）。 */
+  style?: StyleProp<ViewStyle>;
   children: ReactNode;
 };
 
@@ -47,9 +49,10 @@ export function HomeCard({
   accentSurface,
   tokens,
   testID,
+  style,
   children
 }: HomeCardProps) {
-  const wrapStyle = [styles.card, frostedCard(tokens), accentSurface ? styles.cardAccent : null, hidden && editMode ? styles.cardHidden : null];
+  const wrapStyle = [styles.card, frostedCard(tokens), accentSurface ? styles.cardAccent : null, hidden && editMode ? styles.cardHidden : null, style];
 
   return (
     <View style={wrapStyle} testID={testID}>

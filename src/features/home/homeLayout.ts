@@ -3,7 +3,7 @@
  * 顺序数组本身即「可见且有序」的列表：卡片不在数组中即视为已隐藏。
  */
 
-export type HomeCardId = "summary" | "nextThing" | "quickAccounting" | "todos" | "notes" | "meal";
+export type HomeCardId = "summary" | "quickAccounting" | "todos" | "notes" | "meal";
 
 export type HomeCardMeta = {
   id: HomeCardId;
@@ -14,7 +14,6 @@ export type HomeCardMeta = {
 
 export const HOME_CARDS: HomeCardMeta[] = [
   { id: "summary", title: "今日概览", core: true },
-  { id: "nextThing", title: "下一件事", core: false },
   { id: "quickAccounting", title: "快速记账", core: true },
   { id: "todos", title: "今日待办", core: true },
   { id: "notes", title: "备忘录", core: false },

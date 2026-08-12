@@ -6,16 +6,15 @@ import { hydrateFinanceTransactionsFromCloud, loadFinanceTransactions, type Fina
 import { hydrateNotesFromCloud, loadNotes } from "@/features/home/notesStorage";
 import { hydratePackagesFromCloud, loadPackages, type PackageItem } from "@/features/plan/packageStorage";
 import { hydrateRemindersFromCloud, loadReminders, type ReminderItem } from "@/features/plan/reminderStorage";
-import { setPlanFocus, type PlanFocus } from "@/features/plan/planFocus";
+import { type PlanFocus } from "@/features/plan/planFocus";
 import { getDefaultTodoStorage, hydrateTodosFromCloud, loadLocalTodos, saveLocalTodos, sortTodos, type TodoStorage, type TodoTask } from "@/features/plan/todoStorage";
 import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
 import { HOME_CARDS, loadHomeCollapsed, loadHomeOrder, moveCardDown, moveCardUp, saveHomeCollapsed, saveHomeOrder, toggleCardHidden, type HomeCardId } from "@/features/home/homeLayout";
 import { CollapsibleSectionFooter, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import { AnimatedNumber } from "@/shared/ui/AnimatedNumber";
-import { IconCheck, IconChecklist, IconChevronRight, IconClock, IconGripVertical, IconMoreHorizontal } from "@/shared/ui/lineIcons";
+import { IconCheck, IconGripVertical, IconMoreHorizontal } from "@/shared/ui/lineIcons";
 import { PressableScale } from "@/shared/ui/PressableScale";
 import type { UiTokens } from "@/shared/ui/primitives";
-import { EmptyState } from "@/shared/ui/primitives";
 import { HomeCard } from "@/shared/ui/HomeCard";
 import { showUndoToast } from "@/shared/ui/UndoToast";
 import { MealSpinner } from "./MealSpinner";
@@ -37,32 +36,57 @@ type HomePanelProps = {
 
 type ViewState = "home" | "notes" | "todos";
 
-type NextThing = {
-  focus: PlanFocus;
-  title: string;
-  timeLabel: string;
-  near: boolean;
-};
-
-const todoPriorityLabels: Record<TodoTask["priority"], string> = {
-  high: "重要",
-  low: "轻松",
-  normal: "常规",
-  urgent: "紧急"
-};
-
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function dayIsoFromNow(offset: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+
+const PRIORITY_ORDER: Record<TodoTask["priority"], number> = {
+  urgent: 0,
+  high: 1,
+  normal: 2,
+  low: 3
+};
+
+/** 首页待办排序：逾期 → 今天 → 未来 → 无日期；同类内按优先级，最后按创建时间。 */
+function sortHomeTodos(todos: TodoTask[], today: string): TodoTask[] {
+  const bucketOf = (todo: TodoTask) => {
+    const dateIso = todoDateIso(todo);
+    if (!dateIso) return 3;
+    if (dateIso < today) return 0;
+    if (dateIso === today) return 1;
+    return 2;
+  };
+  return [...todos].sort((a, b) => {
+    const ba = bucketOf(a);
+    const bb = bucketOf(b);
+    if (ba !== bb) return ba - bb;
+    const pa = PRIORITY_ORDER[a.priority];
+    const pb = PRIORITY_ORDER[b.priority];
+    if (pa !== pb) return pa - pb;
+    return (a.createTime ?? "").localeCompare(b.createTime ?? "");
+  });
+}
+
+/** 待办的小标签：逾期 / 今天 / 明天 / 常规（无日期）；更远未来不显示标签以免喧宾夺主。 */
+function todoDateTag(todo: TodoTask, today: string): string | null {
+  const dateIso = todoDateIso(todo);
+  if (!dateIso) return "常规";
+  if (dateIso < today) return "逾期";
+  if (dateIso === today) return "今天";
+  if (dateIso === dayIsoFromNow(1)) return "明天";
+  return null;
 }
 
 function todoDateIso(todo: TodoTask): string | null {
   const value = todo.remindAt || todo.deadline || todo.createTime;
   if (!value) return null;
   return value.slice(0, 10);
-}
-
-function isTodoForToday(todo: TodoTask, today: string) {
-  return todoDateIso(todo) === today;
 }
 
 function formatToday(): string {
@@ -88,60 +112,7 @@ function centsToMoney(cents: number) {
   return `${Math.floor(safe / 100)}.${String(safe % 100).padStart(2, "0")}`;
 }
 
-function timeLabelFromIso(iso?: string | null): string | null {
-  if (!iso || !iso.includes("T")) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-function buildNextThing(todos: TodoTask[], reminders: ReminderItem[], packages: PackageItem[]): NextThing | null {
-  const today = todayIso();
-  const now = Date.now();
-  type Candidate = { focus: PlanFocus; title: string; timeLabel: string; sortKey: number };
-  const candidates: Candidate[] = [];
-
-  for (const todo of todos) {
-    if (todo.completed || !todo.deadline) continue;
-    const d = new Date(todo.deadline);
-    if (Number.isNaN(d.getTime())) continue;
-    const isoDate = d.toISOString().slice(0, 10);
-    if (isoDate !== today) continue;
-    candidates.push({
-      focus: { date: isoDate, kind: "todo", id: todo.id },
-      title: todo.title,
-      timeLabel: timeLabelFromIso(todo.deadline) ?? "全天",
-      sortKey: d.getTime()
-    });
-  }
-  for (const reminder of reminders) {
-    if (reminder.date !== today) continue;
-    const sortKey = reminder.time ? new Date(`${reminder.date}T${reminder.time}`).getTime() : new Date(`${reminder.date}T23:59`).getTime();
-    candidates.push({
-      focus: { date: reminder.date, kind: "reminder", id: reminder.id },
-      title: reminder.title,
-      timeLabel: reminder.time ?? "全天",
-      sortKey
-    });
-  }
-  for (const pkg of packages) {
-    if (pkg.pickedUp || pkg.arrivalDate !== today) continue;
-    candidates.push({
-      focus: { date: pkg.arrivalDate, kind: "package", id: pkg.id },
-      title: pkg.company ? `取快递（${pkg.company}）` : "取快递",
-      timeLabel: "待取",
-      sortKey: new Date(`${pkg.arrivalDate}T23:58`).getTime()
-    });
-  }
-
-  if (candidates.length === 0) return null;
-  candidates.sort((a, b) => a.sortKey - b.sortKey);
-  const first = candidates[0];
-  const near = first.sortKey - now > 0 && first.sortKey - now < 2 * 60 * 60 * 1000;
-  return { ...first, near };
-}
-
-export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQuickAccounting, shortcutNonce, shortcutView, storage, themeTokens }: HomePanelProps) {
+export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting, shortcutNonce, shortcutView, storage, themeTokens }: HomePanelProps) {
   const todoStorage = useMemo(() => storage ?? getDefaultTodoStorage(), [storage]);
   const [todos, setTodos] = useState<TodoTask[]>(() => loadLocalTodos(todoStorage));
   const [notes, setNotes] = useState(() => loadNotes());
@@ -214,24 +185,22 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQui
   }, [todoStorage]);
 
   const today = todayIso();
-  const todayTodos = useMemo(() => todos.filter((todo) => isTodoForToday(todo, today)), [todos, today]);
-  const completedCount = todayTodos.filter((todo) => todo.completed).length;
-  const pendingCount = todayTodos.length - completedCount;
+  const homeTodos = useMemo(() => todos.filter((todo) => !todo.completed), [todos]);
+  const pendingCount = homeTodos.length;
   const pendingPackages = packages.filter((item) => !item.pickedUp).length;
-  const sortedHomeTodos = useMemo(() => sortTodos(todayTodos.filter((todo) => !todo.completed)), [todayTodos]);
+  const sortedHomeTodos = useMemo(() => sortHomeTodos(homeTodos, today), [homeTodos, today]);
   const todoList = useCollapsibleList(sortedHomeTodos);
   const todayExpenseCents = useMemo(() => {
     return transactions
       .filter((transaction) => transaction.transactionType === "expense" && transaction.localDate === today)
       .reduce((sum, transaction) => sum + moneyToCents(transaction.amount), 0);
   }, [transactions]);
-  const nextThing = useMemo(() => buildNextThing(todos, reminders, packages), [todos, reminders, packages]);
   const statusChip = useMemo<{ text: string; icon: "check" | "dot"; onPress?: () => void } | null>(() => {
     if (pendingCount > 0) return { text: `还有 ${pendingCount} 项`, icon: "dot", onPress: () => setViewState("todos") };
     if (pendingPackages > 0) return { text: `${pendingPackages} 个待取快递`, icon: "dot", onPress: () => onOpenPackages?.() };
-    if (todayTodos.length > 0) return { text: "今天已清空", icon: "check", onPress: () => setViewState("todos") };
+    if (homeTodos.length > 0) return { text: "今天已清空", icon: "check", onPress: () => setViewState("todos") };
     return { text: "今天很轻松", icon: "dot" };
-  }, [pendingCount, pendingPackages, todayTodos.length, onOpenPackages]);
+  }, [pendingCount, pendingPackages, homeTodos.length, onOpenPackages]);
   const toggleHomeTodo = (todoId: string) => {
     const target = todos.find((todo) => todo.id === todoId);
     if (!target) return;
@@ -270,7 +239,7 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQui
     );
   }
 
-  const renderHomeCard = (id: HomeCardId, hidden: boolean) => {
+  const renderHomeCard = (id: HomeCardId, hidden: boolean, cardStyle?: import("react-native").StyleProp<import("react-native").ViewStyle>) => {
     const meta = HOME_CARDS.find((card) => card.id === id);
     if (!meta) return null;
     const index = order.indexOf(id);
@@ -287,7 +256,8 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQui
       locked: meta.core,
       canMoveUp: index > 0,
       canMoveDown: index < order.length - 1,
-      tokens: themeTokens
+      tokens: themeTokens,
+      style: cardStyle
     };
 
     switch (id) {
@@ -299,33 +269,7 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQui
               <View style={styles.summaryDivider} />
               <OverviewItem label="待取快递" onPress={() => onOpenPackages?.()} styles={styles} value={<AnimatedNumber value={pendingPackages} format={(v) => `${Math.round(v)}`} style={styles.summaryValue} />} />
             </View>
-            <Text style={styles.summaryLine} numberOfLines={1}>{nextThing ? `下一件事：${nextThing.timeLabel} ${nextThing.title}` : statusSummaryLine(pendingCount, pendingPackages, todayExpenseCents)}</Text>
-          </HomeCard>
-        );
-      case "nextThing":
-        if (!nextThing && !editMode) return null;
-        return (
-          <HomeCard key={id} testID="home-next-thing" {...common} collapsible={false} accentSurface title={<Text style={styles.widgetTitle}>下一件事</Text>}>
-            {nextThing ? (
-              <PressableScale
-                accessibilityRole="button"
-                accessibilityLabel={`下一件事：${nextThing.timeLabel} ${nextThing.title}`}
-                onPress={() => onOpenPlan?.(nextThing.focus)}
-                style={[styles.nextThing, nextThing.near ? styles.nextThingNear : null]}
-                wrapperStyle={{ width: "100%" }}
-              >
-                <View style={styles.nextTime}>
-                  <IconClock size={14} color={themeTokens.accent} />
-                  <Text style={styles.nextTimeText}>{nextThing.timeLabel}</Text>
-                </View>
-                <Text style={styles.nextTitle} numberOfLines={1}>{nextThing.title}</Text>
-                <View style={styles.nextArrow}>
-                  <IconChevronRight size={18} color={themeTokens.textMuted} />
-                </View>
-              </PressableScale>
-            ) : (
-              <Text style={styles.notesPlaceholder}>今天没有待办、提醒或快递需要处理。</Text>
-            )}
+            <Text style={styles.summaryLine} numberOfLines={1}>{statusSummaryLine(pendingCount, pendingPackages, todayExpenseCents)}</Text>
           </HomeCard>
         );
       case "quickAccounting":
@@ -334,12 +278,7 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQui
             key={id}
             testID="home-quick-accounting-card"
             {...common}
-            title={
-              <View>
-                <Text style={styles.widgetTitle}>快速记账</Text>
-                <Text style={styles.notesPlaceholder}>不进入记账页，直接记录一笔</Text>
-              </View>
-            }
+            title={<Text style={styles.widgetTitle}>快速记账</Text>}
             headerRight={
               <View style={styles.quickAccountingAmount}>
                 <Text style={styles.summaryLabel}>今日支出</Text>
@@ -374,26 +313,29 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQui
             }
           >
             {sortedHomeTodos.length === 0 ? (
-              <EmptyState
-                description="今天还没有安排，先加一件小事。"
-                icon={<IconChecklist size={34} color={themeTokens.text} />}
-                title="今天暂时没有安排"
-                tokens={themeTokens}
-                action={{ label: "＋ 添加待办", onPress: () => setViewState("todos") }}
-              />
+              <View style={styles.compactEmpty}>
+                <Text style={styles.emptyHint}>暂无待办</Text>
+                <PressableScale accessibilityRole="button" accessibilityLabel="添加待办" onPress={() => setViewState("todos")} style={styles.compactEmptyAction} wrapperStyle={{ width: "100%" }}>
+                  <Text style={styles.quickLink}>＋ 添加待办</Text>
+                </PressableScale>
+              </View>
             ) : (
               <View style={styles.todoPreviewList}>
-                {todoList.visibleItems.map((todo) => (
-                  <View key={todo.id} style={styles.todoRow}>
-                    <Pressable accessibilityRole="checkbox" accessibilityLabel={`${todo.completed ? "恢复" : "完成"}首页待办：${todo.title}`} accessibilityState={{ checked: todo.completed }} onPress={() => toggleHomeTodo(todo.id)} style={styles.todoCheckWrap}>
-                      <View style={[styles.todoCheck, todo.completed ? styles.todoCheckActive : null]}>{todo.completed ? <Text style={styles.todoCheckMark}>✓</Text> : null}</View>
-                    </Pressable>
-                    <View style={styles.todoTextButton}>
-                      <Text style={[styles.todoTitle, todo.completed ? styles.todoTitleDone : null]} numberOfLines={1}>{todo.title}</Text>
+                {todoList.visibleItems.map((todo) => {
+                  const tag = todoDateTag(todo, today);
+                  const tagTone = tag === "逾期" ? "#e0533d" : tag === "今天" ? themeTokens.accent : tag === "明天" ? "#3d7be0" : themeTokens.textMuted;
+                  return (
+                    <View key={todo.id} style={styles.todoRow}>
+                      <Pressable accessibilityRole="checkbox" accessibilityLabel={`${todo.completed ? "恢复" : "完成"}首页待办：${todo.title}`} accessibilityState={{ checked: todo.completed }} onPress={() => toggleHomeTodo(todo.id)} style={styles.todoCheckWrap}>
+                        <View style={[styles.todoCheck, todo.completed ? styles.todoCheckActive : null]}>{todo.completed ? <Text style={styles.todoCheckMark}>✓</Text> : null}</View>
+                      </Pressable>
+                      <View style={styles.todoTextButton}>
+                        <Text style={[styles.todoTitle, todo.completed ? styles.todoTitleDone : null]} numberOfLines={1}>{todo.title}</Text>
+                      </View>
+                      {tag ? <Text style={[styles.todoDateTag, { color: tagTone }]}>{tag}</Text> : null}
                     </View>
-                    <Text style={[styles.todoPriorityText, todo.completed ? styles.todoPriorityTextDone : null]}>{todoPriorityLabels[todo.priority]}</Text>
-                  </View>
-                ))}
+                  );
+                })}
                 <CollapsibleSectionFooter testID="home-todo-show-more" name="待办" expanded={todoList.expanded} hiddenCount={todoList.hiddenCount} onPress={todoList.toggle} tokens={themeTokens} visible={todoList.canExpand} />
               </View>
             )}
@@ -494,7 +436,20 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQui
         </View>
       ) : null}
 
-      {workingOrder.map((id) => renderHomeCard(id, !order.includes(id)))}
+      {workingOrder.map((id) => {
+        if (id === "quickAccounting" && workingOrder.includes("meal")) {
+          const qaHidden = !order.includes("quickAccounting");
+          const mealHidden = !order.includes("meal");
+          return (
+            <View key="quick-accounting-meal-row" style={styles.dualRow}>
+              <View style={styles.dualCell}>{renderHomeCard("quickAccounting", qaHidden, styles.dualCard)}</View>
+              <View style={styles.dualCell}>{renderHomeCard("meal", mealHidden, styles.dualCard)}</View>
+            </View>
+          );
+        }
+        if (id === "meal" && workingOrder.includes("quickAccounting")) return null;
+        return renderHomeCard(id, !order.includes(id));
+      })}
     </ScrollView>
   );
 }
@@ -694,6 +649,34 @@ function createStyles(tokens: UiTokens) {
     todoPreviewList: {
       gap: 7
     },
+    todoDateTag: {
+      backgroundColor: "#eef2ee",
+      borderRadius: 6,
+      fontSize: 10,
+      fontWeight: "900",
+      paddingHorizontal: 6,
+      paddingVertical: 2
+    },
+    compactEmptyAction: {
+      alignItems: "center",
+      backgroundColor: tokens.accentSoft,
+      borderRadius: 10,
+      justifyContent: "center",
+      minHeight: 34,
+      paddingHorizontal: 12
+    },
+    dualRow: {
+      flexDirection: "row",
+      gap: 12,
+      alignItems: "stretch"
+    },
+    dualCell: {
+      flex: 1,
+      minWidth: 0
+    },
+    dualCard: {
+      flex: 1
+    },
     todoPriorityText: {
       color: "#4f9d39",
       fontSize: 11,
@@ -782,43 +765,6 @@ function createStyles(tokens: UiTokens) {
       borderRadius: 999,
       height: 7,
       width: 7
-    },
-    nextThing: {
-      alignItems: "center",
-      backgroundColor: "#eef7ee",
-      borderRadius: 14,
-      flexDirection: "row",
-      gap: 12,
-      minHeight: 64,
-      paddingHorizontal: 14,
-      paddingVertical: 10
-    },
-    nextThingNear: {
-      backgroundColor: tokens.accentSoft
-    },
-    nextTime: {
-      alignItems: "center",
-      backgroundColor: "#ffffff",
-      borderRadius: 10,
-      flexDirection: "row",
-      gap: 5,
-      paddingHorizontal: 10,
-      paddingVertical: 7
-    },
-    nextTimeText: {
-      color: tokens.text,
-      fontSize: 14,
-      fontWeight: "900"
-    },
-    nextTitle: {
-      color: tokens.text,
-      flex: 1,
-      fontSize: 15,
-      fontWeight: "800",
-      minWidth: 0
-    },
-    nextArrow: {
-      flexShrink: 0
     },
     headerRight: {
       alignItems: "center",

@@ -100,7 +100,7 @@ describe("HomePanel layout (Phase 2)", () => {
   });
 
   it("restores a hidden non-core card via the show toggle", () => {
-    storage.data.set(ORDER_KEY, JSON.stringify(["summary", "nextThing", "quickAccounting", "todos", "meal"]));
+    storage.data.set(ORDER_KEY, JSON.stringify(["summary", "quickAccounting", "todos", "meal"]));
 
     render(<HomePanel themeTokens={testTokens} />);
     fireEvent.press(screen.getByRole("button", { name: "编辑首页" }));
