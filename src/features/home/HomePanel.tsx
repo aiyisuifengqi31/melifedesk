@@ -20,6 +20,10 @@ import { HomeCard } from "@/shared/ui/HomeCard";
 import { showUndoToast } from "@/shared/ui/UndoToast";
 import { NotesPanel } from "./NotesPanel";
 import { TodoPanel } from "@/features/plan/TodoPanel";
+import { ExpiryHomeCard } from "@/features/expiry/ExpiryHomeCard";
+import { ExpiryAddModal } from "@/features/expiry/ExpiryAddModal";
+import { hydrateExpiryFromCloud, loadExpiryItems, saveExpiryItems } from "@/features/expiry/expiryStorage";
+import { daysUntil, sortExpiryByUrgency, type ExpiryItem } from "@/features/expiry/expiryUtils";
 
 const MEAL_PRESET_COUNT = 8;
 
@@ -118,6 +122,8 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
   const [notes, setNotes] = useState(() => loadNotes());
   const [packages, setPackages] = useState<PackageItem[]>(() => loadPackages());
   const [reminders, setReminders] = useState<ReminderItem[]>(() => loadReminders());
+  const [expiryItems, setExpiryItems] = useState<ExpiryItem[]>(() => loadExpiryItems());
+  const [expiryModalOpen, setExpiryModalOpen] = useState(false);
   const [transactions, setTransactions] = useState<FinanceTransaction[]>(() => loadFinanceTransactions());
   const [viewState, setViewState] = useState<ViewState>("home");
   const [order, setOrder] = useState<HomeCardId[]>(() => loadHomeOrder());
@@ -165,6 +171,7 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
     hydratePackagesFromCloud().then((next) => !cancelled && setPackages(next)).catch(() => {});
     hydrateRemindersFromCloud().then((next) => !cancelled && setReminders(next)).catch(() => {});
     hydrateFinanceTransactionsFromCloud().then((next) => !cancelled && setTransactions(next)).catch(() => {});
+    hydrateExpiryFromCloud().then((next) => !cancelled && setExpiryItems(next)).catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -177,6 +184,7 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
       setNotes(loadNotes());
       setPackages(loadPackages());
       setReminders(loadReminders());
+      setExpiryItems(loadExpiryItems());
       setTransactions(loadFinanceTransactions());
     };
     window.addEventListener(QUICK_CAPTURE_DATA_EVENT, refresh);
@@ -189,6 +197,14 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
   const pendingPackages = packages.filter((item) => !item.pickedUp).length;
   const sortedHomeTodos = useMemo(() => sortHomeTodos(homeTodos, today), [homeTodos, today]);
   const todoList = useCollapsibleList(sortedHomeTodos);
+  const sortedExpiry = useMemo(() => sortExpiryByUrgency(expiryItems, today), [expiryItems, today]);
+  const expiringSoonCount = useMemo(
+    () => expiryItems.filter((item) => {
+      const remaining = daysUntil(item.expiryDate, today);
+      return remaining < 0 || remaining <= 7;
+    }).length,
+    [expiryItems, today]
+  );
   const todayExpenseCents = useMemo(() => {
     return transactions
       .filter((transaction) => transaction.transactionType === "expense" && transaction.localDate === today)
@@ -434,6 +450,19 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
               <Text style={styles.statusChipText}>{statusChip.text}</Text>
             </PressableScale>
           ) : null}
+          {expiringSoonCount > 0 ? (
+            <PressableScale
+              testID="home-expiry-badge"
+              accessibilityRole="button"
+              accessibilityLabel={`${expiringSoonCount} 项即将到期`}
+              onPress={() => router.push("/expiry")}
+              style={styles.expiryBadge}
+              wrapperStyle={styles.expiryBadgeWrap}
+            >
+              <View style={[styles.statusDot, { backgroundColor: themeTokens.danger ?? "#e57373" }]} />
+              <Text style={styles.expiryBadgeText}>{expiringSoonCount} 项即将到期</Text>
+            </PressableScale>
+          ) : null}
           <PressableScale
             testID="home-edit-toggle"
             accessibilityRole="button"
@@ -468,6 +497,23 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
         if (id === "meal" && workingOrder.includes("quickAccounting")) return null;
         return renderHomeCard(id, !order.includes(id));
       })}
+
+      <ExpiryHomeCard items={sortedExpiry} onAdd={() => setExpiryModalOpen(true)} tokens={themeTokens} testID="home-expiry-card" />
+
+      <ExpiryAddModal
+        visible={expiryModalOpen}
+        onCancel={() => setExpiryModalOpen(false)}
+        onSave={(item) => {
+          setExpiryItems((previous) => {
+            const exists = previous.some((entry) => entry.id === item.id);
+            const next = exists ? previous.map((entry) => (entry.id === item.id ? item : entry)) : [...previous, item];
+            saveExpiryItems(next);
+            return next;
+          });
+          setExpiryModalOpen(false);
+        }}
+        tokens={themeTokens}
+      />
     </ScrollView>
   );
 }
@@ -855,6 +901,23 @@ function createStyles(tokens: UiTokens) {
       borderRadius: 999,
       height: 7,
       width: 7
+    },
+    expiryBadge: {
+      alignItems: "center",
+      backgroundColor: tokens.accentSoft,
+      borderRadius: 999,
+      flexDirection: "row",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 7
+    },
+    expiryBadgeWrap: {
+      flexShrink: 0
+    },
+    expiryBadgeText: {
+      color: tokens.text,
+      fontSize: 13,
+      fontWeight: "900"
     },
     headerRight: {
       alignItems: "center",
