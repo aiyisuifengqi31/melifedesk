@@ -271,6 +271,63 @@ describe("WorkoutPanel interactions", () => {
     resolveSecondLoad({ data: [], error: null });
   });
 
+  it("shows cached partner workouts immediately before the refresh finishes", async () => {
+    let resolveLoad: (value: unknown) => void = () => undefined;
+    const storage = makeStorage();
+    storage.setItem("fanfan-guanguan.workouts.partner-cache.user-b", JSON.stringify([
+      {
+        createTime: "2026-08-10T08:00:00.000Z",
+        durationMinutes: 55,
+        id: "cached-partner-workout",
+        intensity: "moderate",
+        kcal: 0,
+        kcalSource: "manual",
+        parts: ["背"],
+        sessionDate: "2026-08-10",
+        status: "trained",
+        title: "背"
+      }
+    ]));
+    (listPartnerWorkoutSessions as jest.Mock).mockReturnValueOnce(new Promise((resolve) => {
+      resolveLoad = resolve;
+    }));
+    (loadLoveSharedValue as jest.Mock).mockReturnValueOnce(new Promise(() => undefined));
+
+    render(<WorkoutPanel storage={storage} />);
+    fireEvent.press(await screen.findByRole("button", { name: /TA/ }));
+
+    expect(screen.getByText("本周运动")).toBeOnTheScreen();
+    expect(screen.getByText("55 分钟")).toBeOnTheScreen();
+    expect(screen.queryByText("正在加载TA的运动数据…")).toBeNull();
+    resolveLoad({ data: [], error: null });
+  });
+
+  it("allows opening the partner tab from the cached partner id before binding RPC finishes", () => {
+    const storage = makeStorage();
+    storage.setItem("fanfan-guanguan.workouts.partner-user.v1", "user-b");
+    storage.setItem("fanfan-guanguan.workouts.partner-cache.user-b", JSON.stringify([
+      {
+        createTime: "2026-08-10T08:00:00.000Z",
+        durationMinutes: 35,
+        id: "cached-before-rpc",
+        intensity: "moderate",
+        kcal: 0,
+        kcalSource: "manual",
+        parts: ["肩"],
+        sessionDate: "2026-08-10",
+        status: "trained",
+        title: "肩"
+      }
+    ]));
+    mockRpc.mockImplementation(() => new Promise(() => undefined));
+
+    render(<WorkoutPanel storage={storage} />);
+    fireEvent.press(screen.getByRole("button", { name: "查看TA的运动" }));
+
+    expect(screen.getByText("本周运动")).toBeOnTheScreen();
+    expect(screen.getByText("35 分钟")).toBeOnTheScreen();
+  });
+
   it("uploads unsynced local workouts as couple-readable sessions when the user is bound", async () => {
     const storage = makeStorage();
     const localOnlyLog: WorkoutLog = {

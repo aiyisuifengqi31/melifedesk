@@ -15,6 +15,8 @@ import {
   ANNIVERSARY_KEY,
   DIARY_KEY,
   GIFT_KEY,
+  LOVE_FOLDER_KEY,
+  buildPhotoGroups,
   hydrateLoveFromCloud,
   saveAnniversaries,
   saveDiaries,
@@ -151,6 +153,41 @@ describe("cloud backed storage", () => {
     expect(hydrateLoveSharedValue).toHaveBeenCalledWith(DIARY_KEY, [diary], expect.any(Function));
     expect(hydrateLoveSharedValue).toHaveBeenCalledWith(ANNIVERSARY_KEY, [anniversary], expect.any(Function));
     expect(hydrateLoveSharedValue).toHaveBeenCalledWith(GIFT_KEY, [gift], expect.any(Function));
+    expect(hydrateLoveSharedValue).toHaveBeenCalledWith(LOVE_FOLDER_KEY, [], expect.any(Function));
+  });
+
+  it("groups photo wall images by the source folder and falls diary photos back to the diary album", () => {
+    const diaryFolder = { createTime: "2026-08-01T08:00:00.000Z", id: "folder-trip", name: "旅行" };
+    const grouped = buildPhotoGroups(
+      [
+        {
+          content: "with folder",
+          createTime: "2026-08-02T08:00:00.000Z",
+          date: "2026-08-02",
+          folderId: diaryFolder.id,
+          id: "diary-trip",
+          images: ["trip-photo"],
+          mood: "happy",
+          visibility: "couple_edit"
+        },
+        {
+          content: "without folder",
+          createTime: "2026-08-03T08:00:00.000Z",
+          date: "2026-08-03",
+          id: "diary-default",
+          images: ["diary-photo"],
+          mood: "happy",
+          visibility: "couple_edit"
+        }
+      ],
+      [],
+      [],
+      [diaryFolder]
+    );
+
+    expect(grouped.map((group) => group.title)).toEqual(["日记本", "旅行"]);
+    expect(grouped.find((group) => group.key === "folder-trip")?.photos[0].image).toBe("trip-photo");
+    expect(grouped.find((group) => group.key === "album-diary")?.photos[0].image).toBe("diary-photo");
   });
 
   it("syncs idiom check-ins through the cloud key-value store", async () => {

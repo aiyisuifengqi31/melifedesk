@@ -397,7 +397,7 @@ export function LovePanel({
     event.target.value = "";
   };
 
-  const groupedPhotos = useMemo(() => buildPhotoGroups(diaries, gifts, anniversaries), [diaries, gifts, anniversaries]);
+  const groupedPhotos = useMemo(() => buildPhotoGroups(diaries, gifts, anniversaries, folders), [anniversaries, diaries, folders, gifts]);
   const folderOptions = useMemo(() => [{ label: "未分类", value: "" }, ...folders.map((folder) => ({ label: folder.name, value: folder.id }))], [folders]);
   const diaryArchive = useMemo(
     () => filterDiaries(diaries, { dateFilter: diaryDateFilter, folderId: diaryFolderFilter, query: diarySearch, sort: diarySort, type: diaryTypeFilter }),
@@ -960,7 +960,13 @@ export function LovePanel({
           <>
           {photoList.visibleItems.map((group) => (
             <View key={group.key} style={styles.card}>
-              <Text style={styles.cardTitle}>{group.year} 年 {group.month} 月</Text>
+              <View style={styles.archiveHeader}>
+                <Text style={styles.cardTitle}>{group.title}</Text>
+                <Text style={styles.archiveCount}>{group.photos.length} 张</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="照片墙新建文件夹" onPress={() => setFolderDialogOpen(true)} style={styles.folderCreateButton}>
+                  <Text style={styles.folderCreateText}>+ 文件夹</Text>
+                </Pressable>
+              </View>
               <View style={styles.photoGrid}>
                 {group.photos.map((photo, index) => (
                   <Pressable
@@ -978,11 +984,11 @@ export function LovePanel({
           <CollapsibleSectionFooter
             expanded={photoList.expanded}
             hiddenCount={photoList.hiddenCount}
-            name="照片墙月份"
+            name="照片分组"
             onPress={photoList.toggle}
             testID="love-photo-show-more"
             tokens={themeTokens}
-            unit="个月"
+            unit="组"
             visible={photoList.canExpand}
           />
           </>
@@ -1332,14 +1338,15 @@ function startOfDay(date: Date) {
 type PhotoItem = {
   date: string;
   image: string;
+  key: string;
   source: { id: string; type: "diary" | "gift" | "anniversary" };
+  title: string;
 };
 
 type PhotoGroup = {
   key: string;
-  month: string;
   photos: PhotoItem[];
-  year: string;
+  title: string;
 };
 
 type ChoiceOption = {
@@ -1394,22 +1401,41 @@ function shouldUsePortal() {
   return Platform.OS === "web" && typeof document !== "undefined" && Boolean(document.body) && (typeof process === "undefined" || process.env.NODE_ENV !== "test");
 }
 
-function buildPhotoGroups(diaries: DiaryEntry[], gifts: GiftEntry[], anniversaries: AnniversaryEntry[]): PhotoGroup[] {
+export function buildPhotoGroups(diaries: DiaryEntry[], gifts: GiftEntry[], anniversaries: AnniversaryEntry[], folders: LoveFolder[] = []): PhotoGroup[] {
   const photos: PhotoItem[] = [];
+  const folderNames = new Map(folders.map((folder) => [folder.id, folder.name]));
 
   for (const diary of diaries) {
     for (const image of diary.images ?? []) {
-      photos.push({ date: diary.date, image, source: { id: diary.id, type: "diary" } });
+      photos.push({
+        date: diary.date,
+        image,
+        key: getPhotoGroupKey(diary.folderId, "album-diary"),
+        source: { id: diary.id, type: "diary" },
+        title: getPhotoGroupTitle(diary.folderId, folderNames, "日记本")
+      });
     }
   }
   for (const gift of gifts) {
     if (gift.image) {
-      photos.push({ date: gift.date, image: gift.image, source: { id: gift.id, type: "gift" } });
+      photos.push({
+        date: gift.date,
+        image: gift.image,
+        key: getPhotoGroupKey(gift.folderId, "album-gifts"),
+        source: { id: gift.id, type: "gift" },
+        title: getPhotoGroupTitle(gift.folderId, folderNames, "礼物")
+      });
     }
   }
   for (const anni of anniversaries) {
     if (anni.image) {
-      photos.push({ date: anni.date, image: anni.image, source: { id: anni.id, type: "anniversary" } });
+      photos.push({
+        date: anni.date,
+        image: anni.image,
+        key: "album-anniversary",
+        source: { id: anni.id, type: "anniversary" },
+        title: "纪念日"
+      });
     }
   }
 
@@ -1417,17 +1443,27 @@ function buildPhotoGroups(diaries: DiaryEntry[], gifts: GiftEntry[], anniversari
 
   const groups = new Map<string, PhotoGroup>();
   for (const photo of photos) {
-    const [year, month] = photo.date.split("-");
-    const key = `${year}-${month}`;
-    const existing = groups.get(key);
+    const existing = groups.get(photo.key);
     if (existing) {
       existing.photos.push(photo);
     } else {
-      groups.set(key, { key, month, photos: [photo], year });
+      groups.set(photo.key, { key: photo.key, photos: [photo], title: photo.title });
     }
   }
 
-  return Array.from(groups.values()).sort((left, right) => right.key.localeCompare(left.key));
+  return Array.from(groups.values()).sort((left, right) => newestPhotoDate(right).localeCompare(newestPhotoDate(left)));
+}
+
+function getPhotoGroupKey(folderId: string | null | undefined, fallback: string) {
+  return folderId || fallback;
+}
+
+function getPhotoGroupTitle(folderId: string | null | undefined, folderNames: Map<string, string>, fallback: string) {
+  return folderId ? folderNames.get(folderId) ?? fallback : fallback;
+}
+
+function newestPhotoDate(group: PhotoGroup) {
+  return group.photos[0]?.date ?? "";
 }
 
 const styles = StyleSheet.create({

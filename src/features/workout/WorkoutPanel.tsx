@@ -64,6 +64,8 @@ const dataTrendOptions: Array<{ label: string; value: DataTrendType }> = [
 ];
 const durationOptions = Array.from({ length: 36 }, (_, index) => (index + 1) * 5);
 const WORKOUT_SHARED_KEY_PREFIX = "fanfan-guanguan.workouts.shared.";
+const WORKOUT_PARTNER_USER_KEY = "fanfan-guanguan.workouts.partner-user.v1";
+const WORKOUT_PARTNER_CACHE_KEY_PREFIX = "fanfan-guanguan.workouts.partner-cache.";
 const logFilterOptions: Array<{ label: string; value: LogFilter }> = [
   { label: "全部", value: "all" },
   { label: "本月", value: "currentMonth" },
@@ -80,6 +82,7 @@ const todayIso = () => toLocalIso(new Date());
 
 export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const workoutStorage = useMemo(() => storage ?? getDefaultWorkoutStorage(), [storage]);
+  const cachedPartnerUserId = useMemo(() => loadCachedPartnerUserId(workoutStorage), [workoutStorage]);
   const [logs, setLogs] = useState<WorkoutLog[]>(() => sortWorkoutLogs(loadLocalWorkouts(workoutStorage)));
   const [bodyMetrics, setBodyMetrics] = useState<BodyMetricLog[]>(() => sortBodyMetrics(loadLocalBodyMetrics(workoutStorage)));
   const [bodyDate, setBodyDate] = useState(todayIso());
@@ -94,9 +97,9 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState("我的运动");
   const [activeCoupleId, setActiveCoupleId] = useState<string | null>(null);
-  const [partnerUserId, setPartnerUserId] = useState<string | null>(null);
+  const [partnerUserId, setPartnerUserId] = useState<string | null>(() => cachedPartnerUserId);
   const [partnershipResolved, setPartnershipResolved] = useState(false);
-  const [partnerLogs, setPartnerLogs] = useState<WorkoutLog[]>([]);
+  const [partnerLogs, setPartnerLogs] = useState<WorkoutLog[]>(() => cachedPartnerUserId ? loadCachedPartnerWorkouts(workoutStorage, cachedPartnerUserId) : []);
   const [partnerLoading, setPartnerLoading] = useState(false);
   const [partnerRefreshToken, setPartnerRefreshToken] = useState(0);
   const [selectedMetricPoint, setSelectedMetricPoint] = useState<BodyMetricLog | null>(null);
@@ -175,6 +178,13 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       if (cancelled) return;
       setActiveCoupleId(coupleId);
       setPartnerUserId(partnerId);
+      if (partnerId) {
+        saveCachedPartnerUserId(workoutStorage, partnerId);
+        setPartnerLogs((currentLogs) => currentLogs.length > 0 ? currentLogs : loadCachedPartnerWorkouts(workoutStorage, partnerId));
+      } else {
+        clearCachedPartnerUserId(workoutStorage);
+        setPartnerLogs([]);
+      }
       setPartnershipResolved(true);
       if (!partnerId) {
         setOwnerView("mine");
@@ -184,7 +194,7 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [workoutStorage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -230,6 +240,7 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       setPartnerLogs([]);
       return undefined;
     }
+    setPartnerLogs((currentLogs) => currentLogs.length > 0 ? currentLogs : loadCachedPartnerWorkouts(workoutStorage, partnerUserId));
     setPartnerLoading(true);
     void Promise.all([
       listPartnerWorkoutSessions(client, partnerUserId),
@@ -238,13 +249,15 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       if (cancelled) return;
       const remoteLogs = error || !Array.isArray(data) ? [] : data.map((row) => mapPartnerWorkoutRow(row));
       const normalizedSharedLogs = normalizeSharedWorkoutLogs(sharedLogs);
-      setPartnerLogs(mergeWorkoutLogs(remoteLogs, normalizedSharedLogs));
+      const nextLogs = mergeWorkoutLogs(remoteLogs, normalizedSharedLogs);
+      setPartnerLogs(nextLogs);
+      saveCachedPartnerWorkouts(workoutStorage, partnerUserId, nextLogs);
       setPartnerLoading(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [ownerView, partnerRefreshToken, partnerUserId]);
+  }, [ownerView, partnerRefreshToken, partnerUserId, workoutStorage]);
 
   useEffect(() => {
     const metricForDate = bodyMetrics.find((metric) => metric.recordDate === bodyDate) ?? latestBodyMetric;
@@ -707,7 +720,7 @@ function PartnerWorkoutReadOnly({
     <>
       <View style={styles.partnerHintRow}>
         <Text style={styles.partnerHintText}>🔒 TA的运动数据 · 只读</Text>
-        <Text style={styles.partnerHintText}>{loading ? "正在更新…" : formatPartnerTodayStatus(todayLogs)}</Text>
+        <Text style={styles.partnerHintText}>{formatPartnerTodayStatus(todayLogs)}</Text>
       </View>
 
       <View style={styles.card}>
@@ -854,6 +867,37 @@ async function uploadWorkoutLog(client: NonNullable<ReturnType<typeof getSupabas
 
 function getWorkoutSharedKey(userId: string) {
   return `${WORKOUT_SHARED_KEY_PREFIX}${userId}`;
+}
+
+function getWorkoutPartnerCacheKey(userId: string) {
+  return `${WORKOUT_PARTNER_CACHE_KEY_PREFIX}${userId}`;
+}
+
+function loadCachedPartnerUserId(storage: WorkoutStorage) {
+  const value = storage.getItem(WORKOUT_PARTNER_USER_KEY);
+  return value && value.trim() ? value : null;
+}
+
+function saveCachedPartnerUserId(storage: WorkoutStorage, userId: string) {
+  storage.setItem(WORKOUT_PARTNER_USER_KEY, userId);
+}
+
+function clearCachedPartnerUserId(storage: WorkoutStorage) {
+  storage.removeItem(WORKOUT_PARTNER_USER_KEY);
+}
+
+function loadCachedPartnerWorkouts(storage: WorkoutStorage, userId: string): WorkoutLog[] {
+  const raw = storage.getItem(getWorkoutPartnerCacheKey(userId));
+  if (!raw) return [];
+  try {
+    return normalizeSharedWorkoutLogs(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
+
+function saveCachedPartnerWorkouts(storage: WorkoutStorage, userId: string, logs: WorkoutLog[]) {
+  storage.setItem(getWorkoutPartnerCacheKey(userId), JSON.stringify(sortWorkoutLogs(logs)));
 }
 
 function normalizeSharedWorkoutLogs(value: unknown): WorkoutLog[] {
