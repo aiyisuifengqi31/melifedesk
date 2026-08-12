@@ -55,6 +55,16 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function todoDateIso(todo: TodoTask): string | null {
+  const value = todo.remindAt || todo.deadline || todo.createTime;
+  if (!value) return null;
+  return value.slice(0, 10);
+}
+
+function isTodoForToday(todo: TodoTask, today: string) {
+  return todoDateIso(todo) === today;
+}
+
 function formatToday(): string {
   const now = new Date();
   const weekDays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
@@ -203,13 +213,14 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQui
     return () => window.removeEventListener(QUICK_CAPTURE_DATA_EVENT, refresh);
   }, [todoStorage]);
 
-  const completedCount = todos.filter((todo) => todo.completed).length;
-  const pendingCount = todos.length - completedCount;
+  const today = todayIso();
+  const todayTodos = useMemo(() => todos.filter((todo) => isTodoForToday(todo, today)), [todos, today]);
+  const completedCount = todayTodos.filter((todo) => todo.completed).length;
+  const pendingCount = todayTodos.length - completedCount;
   const pendingPackages = packages.filter((item) => !item.pickedUp).length;
-  const sortedHomeTodos = useMemo(() => sortTodos(todos), [todos]);
+  const sortedHomeTodos = useMemo(() => sortTodos(todayTodos.filter((todo) => !todo.completed)), [todayTodos]);
   const todoList = useCollapsibleList(sortedHomeTodos);
   const todayExpenseCents = useMemo(() => {
-    const today = todayIso();
     return transactions
       .filter((transaction) => transaction.transactionType === "expense" && transaction.localDate === today)
       .reduce((sum, transaction) => sum + moneyToCents(transaction.amount), 0);
@@ -218,9 +229,9 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQui
   const statusChip = useMemo<{ text: string; icon: "check" | "dot"; onPress?: () => void } | null>(() => {
     if (pendingCount > 0) return { text: `还有 ${pendingCount} 项`, icon: "dot", onPress: () => setViewState("todos") };
     if (pendingPackages > 0) return { text: `${pendingPackages} 个待取快递`, icon: "dot", onPress: () => onOpenPackages?.() };
-    if (todos.length > 0) return { text: "今天已清空", icon: "check", onPress: () => setViewState("todos") };
+    if (todayTodos.length > 0) return { text: "今天已清空", icon: "check", onPress: () => setViewState("todos") };
     return { text: "今天很轻松", icon: "dot" };
-  }, [pendingCount, pendingPackages, todos.length, onOpenPackages]);
+  }, [pendingCount, pendingPackages, todayTodos.length, onOpenPackages]);
   const toggleHomeTodo = (todoId: string) => {
     const target = todos.find((todo) => todo.id === todoId);
     if (!target) return;
@@ -284,7 +295,7 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQui
         return (
           <HomeCard key={id} testID="home-summary-card" {...common} title={<Text style={styles.widgetTitle}>今日概览</Text>}>
             <View style={styles.summaryGrid}>
-              <OverviewItem label="今日待办" onPress={() => setViewState("todos")} styles={styles} value={<AnimatedNumber value={completedCount} format={(v) => `${Math.round(v)}/${todos.length}`} style={styles.summaryValue} />} />
+              <OverviewItem label="今日待办" onPress={() => setViewState("todos")} styles={styles} value={<AnimatedNumber value={pendingCount} format={(v) => `${Math.round(v)}`} style={styles.summaryValue} />} />
               <View style={styles.summaryDivider} />
               <OverviewItem label="待取快递" onPress={() => onOpenPackages?.()} styles={styles} value={<AnimatedNumber value={pendingPackages} format={(v) => `${Math.round(v)}`} style={styles.summaryValue} />} />
             </View>
@@ -353,7 +364,7 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQui
             title={
               <View style={styles.titleRow}>
                 <Text style={styles.widgetTitle}>今日待办</Text>
-                <TitleBadge>{`${completedCount}/${todos.length}`}</TitleBadge>
+                <TitleBadge>{`${pendingCount}`}</TitleBadge>
               </View>
             }
             headerRight={
@@ -362,7 +373,7 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenPlan, onOpenQui
               </PressableScale>
             }
           >
-            {todos.length === 0 ? (
+            {sortedHomeTodos.length === 0 ? (
               <EmptyState
                 description="今天还没有安排，先加一件小事。"
                 icon={<IconChecklist size={34} color={themeTokens.text} />}

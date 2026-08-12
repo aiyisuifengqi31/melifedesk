@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 
 import type { UiTokens } from "@/shared/ui/primitives";
 
@@ -137,13 +137,14 @@ describe("Todo route interactions", () => {
   });
 
   it("keeps daily todos out of navigation, toggles in the home card, and only opens from all", async () => {
+    const today = new Date().toISOString().slice(0, 10);
     const seeded: TodoTask = {
       completed: false,
-      createTime: "2026-07-31T08:00:00.000Z",
-      deadline: "2026-08-01T10:30:00.000Z",
+      createTime: `${today}T08:00:00.000Z`,
+      deadline: `${today}T10:30:00.000Z`,
       id: "task-1",
       priority: "urgent",
-      remindAt: "2026-08-01T09:30:00.000Z",
+      remindAt: `${today}T09:30:00.000Z`,
       title: "复盘页面交互"
     };
     saveLocalTodos([seeded], window.localStorage);
@@ -151,7 +152,7 @@ describe("Todo route interactions", () => {
     render(<HomePanel storage={window.localStorage} themeTokens={testTokens} />);
 
     expect(screen.getAllByText("今日待办").length).toBeGreaterThan(0);
-    expect(screen.getByText("复盘页面交互")).toBeOnTheScreen();
+    expect(screen.getAllByText("复盘页面交互").length).toBeGreaterThan(0);
     fireEvent.press(screen.getByRole("checkbox", { name: "完成首页待办：复盘页面交互" }));
     expect(loadLocalTodos(window.localStorage)[0]?.completed).toBe(true);
     expect(screen.queryByText("每日待办")).toBeNull();
@@ -161,6 +162,51 @@ describe("Todo route interactions", () => {
     expect(await screen.findByText("复盘页面交互")).toBeOnTheScreen();
     fireEvent.press(screen.getByRole("button", { name: "返回首页" }));
     expect(screen.getByText("今日概览")).toBeOnTheScreen();
+  });
+
+  it("hides completed today tasks from the home preview and overview reminder", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const seeded: TodoTask = {
+      completed: false,
+      createTime: `${today}T08:00:00.000Z`,
+      deadline: `${today}T10:30:00.000Z`,
+      id: "home-complete-1",
+      priority: "normal",
+      remindAt: `${today}T09:30:00.000Z`,
+      title: "completed-home-only"
+    };
+    saveLocalTodos([seeded], window.localStorage);
+
+    render(<HomePanel storage={window.localStorage} themeTokens={testTokens} />);
+
+    expect(within(screen.getByTestId("home-todo-widget")).getByText("completed-home-only")).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("checkbox", { name: /completed-home-only/ }));
+
+    expect(within(screen.getByTestId("home-todo-widget")).queryByText("completed-home-only")).toBeNull();
+    expect(within(screen.getByTestId("home-summary-card")).queryByText("1/1")).toBeNull();
+    expect(within(screen.getByTestId("home-todo-widget")).queryByText("1/1")).toBeNull();
+  });
+
+  it("keeps completed tasks from previous days out of the home todo card and today overview", async () => {
+    const oldTask: TodoTask = {
+      completed: true,
+      createTime: "2026-08-01T08:00:00.000Z",
+      deadline: "2026-08-01T10:30:00.000Z",
+      id: "old-completed-task",
+      priority: "normal",
+      remindAt: "2026-08-01T09:30:00.000Z",
+      title: "几天前完成的待办"
+    };
+    saveLocalTodos([oldTask], window.localStorage);
+
+    render(<HomePanel storage={window.localStorage} themeTokens={testTokens} />);
+
+    const todosCard = screen.getByTestId("home-todo-widget");
+    expect(within(screen.getByTestId("home-todo-widget")).getByText("0")).toBeOnTheScreen();
+    expect(screen.queryByText("几天前完成的待办")).toBeNull();
+    fireEvent.press(screen.getByRole("button", { name: "查看全部每日待办" }));
+    expect(await screen.findByText("几天前完成的待办")).toBeOnTheScreen();
+    expect(todosCard).toBeTruthy();
   });
 
   it("does not expose a standalone daily todo navigation tab", () => {
@@ -211,7 +257,7 @@ describe("Todo route interactions", () => {
 
     expect(screen.getByText("今日概览")).toBeOnTheScreen();
     expect(screen.queryByText("生活控制中心")).toBeNull();
-    expect(screen.getAllByText("1/2").length).toBeGreaterThan(0);
+    expect(within(screen.getByTestId("home-todo-widget")).getByText("1")).toBeOnTheScreen();
     expect(screen.getByText("待取快递")).toBeOnTheScreen();
     expect(screen.getAllByText("¥52.00").length).toBeGreaterThan(0);
     expect(screen.queryByText("金币")).toBeNull();
