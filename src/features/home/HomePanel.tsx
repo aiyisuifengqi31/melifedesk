@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { router } from "expo-router";
 
 import { hydrateFinanceTransactionsFromCloud, loadFinanceTransactions, type FinanceTransaction } from "@/features/finance/financeStorage";
 import { hydrateNotesFromCloud, loadNotes } from "@/features/home/notesStorage";
@@ -17,7 +18,6 @@ import { PressableScale } from "@/shared/ui/PressableScale";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { HomeCard } from "@/shared/ui/HomeCard";
 import { showUndoToast } from "@/shared/ui/UndoToast";
-import { MealSpinner } from "./MealSpinner";
 import { NotesPanel } from "./NotesPanel";
 import { TodoPanel } from "@/features/plan/TodoPanel";
 
@@ -120,7 +120,6 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
   const [reminders, setReminders] = useState<ReminderItem[]>(() => loadReminders());
   const [transactions, setTransactions] = useState<FinanceTransaction[]>(() => loadFinanceTransactions());
   const [viewState, setViewState] = useState<ViewState>("home");
-  const [mealOpen, setMealOpen] = useState(false);
   const [order, setOrder] = useState<HomeCardId[]>(() => loadHomeOrder());
   const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>(() => loadHomeCollapsed());
   const [editMode, setEditMode] = useState(false);
@@ -278,20 +277,25 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
             key={id}
             testID="home-quick-accounting-card"
             {...common}
-            title={<Text style={styles.widgetTitle}>快速记账</Text>}
-            headerRight={
-              <View style={styles.quickAccountingAmount}>
-                <Text style={styles.summaryLabel}>今日支出</Text>
-                <AnimatedNumber value={todayExpenseCents} format={(v) => `¥${centsToMoney(v)}`} style={styles.quickAccountingValue} />
+            title={
+              <View style={styles.qaTitleRow}>
+                <Text style={styles.widgetTitle}>快速记账</Text>
+                <View style={styles.qaAmountPill}>
+                  <Text style={styles.qaAmountLabel}>今日支出</Text>
+                  <AnimatedNumber value={todayExpenseCents} format={(v) => `¥${centsToMoney(v)}`} style={styles.qaAmountValue} />
+                </View>
               </View>
             }
           >
-            <PressableScale accessibilityRole="button" accessibilityLabel="快速记账：记一笔" onPress={() => onOpenQuickAccounting?.()} style={styles.quickAccountingButton} wrapperStyle={{ width: "100%" }} vibrate={12}>
-              <Text style={styles.quickAccountingButtonText}>＋ 记一笔</Text>
-            </PressableScale>
-            <PressableScale accessibilityRole="button" accessibilityLabel="查看账单" onPress={() => onOpenFinance?.()} style={styles.financeLink} wrapperStyle={{ alignSelf: "flex-end" }}>
-              <Text style={styles.widgetMoreText}>查看账单 →</Text>
-            </PressableScale>
+            <View style={styles.qaBody}>
+              <PressableScale accessibilityRole="button" accessibilityLabel="快速记账：记一笔" onPress={() => onOpenQuickAccounting?.()} style={styles.qaRecordButton} wrapperStyle={{ flex: 1 }} vibrate={12}>
+                <Text style={styles.qaRecordIcon}>＋</Text>
+                <Text style={styles.qaRecordLabel}>记一笔</Text>
+              </PressableScale>
+              <PressableScale accessibilityRole="button" accessibilityLabel="查看账单" onPress={() => onOpenFinance?.()} style={styles.qaBillLink} wrapperStyle={{ flexShrink: 0 }}>
+                <Text style={styles.qaBillText}>账单 →</Text>
+              </PressableScale>
+            </View>
           </HomeCard>
         );
       case "todos":
@@ -377,13 +381,27 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
                 <TitleBadge>{`${MEAL_PRESET_COUNT} 候选`}</TitleBadge>
               </View>
             }
-            headerRight={
-              <PressableScale testID="meal-spinner-compact-entry" accessibilityRole="button" accessibilityLabel="打开今天吃什么转盘" onPress={() => setMealOpen((value) => !value)} style={styles.widgetMore} wrapperStyle={{ flexShrink: 0 }}>
-                <Text style={styles.widgetMoreText}>{mealOpen ? "收起" : "去转盘 →"}</Text>
-              </PressableScale>
-            }
           >
-            {mealOpen ? <MealSpinner /> : null}
+            <PressableScale
+              testID="meal-spinner-compact-entry"
+              accessibilityRole="button"
+              accessibilityLabel="打开今天吃什么转盘"
+              onPress={() => router.push("/meal")}
+              style={styles.mealCardBody}
+              wrapperStyle={{ width: "100%" }}
+            >
+              <View style={styles.mealPreviewRow}>
+                {["火锅", "烧烤", "寿司", "汉堡"].map((item) => (
+                  <View key={item} style={styles.mealChip}>
+                    <Text style={styles.mealChipText}>{item}</Text>
+                  </View>
+                ))}
+                <Text style={styles.mealMoreHint}>…</Text>
+              </View>
+              <View style={styles.mealCtaRow}>
+                <Text style={styles.mealCtaText}>去转盘决定 →</Text>
+              </View>
+            </PressableScale>
           </HomeCard>
         );
       default:
@@ -551,31 +569,103 @@ function createStyles(tokens: UiTokens) {
     financeLink: {
       alignSelf: "flex-end"
     },
-    quickAccountingAmount: {
-      alignItems: "flex-end",
-      flexShrink: 0
+    /* ── 快速记账（双列美化版）── */
+    qaTitleRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 8
     },
-    quickAccountingButton: {
+    qaAmountPill: {
+      alignItems: "center",
+      backgroundColor: "#f0f5f0",
+      borderRadius: 999,
+      flexDirection: "row",
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 3
+    },
+    qaAmountLabel: {
+      color: "#6b8a6b",
+      fontSize: 11,
+      fontWeight: "800"
+    },
+    qaAmountValue: {
+      color: "#1f2937",
+      fontSize: 13,
+      fontWeight: "900"
+    },
+    qaBody: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 10
+    },
+    qaRecordButton: {
       alignItems: "center",
       backgroundColor: tokens.accent,
       borderRadius: 12,
+      flex: 1,
+      flexDirection: "row",
+      gap: 6,
       justifyContent: "center",
-      minHeight: 42
+      paddingVertical: 12
     },
-    quickAccountingButtonText: {
+    qaRecordIcon: {
       color: "#ffffff",
-      fontSize: 15,
+      fontSize: 18,
       fontWeight: "900"
     },
-    quickAccountingHeader: {
-      alignItems: "flex-start",
-      flexDirection: "row",
-      gap: 12,
-      justifyContent: "space-between"
+    qaRecordLabel: {
+      color: "#ffffff",
+      fontSize: 14,
+      fontWeight: "900"
     },
-    quickAccountingValue: {
-      color: tokens.text,
-      fontSize: 15,
+    qaBillLink: {
+      alignItems: "center",
+      backgroundColor: "#f0f5f0",
+      borderRadius: 12,
+      justifyContent: "center",
+      paddingHorizontal: 14,
+      paddingVertical: 12
+    },
+    qaBillText: {
+      color: "#4a7c4a",
+      fontSize: 13,
+      fontWeight: "900"
+    },
+    /* ── 今天吃什么（双列美化版）── */
+    mealCardBody: {
+      borderRadius: 12,
+      gap: 10,
+      padding: 4
+    },
+    mealPreviewRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6
+    },
+    mealChip: {
+      backgroundColor: "#eef5ee",
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 5
+    },
+    mealChipText: {
+      color: "#3d6b3d",
+      fontSize: 12,
+      fontWeight: "800"
+    },
+    mealMoreHint: {
+      color: "#9ab89a",
+      fontSize: 14,
+      fontWeight: "900",
+      lineHeight: 24
+    },
+    mealCtaRow: {
+      alignItems: "center"
+    },
+    mealCtaText: {
+      color: tokens.accent,
+      fontSize: 13,
       fontWeight: "900"
     },
     summaryCard: {
