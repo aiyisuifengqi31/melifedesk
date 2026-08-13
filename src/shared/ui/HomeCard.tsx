@@ -9,10 +9,14 @@ type HomeCardProps = {
   title: ReactNode;
   /** 标题右侧的附加内容（如「全部 →」、今日支出金额）。 */
   headerRight?: ReactNode;
-  collapsed: boolean;
-  /** 是否允许折叠（下一件事等单行卡片可置 false）。 */
-  collapsible: boolean;
-  onToggleCollapse: () => void;
+  /**
+   * 是否处于折叠态。折叠仅在 `collapsible === true` 时生效，
+   * 否则不论该值是什么正文始终展示（首页快捷卡用此语义彻底禁用折叠）。
+   */
+  collapsed?: boolean;
+  /** 是否允许折叠。默认 `false`：无 ⌄ 箭头、无 header 点击展开事件。 */
+  collapsible?: boolean;
+  onToggleCollapse?: () => void;
   editMode: boolean;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
@@ -115,7 +119,7 @@ export function HomeCard({
         ) : null}
       </View>
 
-      {editMode || !collapsed ? <View style={styles.body}>{children}</View> : null}
+      {editMode || !collapsible || !collapsed ? <View style={styles.body}>{children}</View> : null}
     </View>
   );
 }

@@ -293,6 +293,8 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
             key={id}
             testID="home-quick-accounting-card"
             {...common}
+            collapsible={false}
+            collapsed={false}
             title={<Text style={styles.widgetTitle}>快速记账</Text>}
           >
             <View style={styles.qaHero}>
@@ -305,19 +307,19 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
                 accessibilityRole="button"
                 onPress={() => onOpenQuickAccounting?.()}
                 style={styles.qaPrimaryButton}
-                wrapperStyle={styles.qaButtonWrap}
+                wrapperStyle={styles.qaPrimaryWrap}
                 vibrate={12}
               >
-                <Text style={styles.qaPrimaryText}>＋ 记一笔</Text>
+                <Text numberOfLines={1} style={styles.qaPrimaryText}>＋ 记一笔</Text>
               </PressableScale>
               <PressableScale
                 accessibilityLabel="账单"
                 accessibilityRole="button"
                 onPress={() => onOpenFinance?.()}
                 style={styles.qaSecondaryButton}
-                wrapperStyle={styles.qaButtonWrap}
+                wrapperStyle={styles.qaSecondaryWrap}
               >
-                <Text style={styles.qaSecondaryText}>账单</Text>
+                <Text numberOfLines={1} style={styles.qaSecondaryText}>账单</Text>
               </PressableScale>
             </View>
           </HomeCard>
@@ -399,6 +401,8 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
             key={id}
             testID="home-meal-card"
             {...common}
+            collapsible={false}
+            collapsed={false}
             title={
               <Pressable
                 accessibilityLabel="打开今天吃什么转盘"
@@ -416,8 +420,8 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
               style={styles.mealCardBody}
               testID="meal-spinner-compact-entry"
             >
-              <Text style={styles.mealCount}>{`${MEAL_PRESET_COUNT} 个候选`}</Text>
-              <Text style={styles.mealCta}>去转盘 →</Text>
+              <Text numberOfLines={1} style={styles.mealCount}>{`${MEAL_PRESET_COUNT} 个候选`}</Text>
+              <Text numberOfLines={1} style={styles.mealCta}>去转盘 →</Text>
             </Pressable>
           </HomeCard>
         );
@@ -622,7 +626,7 @@ function createStyles(tokens: UiTokens) {
     },
     qaAmountHero: {
       color: tokens.text,
-      fontSize: 24,
+      fontSize: 22,
       fontWeight: "900"
     },
     qaHeroLabel: {
@@ -631,12 +635,15 @@ function createStyles(tokens: UiTokens) {
       fontWeight: "800"
     },
     qaActions: {
-      alignItems: "center",
+      alignItems: "stretch",
       flexDirection: "row",
-      gap: 10
+      gap: 6
     },
-    qaButtonWrap: {
-      flex: 1
+    qaPrimaryWrap: {
+      flex: 1.5
+    },
+    qaSecondaryWrap: {
+      flex: 0.7
     },
     qaPrimaryButton: {
       alignItems: "center",
@@ -644,10 +651,12 @@ function createStyles(tokens: UiTokens) {
       borderRadius: 12,
       justifyContent: "center",
       minHeight: 40,
-      paddingVertical: 10
+      paddingHorizontal: 4,
+      paddingVertical: 9
     },
     qaPrimaryText: {
       color: "#ffffff",
+      flexShrink: 0,
       fontSize: 14,
       fontWeight: "900"
     },
@@ -657,10 +666,12 @@ function createStyles(tokens: UiTokens) {
       borderRadius: 12,
       justifyContent: "center",
       minHeight: 40,
-      paddingVertical: 10
+      paddingHorizontal: 4,
+      paddingVertical: 9
     },
     qaSecondaryText: {
       color: tokens.accent,
+      flexShrink: 0,
       fontSize: 14,
       fontWeight: "900"
     },
@@ -668,16 +679,18 @@ function createStyles(tokens: UiTokens) {
     mealCardBody: {
       alignItems: "flex-start",
       flex: 1,
-      gap: 8,
-      justifyContent: "center"
+      justifyContent: "space-between",
+      paddingTop: 2
     },
     mealCount: {
       color: tokens.textMuted,
+      flexShrink: 0,
       fontSize: 13,
       fontWeight: "800"
     },
     mealCta: {
       color: tokens.accent,
+      flexShrink: 0,
       fontSize: 16,
       fontWeight: "900"
     },
@@ -779,7 +792,7 @@ function createStyles(tokens: UiTokens) {
     },
     dualCard: {
       flex: 1,
-      minHeight: 168
+      minHeight: 150
     },
     todoPriorityText: {
       color: "#4f9d39",
