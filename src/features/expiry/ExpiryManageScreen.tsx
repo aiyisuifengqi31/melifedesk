@@ -322,7 +322,10 @@ function createStyles(tokens: UiTokens) {
     },
     filterRow: {
       flexDirection: "row",
-      gap: 8
+      gap: 8,
+      paddingBottom: 12,
+      paddingHorizontal: 16,
+      paddingTop: 14
     },
     header: {
       alignItems: "center",
@@ -349,7 +352,8 @@ function createStyles(tokens: UiTokens) {
       width: 32
     },
     page: {
-      flex: 1
+      flex: 1,
+      paddingTop: "env(safe-area-inset-top, 0px)" as unknown as number
     },
     popoverBackdrop: {
       backgroundColor: "rgba(0, 0, 0, 0.25)",

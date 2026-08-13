@@ -626,7 +626,7 @@ function createStyles(tokens: UiTokens) {
     },
     qaAmountHero: {
       color: tokens.text,
-      fontSize: 22,
+      fontSize: 20,
       fontWeight: "900"
     },
     qaHeroLabel: {
@@ -640,10 +640,13 @@ function createStyles(tokens: UiTokens) {
       gap: 6
     },
     qaPrimaryWrap: {
-      flex: 1.5
+      flex: 3,
+      minWidth: 0
     },
     qaSecondaryWrap: {
-      flex: 0.7
+      flex: 1,
+      flexShrink: 0,
+      minWidth: 76
     },
     qaPrimaryButton: {
       alignItems: "center",
@@ -666,7 +669,7 @@ function createStyles(tokens: UiTokens) {
       borderRadius: 12,
       justifyContent: "center",
       minHeight: 40,
-      paddingHorizontal: 4,
+      paddingHorizontal: 12,
       paddingVertical: 9
     },
     qaSecondaryText: {
@@ -679,19 +682,19 @@ function createStyles(tokens: UiTokens) {
     mealCardBody: {
       alignItems: "flex-start",
       flex: 1,
-      justifyContent: "space-between",
-      paddingTop: 2
+      justifyContent: "center",
+      paddingTop: 4
     },
     mealCount: {
       color: tokens.textMuted,
       flexShrink: 0,
-      fontSize: 13,
+      fontSize: 14,
       fontWeight: "800"
     },
     mealCta: {
       color: tokens.accent,
       flexShrink: 0,
-      fontSize: 16,
+      fontSize: 17,
       fontWeight: "900"
     },
     summaryCard: {
@@ -792,7 +795,7 @@ function createStyles(tokens: UiTokens) {
     },
     dualCard: {
       flex: 1,
-      minHeight: 150
+      minHeight: 148
     },
     todoPriorityText: {
       color: "#4f9d39",

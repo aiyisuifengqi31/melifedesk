@@ -96,10 +96,15 @@ function createStyles(tokens: UiTokens) {
       borderColor: tokens.border,
       borderRadius: 14,
       borderWidth: 1.5,
+      // RN-Web 的 ViewStyle 类型不接受 "none"，但运行时会写到 input/textarea 的 CSS outline 上以去除浏览器默认 focus ring
+      boxShadow: "none",
       color: tokens.text,
       fontSize: 14,
       minHeight: 48,
       minWidth: 0,
+      outlineColor: "transparent",
+      outlineStyle: "none" as unknown as "solid",
+      outlineWidth: 0,
       paddingHorizontal: 12,
       paddingVertical: 10
     },

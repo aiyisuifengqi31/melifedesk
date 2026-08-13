@@ -288,17 +288,22 @@ export function ExpiryAddModal({ editingItem, onCancel, onDelete, onSave, tokens
 function createStyles(tokens: UiTokens) {
   return StyleSheet.create({
     backdrop: {
+      alignItems: "center",
       backgroundColor: "rgba(0, 0, 0, 0.35)",
-      flex: 1
+      flex: 1,
+      justifyContent: "center",
+      paddingBottom: 24,
+      paddingHorizontal: 16,
+      paddingTop: "max(28px, calc(env(safe-area-inset-top, 0px) + 28px))" as unknown as number
     },
     card: {
-      alignSelf: "center",
+      alignSelf: "stretch",
       borderRadius: 22,
-      gap: 12,
-      maxHeight: "88%",
+      gap: 10,
+      maxHeight: "82dvh" as unknown as number,
       maxWidth: 460,
-      padding: 16,
-      width: "90%"
+      padding: 14,
+      width: "100%"
     },
     closeButton: {
       alignItems: "center",
@@ -333,7 +338,7 @@ function createStyles(tokens: UiTokens) {
       flex: 1,
       fontSize: 14,
       fontWeight: "800",
-      minHeight: 44,
+      minHeight: 40,
       paddingHorizontal: 12
     },
     customRow: {
@@ -368,7 +373,7 @@ function createStyles(tokens: UiTokens) {
       alignItems: "center",
       borderRadius: 12,
       justifyContent: "center",
-      paddingVertical: 12,
+      paddingVertical: 10,
       flex: 1
     },
     footerSpacer: {
@@ -442,7 +447,7 @@ function createStyles(tokens: UiTokens) {
       borderRadius: 999,
       borderWidth: 1,
       paddingHorizontal: 12,
-      paddingVertical: 8
+      paddingVertical: 6
     },
     reminderChipText: {
       fontSize: 13,
@@ -454,8 +459,8 @@ function createStyles(tokens: UiTokens) {
       gap: 8
     },
     scroll: {
-      gap: 14,
-      paddingVertical: 4
+      gap: 12,
+      paddingVertical: 2
     },
     selectButton: {
       alignItems: "center",
@@ -465,7 +470,7 @@ function createStyles(tokens: UiTokens) {
       borderWidth: 1.5,
       flexDirection: "row",
       justifyContent: "space-between",
-      minHeight: 48,
+      minHeight: 44,
       paddingHorizontal: 12
     },
     selectValue: {
