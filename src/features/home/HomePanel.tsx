@@ -293,23 +293,31 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
             key={id}
             testID="home-quick-accounting-card"
             {...common}
-            title={
-              <View style={styles.qaTitleRow}>
-                <Text style={styles.widgetTitle}>快速记账</Text>
-                <View style={styles.qaAmountPill}>
-                  <Text style={styles.qaAmountLabel}>今日支出</Text>
-                  <AnimatedNumber value={todayExpenseCents} format={(v) => `¥${centsToMoney(v)}`} style={styles.qaAmountValue} />
-                </View>
-              </View>
-            }
+            title={<Text style={styles.widgetTitle}>快速记账</Text>}
           >
-            <View style={styles.qaBody}>
-              <PressableScale accessibilityRole="button" accessibilityLabel="快速记账：记一笔" onPress={() => onOpenQuickAccounting?.()} style={styles.qaRecordButton} wrapperStyle={{ flex: 1 }} vibrate={12}>
-                <Text style={styles.qaRecordIcon}>＋</Text>
-                <Text style={styles.qaRecordLabel}>记一笔</Text>
+            <View style={styles.qaHero}>
+              <AnimatedNumber value={todayExpenseCents} format={(v) => `¥${centsToMoney(v)}`} style={styles.qaAmountHero} />
+              <Text style={styles.qaHeroLabel}>今日支出</Text>
+            </View>
+            <View style={styles.qaActions}>
+              <PressableScale
+                accessibilityLabel="快速记账：记一笔"
+                accessibilityRole="button"
+                onPress={() => onOpenQuickAccounting?.()}
+                style={styles.qaPrimaryButton}
+                wrapperStyle={styles.qaButtonWrap}
+                vibrate={12}
+              >
+                <Text style={styles.qaPrimaryText}>＋ 记一笔</Text>
               </PressableScale>
-              <PressableScale accessibilityRole="button" accessibilityLabel="查看账单" onPress={() => onOpenFinance?.()} style={styles.qaBillLink} wrapperStyle={{ flexShrink: 0 }}>
-                <Text style={styles.qaBillText}>账单 →</Text>
+              <PressableScale
+                accessibilityLabel="账单"
+                accessibilityRole="button"
+                onPress={() => onOpenFinance?.()}
+                style={styles.qaSecondaryButton}
+                wrapperStyle={styles.qaButtonWrap}
+              >
+                <Text style={styles.qaSecondaryText}>账单</Text>
               </PressableScale>
             </View>
           </HomeCard>
@@ -392,32 +400,25 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
             testID="home-meal-card"
             {...common}
             title={
-              <View style={styles.titleRow}>
+              <Pressable
+                accessibilityLabel="打开今天吃什么转盘"
+                accessibilityRole="button"
+                onPress={() => router.push("/meal")}
+              >
                 <Text style={styles.widgetTitle}>今天吃什么</Text>
-                <TitleBadge>{`${MEAL_PRESET_COUNT} 候选`}</TitleBadge>
-              </View>
+              </Pressable>
             }
           >
-            <PressableScale
-              testID="meal-spinner-compact-entry"
-              accessibilityRole="button"
+            <Pressable
               accessibilityLabel="打开今天吃什么转盘"
+              accessibilityRole="button"
               onPress={() => router.push("/meal")}
               style={styles.mealCardBody}
-              wrapperStyle={{ width: "100%" }}
+              testID="meal-spinner-compact-entry"
             >
-              <View style={styles.mealPreviewRow}>
-                {["火锅", "烧烤", "寿司", "汉堡"].map((item) => (
-                  <View key={item} style={styles.mealChip}>
-                    <Text style={styles.mealChipText}>{item}</Text>
-                  </View>
-                ))}
-                <Text style={styles.mealMoreHint}>…</Text>
-              </View>
-              <View style={styles.mealCtaRow}>
-                <Text style={styles.mealCtaText}>去转盘决定 →</Text>
-              </View>
-            </PressableScale>
+              <Text style={styles.mealCount}>{`${MEAL_PRESET_COUNT} 个候选`}</Text>
+              <Text style={styles.mealCta}>去转盘 →</Text>
+            </Pressable>
           </HomeCard>
         );
       default:
@@ -615,103 +616,69 @@ function createStyles(tokens: UiTokens) {
     financeLink: {
       alignSelf: "flex-end"
     },
-    /* ── 快速记账（双列美化版）── */
-    qaTitleRow: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: 8
+    /* ── 快速记账（紧凑两卡版）── */
+    qaHero: {
+      gap: 2
     },
-    qaAmountPill: {
-      alignItems: "center",
-      backgroundColor: "#f0f5f0",
-      borderRadius: 999,
-      flexDirection: "row",
-      gap: 4,
-      paddingHorizontal: 10,
-      paddingVertical: 3
-    },
-    qaAmountLabel: {
-      color: "#6b8a6b",
-      fontSize: 11,
-      fontWeight: "800"
-    },
-    qaAmountValue: {
-      color: "#1f2937",
-      fontSize: 13,
+    qaAmountHero: {
+      color: tokens.text,
+      fontSize: 24,
       fontWeight: "900"
     },
-    qaBody: {
+    qaHeroLabel: {
+      color: tokens.textMuted,
+      fontSize: 12,
+      fontWeight: "800"
+    },
+    qaActions: {
       alignItems: "center",
       flexDirection: "row",
       gap: 10
     },
-    qaRecordButton: {
+    qaButtonWrap: {
+      flex: 1
+    },
+    qaPrimaryButton: {
       alignItems: "center",
       backgroundColor: tokens.accent,
       borderRadius: 12,
-      flex: 1,
-      flexDirection: "row",
-      gap: 6,
       justifyContent: "center",
-      paddingVertical: 12
+      minHeight: 40,
+      paddingVertical: 10
     },
-    qaRecordIcon: {
-      color: "#ffffff",
-      fontSize: 18,
-      fontWeight: "900"
-    },
-    qaRecordLabel: {
+    qaPrimaryText: {
       color: "#ffffff",
       fontSize: 14,
       fontWeight: "900"
     },
-    qaBillLink: {
+    qaSecondaryButton: {
       alignItems: "center",
-      backgroundColor: "#f0f5f0",
+      backgroundColor: tokens.accentSoft,
       borderRadius: 12,
       justifyContent: "center",
-      paddingHorizontal: 14,
-      paddingVertical: 12
+      minHeight: 40,
+      paddingVertical: 10
     },
-    qaBillText: {
-      color: "#4a7c4a",
-      fontSize: 13,
+    qaSecondaryText: {
+      color: tokens.accent,
+      fontSize: 14,
       fontWeight: "900"
     },
-    /* ── 今天吃什么（双列美化版）── */
+    /* ── 今天吃什么（紧凑两卡版）── */
     mealCardBody: {
-      borderRadius: 12,
-      gap: 10,
-      padding: 4
+      alignItems: "flex-start",
+      flex: 1,
+      gap: 8,
+      justifyContent: "center"
     },
-    mealPreviewRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 6
-    },
-    mealChip: {
-      backgroundColor: "#eef5ee",
-      borderRadius: 999,
-      paddingHorizontal: 10,
-      paddingVertical: 5
-    },
-    mealChipText: {
-      color: "#3d6b3d",
-      fontSize: 12,
+    mealCount: {
+      color: tokens.textMuted,
+      fontSize: 13,
       fontWeight: "800"
     },
-    mealMoreHint: {
-      color: "#9ab89a",
-      fontSize: 14,
-      fontWeight: "900",
-      lineHeight: 24
-    },
-    mealCtaRow: {
-      alignItems: "center"
-    },
-    mealCtaText: {
+    mealCta: {
       color: tokens.accent,
-      fontSize: 13,
+      fontSize: 16,
       fontWeight: "900"
     },
     summaryCard: {
@@ -811,7 +778,8 @@ function createStyles(tokens: UiTokens) {
       minWidth: 0
     },
     dualCard: {
-      flex: 1
+      flex: 1,
+      minHeight: 168
     },
     todoPriorityText: {
       color: "#4f9d39",
@@ -872,6 +840,7 @@ function createStyles(tokens: UiTokens) {
     },
     widgetTitle: {
       color: tokens.text,
+      flexShrink: 0,
       fontSize: 16,
       fontWeight: "900"
     },
