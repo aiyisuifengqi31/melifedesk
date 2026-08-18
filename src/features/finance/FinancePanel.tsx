@@ -8,12 +8,13 @@ import { ButtonFormField, TextFormField } from "@/shared/ui/FormField";
 import { MobileFormLayout, MobileFormRow } from "@/shared/ui/MobileFormLayout";
 import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
 import { StatusSticker } from "@/shared/ui/StatusSticker";
+import { BalanceSummaryCard } from "@/shared/ui/SummaryCard";
 import { IconPiggyBank, IconWalletCards } from "@/shared/ui/lineIcons";
 import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { CategoryLineIcon } from "@/features/finance/QuickAccountingSheet";
 import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
-import { buildMonthlyFinanceOverview, type MonthComparisonResult, type TransactionType } from "@/features/finance/financeService";
+import { buildMonthlyFinanceOverview, type TransactionType } from "@/features/finance/financeService";
 import {
   createFinanceId,
   getDefaultFinanceStorage,
@@ -654,7 +655,44 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
 
       {tab === "stats" ? (
         <>
-          <MonthlyFinanceOverviewCard overview={monthlyOverview} />
+          <View style={styles.overviewCard}>
+            <View pointerEvents="none" style={styles.pageWatermark}>
+              <IconWalletCards color="#111827" size={82} />
+            </View>
+            <View testID="finance-summary-panel" style={styles.overviewMetricStack}>
+              <View testID="finance-metric-本月结余" style={styles.balanceMetricWrap}>
+                <BalanceSummaryCard
+                  expense={`¥${monthlyOverview.expense.amount}`}
+                  income={`¥${monthlyOverview.income.amount}`}
+                  title="本月结余"
+                  tokens={themeTokens}
+                  value={`¥${monthlyOverview.balance.amount}`}
+                />
+              </View>
+            </View>
+          </View>
+          <View style={styles.card}>
+            <View style={styles.categorySectionHeader}>
+              <Text style={styles.cardTitle}>支出分类</Text>
+              <Text style={styles.categorySectionHint}>{monthlyOverview.monthLabel}</Text>
+            </View>
+            {monthlyOverview.categoryShares.length === 0 ? <Text style={styles.emptyText}>暂无支出分类数据。</Text> : monthlyOverview.categoryShares.map((share, index) => {
+              const color = getCategoryColor(share.categoryName, index);
+              const percent = Math.round(share.ratio * 100);
+              return (
+                <View key={share.categoryName} style={styles.shareRow}>
+                  <View style={[styles.shareDot, { backgroundColor: color }]} />
+                  <Text numberOfLines={2} style={styles.shareName}>{share.categoryName}</Text>
+                  <View style={styles.shareTrack}>
+                    <View style={[styles.shareFill, { width: `${percent}%`, backgroundColor: color }]} />
+                  </View>
+                  <Text style={[styles.sharePercent, { color }]}>{percent}%</Text>
+                  <Text style={[styles.shareAmount, { color }]}>¥{share.amount}</Text>
+                </View>
+              );
+            })}
+            {monthlyOverview.categoryShares.length > 0 ? <CategoryPieChart shares={monthlyOverview.categoryShares} /> : null}
+          </View>
           <View style={styles.card}>
             <View style={styles.detailTabs}>
               <Pressable accessibilityRole="button" accessibilityLabel="支出明细" onPress={() => {
@@ -911,78 +949,6 @@ function TabButton({ active, label, onPress }: { active: boolean; label: string;
       <Text style={[styles.tabText, active ? styles.tabTextActive : null]}>{label}</Text>
     </Pressable>
   );
-}
-
-type MonthlyFinanceOverview = ReturnType<typeof buildMonthlyFinanceOverview>;
-
-function MonthlyFinanceOverviewCard({ overview }: { overview: MonthlyFinanceOverview }) {
-  return (
-    <View testID="finance-monthly-overview-card" style={styles.monthlyOverviewCard}>
-      <View pointerEvents="none" style={styles.pageWatermark}>
-        <IconWalletCards color="#111827" size={82} />
-      </View>
-      <Text style={styles.monthlyOverviewTitle}>{overview.monthLabel}收支概览</Text>
-      <View style={styles.monthlyCoreGrid}>
-        <View testID="finance-metric-本月结余" style={styles.balanceHero}>
-          <Text style={styles.overviewMetricLabel}>本月结余</Text>
-          <Text numberOfLines={1} style={[styles.balanceHeroAmount, Number(overview.balance.amount) < 0 ? styles.balanceHeroAmountNegative : null]}>¥{overview.balance.amount}</Text>
-          <MonthComparison comparison={overview.balance.comparison} />
-        </View>
-        <View style={styles.monthlySideMetrics}>
-          <OverviewMiniMetric amount={overview.income.amount} comparison={overview.income.comparison} label="收入" tone="income" />
-          <OverviewMiniMetric amount={overview.expense.amount} comparison={overview.expense.comparison} label="支出" tone="expense" />
-        </View>
-      </View>
-      <View style={styles.overviewDivider} />
-      <View style={styles.categorySectionHeader}>
-        <Text style={styles.categorySectionTitle}>支出分类</Text>
-        <Text style={styles.categorySectionHint}>完整月份统计</Text>
-      </View>
-      {overview.categoryShares.length === 0 ? (
-        <Text style={styles.emptyText}>这个月还没有支出分类数据。</Text>
-      ) : (
-        <View style={styles.categoryDistribution}>
-          <View style={styles.categoryShareList}>
-            {overview.categoryShares.map((share, index) => {
-              const color = getCategoryColor(share.categoryName, index);
-              const percent = Math.round(share.ratio * 100);
-              return (
-                <View key={share.categoryName} style={styles.compactShareRow}>
-                  <View style={[styles.shareDot, { backgroundColor: color }]} />
-                  <Text style={styles.compactShareName}>{share.categoryName}</Text>
-                  <Text style={styles.compactSharePercent}>{percent}%</Text>
-                  <Text style={styles.compactShareAmount}>¥{share.amount}</Text>
-                </View>
-              );
-            })}
-          </View>
-          <CategoryPieChart shares={overview.categoryShares} />
-        </View>
-      )}
-    </View>
-  );
-}
-
-function OverviewMiniMetric({ amount, comparison, label, tone }: { amount: string; comparison: MonthComparisonResult; label: string; tone: "expense" | "income" }) {
-  return (
-    <View style={styles.overviewMiniMetric}>
-      <Text style={styles.overviewMetricLabel}>{label}</Text>
-      <Text numberOfLines={1} style={[styles.overviewMiniAmount, tone === "income" ? styles.overviewMiniAmountIncome : styles.overviewMiniAmountExpense]}>¥{amount}</Text>
-      <MonthComparison comparison={comparison} />
-    </View>
-  );
-}
-
-function MonthComparison({ comparison }: { comparison: MonthComparisonResult }) {
-  const toneStyle =
-    comparison.tone === "up"
-      ? styles.comparisonUp
-      : comparison.tone === "down"
-        ? styles.comparisonDown
-        : comparison.tone === "flat"
-          ? styles.comparisonFlat
-          : styles.comparisonMuted;
-  return <Text numberOfLines={1} style={[styles.monthComparison, toneStyle]}>{comparison.label}</Text>;
 }
 
 type SavingStats = {
@@ -1348,7 +1314,7 @@ function FinanceStatementList({
           </Pressable>
           <Text style={styles.statementMeta}>{summaryLabel} ¥{total} · {transactions.length} 笔</Text>
           {monthMenuOpen ? (
-            <View style={styles.monthMenu}>
+            <View testID="finance-month-menu" style={styles.monthMenu}>
               {months.map((item) => (
                 <Pressable
                   key={item}
@@ -1516,7 +1482,9 @@ function GiftItem({ onDelete, record }: { onDelete: (giftId: string) => void; re
   );
 }
 
-function CategoryPieChart({ shares }: { shares: MonthlyFinanceOverview["categoryShares"] }) {
+type MonthlyCategoryShares = ReturnType<typeof buildMonthlyFinanceOverview>["categoryShares"];
+
+function CategoryPieChart({ shares }: { shares: MonthlyCategoryShares }) {
   const size = 110;
   const radius = 36;
   const stroke = 18;
@@ -2758,8 +2726,9 @@ const styles = StyleSheet.create({
   },
   shareName: {
     color: "#111827",
+    flexShrink: 0,
     fontWeight: "900",
-    width: 56
+    width: 86
   },
   sharePercent: {
     fontWeight: "900",
@@ -2865,7 +2834,8 @@ const styles = StyleSheet.create({
   statementHeader: {
     alignItems: "center",
     flexDirection: "row",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    zIndex: 180
   },
   statementMonthBlock: {
     flex: 1,
@@ -2886,7 +2856,7 @@ const styles = StyleSheet.create({
     borderColor: "#e3e8ef",
     borderRadius: 14,
     borderWidth: 1,
-    elevation: 8,
+    elevation: 16,
     gap: 3,
     left: 0,
     maxHeight: 230,
@@ -2894,7 +2864,7 @@ const styles = StyleSheet.create({
     padding: 6,
     position: "absolute",
     top: 40,
-    zIndex: 40
+    zIndex: 200
   },
   monthMenuItem: {
     borderRadius: 10,
