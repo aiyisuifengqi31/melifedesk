@@ -8,13 +8,12 @@ import { ButtonFormField, TextFormField } from "@/shared/ui/FormField";
 import { MobileFormLayout, MobileFormRow } from "@/shared/ui/MobileFormLayout";
 import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
 import { StatusSticker } from "@/shared/ui/StatusSticker";
-import { BalanceSummaryCard, SummaryCard } from "@/shared/ui/SummaryCard";
 import { IconPiggyBank, IconWalletCards } from "@/shared/ui/lineIcons";
 import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { CategoryLineIcon } from "@/features/finance/QuickAccountingSheet";
 import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
-import { buildFinanceSummary, type TransactionType } from "@/features/finance/financeService";
+import { buildMonthlyFinanceOverview, type MonthComparisonResult, type TransactionType } from "@/features/finance/financeService";
 import {
   createFinanceId,
   getDefaultFinanceStorage,
@@ -179,24 +178,21 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
     ],
     [customCategories]
   );
-  const summary = useMemo(
-    () =>
-      buildFinanceSummary({
-        budgets: [],
-        now: todayIso(),
-        transactions: transactions.map((transaction) => ({
-          amount: transaction.amount,
-          categoryName: transaction.categoryName,
-          giftRecordId: transaction.giftRecordId ?? null,
-          id: transaction.id,
-          localDate: transaction.localDate,
-          transactionType: transaction.transactionType
-        }))
-      }),
+  const statsTransactions = useMemo(
+    () => transactions.map((transaction) => ({
+      amount: transaction.amount,
+      categoryName: transaction.categoryName,
+      giftRecordId: transaction.giftRecordId ?? null,
+      id: transaction.id,
+      localDate: transaction.localDate,
+      transactionType: transaction.transactionType
+    })),
     [transactions]
   );
-  const monthExpenseCount = transactions.filter((transaction) => transaction.localDate.startsWith(todayIso().slice(0, 7)) && transaction.transactionType === "expense").length;
-  const monthIncomeCount = transactions.filter((transaction) => transaction.localDate.startsWith(todayIso().slice(0, 7)) && transaction.transactionType === "income").length;
+  const monthlyOverview = useMemo(
+    () => buildMonthlyFinanceOverview({ selectedMonth: detailMonth, transactions: statsTransactions }),
+    [detailMonth, statsTransactions]
+  );
   const savingTotal = useMemo(() => sumSavingEntries(savingEntries), [savingEntries]);
   const savingStats = useMemo(() => getSavingStats(savingEntries, todayIso()), [savingEntries]);
   const savingVisibleEntries = useMemo(
@@ -212,9 +208,9 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
     return ["全部", ...Array.from(new Set(names))];
   }, [detailType, transactions]);
   const detailMonths = useMemo(() => {
-    const months = transactions.filter((transaction) => transaction.transactionType === detailType).map((transaction) => transaction.localDate.slice(0, 7));
+    const months = transactions.map((transaction) => transaction.localDate.slice(0, 7));
     return Array.from(new Set([todayIso().slice(0, 7), ...months])).sort((left, right) => right.localeCompare(left));
-  }, [detailType, transactions]);
+  }, [transactions]);
   const detailTransactions = transactions.filter(
     (transaction) => transaction.transactionType === detailType && transaction.localDate.startsWith(detailMonth) && (detailCategory === "全部" || transaction.categoryName === detailCategory)
   );
@@ -547,17 +543,6 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
 
   return (
     <View style={styles.stack}>
-      {tab !== "saving" ? <View style={styles.overviewCard}>
-        <View pointerEvents="none" style={styles.pageWatermark}>
-          <IconWalletCards color="#111827" size={82} />
-        </View>
-        <View testID="finance-summary-panel" style={styles.overviewMetricStack}>
-          <View testID="finance-metric-本月结余" style={styles.balanceMetricWrap}>
-            <BalanceSummaryCard expense={`¥${summary.monthExpense}`} income={`¥${summary.monthIncome}`} title="本月结余" tokens={themeTokens} value={`¥${summary.monthBalance}`} />
-          </View>
-        </View>
-      </View> : null}
-
       {tab === "record" ? (
         <>
           <View style={[styles.card, styles.quickRecordCard]}>
@@ -669,25 +654,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
 
       {tab === "stats" ? (
         <>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>本月分类占比</Text>
-            {summary.categoryShares.length === 0 ? <Text style={styles.emptyText}>暂无支出分类数据。</Text> : summary.categoryShares.map((share, index) => {
-              const color = getCategoryColor(share.categoryName, index);
-              const percent = Math.round(share.ratio * 100);
-              return (
-                <View key={share.categoryName} style={styles.shareRow}>
-                  <View style={[styles.shareDot, { backgroundColor: color }]} />
-                  <Text style={styles.shareName}>{share.categoryName}</Text>
-                  <View style={styles.shareTrack}>
-                    <View style={[styles.shareFill, { width: `${percent}%`, backgroundColor: color }]} />
-                  </View>
-                  <Text style={[styles.sharePercent, { color }]}>{percent}%</Text>
-                  <Text style={[styles.shareAmount, { color }]}>¥{share.amount}</Text>
-                </View>
-              );
-            })}
-            {summary.categoryShares.length > 0 ? <CategoryPieChart shares={summary.categoryShares} /> : null}
-          </View>
+          <MonthlyFinanceOverviewCard overview={monthlyOverview} />
           <View style={styles.card}>
             <View style={styles.detailTabs}>
               <Pressable accessibilityRole="button" accessibilityLabel="支出明细" onPress={() => {
@@ -944,6 +911,78 @@ function TabButton({ active, label, onPress }: { active: boolean; label: string;
       <Text style={[styles.tabText, active ? styles.tabTextActive : null]}>{label}</Text>
     </Pressable>
   );
+}
+
+type MonthlyFinanceOverview = ReturnType<typeof buildMonthlyFinanceOverview>;
+
+function MonthlyFinanceOverviewCard({ overview }: { overview: MonthlyFinanceOverview }) {
+  return (
+    <View testID="finance-monthly-overview-card" style={styles.monthlyOverviewCard}>
+      <View pointerEvents="none" style={styles.pageWatermark}>
+        <IconWalletCards color="#111827" size={82} />
+      </View>
+      <Text style={styles.monthlyOverviewTitle}>{overview.monthLabel}收支概览</Text>
+      <View style={styles.monthlyCoreGrid}>
+        <View testID="finance-metric-本月结余" style={styles.balanceHero}>
+          <Text style={styles.overviewMetricLabel}>本月结余</Text>
+          <Text numberOfLines={1} style={[styles.balanceHeroAmount, Number(overview.balance.amount) < 0 ? styles.balanceHeroAmountNegative : null]}>¥{overview.balance.amount}</Text>
+          <MonthComparison comparison={overview.balance.comparison} />
+        </View>
+        <View style={styles.monthlySideMetrics}>
+          <OverviewMiniMetric amount={overview.income.amount} comparison={overview.income.comparison} label="收入" tone="income" />
+          <OverviewMiniMetric amount={overview.expense.amount} comparison={overview.expense.comparison} label="支出" tone="expense" />
+        </View>
+      </View>
+      <View style={styles.overviewDivider} />
+      <View style={styles.categorySectionHeader}>
+        <Text style={styles.categorySectionTitle}>支出分类</Text>
+        <Text style={styles.categorySectionHint}>完整月份统计</Text>
+      </View>
+      {overview.categoryShares.length === 0 ? (
+        <Text style={styles.emptyText}>这个月还没有支出分类数据。</Text>
+      ) : (
+        <View style={styles.categoryDistribution}>
+          <View style={styles.categoryShareList}>
+            {overview.categoryShares.map((share, index) => {
+              const color = getCategoryColor(share.categoryName, index);
+              const percent = Math.round(share.ratio * 100);
+              return (
+                <View key={share.categoryName} style={styles.compactShareRow}>
+                  <View style={[styles.shareDot, { backgroundColor: color }]} />
+                  <Text style={styles.compactShareName}>{share.categoryName}</Text>
+                  <Text style={styles.compactSharePercent}>{percent}%</Text>
+                  <Text style={styles.compactShareAmount}>¥{share.amount}</Text>
+                </View>
+              );
+            })}
+          </View>
+          <CategoryPieChart shares={overview.categoryShares} />
+        </View>
+      )}
+    </View>
+  );
+}
+
+function OverviewMiniMetric({ amount, comparison, label, tone }: { amount: string; comparison: MonthComparisonResult; label: string; tone: "expense" | "income" }) {
+  return (
+    <View style={styles.overviewMiniMetric}>
+      <Text style={styles.overviewMetricLabel}>{label}</Text>
+      <Text numberOfLines={1} style={[styles.overviewMiniAmount, tone === "income" ? styles.overviewMiniAmountIncome : styles.overviewMiniAmountExpense]}>¥{amount}</Text>
+      <MonthComparison comparison={comparison} />
+    </View>
+  );
+}
+
+function MonthComparison({ comparison }: { comparison: MonthComparisonResult }) {
+  const toneStyle =
+    comparison.tone === "up"
+      ? styles.comparisonUp
+      : comparison.tone === "down"
+        ? styles.comparisonDown
+        : comparison.tone === "flat"
+          ? styles.comparisonFlat
+          : styles.comparisonMuted;
+  return <Text numberOfLines={1} style={[styles.monthComparison, toneStyle]}>{comparison.label}</Text>;
 }
 
 type SavingStats = {
@@ -1286,6 +1325,7 @@ function FinanceStatementList({
   transactions: FinanceTransaction[];
   type: TransactionType;
 }) {
+  const [monthMenuOpen, setMonthMenuOpen] = useState(false);
   const sortedTransactions = useMemo(
     () => sortByNewest(transactions, (item) => [item.localDate, item.createTime]),
     [transactions]
@@ -1297,19 +1337,36 @@ function FinanceStatementList({
   return (
     <View testID="finance-statement-list" style={styles.statementList}>
       <View style={styles.statementHeader}>
-        <View>
-          <Text style={styles.statementMonth}>{formatMonthLabel(month)}</Text>
+        <View style={styles.statementMonthBlock}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`选择月份：${formatMonthLabel(month)}`}
+            onPress={() => setMonthMenuOpen((value) => !value)}
+            style={styles.monthSelectButton}
+          >
+            <Text style={styles.statementMonth}>{formatMonthLabel(month)} ▼</Text>
+          </Pressable>
           <Text style={styles.statementMeta}>{summaryLabel} ¥{total} · {transactions.length} 笔</Text>
+          {monthMenuOpen ? (
+            <View style={styles.monthMenu}>
+              {months.map((item) => (
+                <Pressable
+                  key={item}
+                  accessibilityRole="button"
+                  accessibilityLabel={`筛选月份：${formatMonthLabel(item)}`}
+                  onPress={() => {
+                    onMonthChange(item);
+                    setMonthMenuOpen(false);
+                  }}
+                  style={[styles.monthMenuItem, month === item ? styles.monthMenuItemActive : null]}
+                >
+                  <Text style={[styles.monthMenuText, month === item ? styles.monthMenuTextActive : null]}>{formatMonthLabel(item)}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
         </View>
       </View>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-        {months.map((item) => (
-          <Pressable key={item} accessibilityRole="button" accessibilityLabel={`筛选月份：${item}`} onPress={() => onMonthChange(item)} style={[styles.filterChip, month === item ? styles.filterChipActive : null]}>
-            <Text style={[styles.filterText, month === item ? styles.filterTextActive : null]}>{formatMonthLabel(item)}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
         {categories.map((item) => (
@@ -1459,7 +1516,7 @@ function GiftItem({ onDelete, record }: { onDelete: (giftId: string) => void; re
   );
 }
 
-function CategoryPieChart({ shares }: { shares: ReturnType<typeof buildFinanceSummary>["categoryShares"] }) {
+function CategoryPieChart({ shares }: { shares: MonthlyFinanceOverview["categoryShares"] }) {
   const size = 110;
   const radius = 36;
   const stroke = 18;
@@ -1468,7 +1525,7 @@ function CategoryPieChart({ shares }: { shares: ReturnType<typeof buildFinanceSu
   let offset = 0;
 
   return (
-    <View accessibilityLabel="本月分类占比饼图" style={styles.piePanel}>
+    <View accessibilityLabel="支出分类饼图" style={styles.piePanel}>
       <Svg height={size} viewBox={`0 0 ${size} ${size}`} width={size}>
         <Circle cx={center} cy={center} fill="#ffffff" r={radius} stroke="#eef2f7" strokeWidth={stroke} />
         {shares.map((share, index) => {
@@ -1494,19 +1551,6 @@ function CategoryPieChart({ shares }: { shares: ReturnType<typeof buildFinanceSu
         })}
         <Circle cx={center} cy={center} fill="#ffffff" r={radius - stroke / 2 - 2} />
       </Svg>
-      <View style={styles.pieLegend}>
-        {shares.map((share, index) => {
-          const color = chartColors[index % chartColors.length];
-          const percent = Math.round(share.ratio * 100);
-          return (
-            <View key={share.categoryName} style={styles.legendRow}>
-              <View style={[styles.legendDot, { backgroundColor: color }]} />
-              <Text style={styles.legendName} numberOfLines={1}>{share.categoryName}</Text>
-              <Text style={[styles.legendPercent, { color }]}>{percent}%</Text>
-            </View>
-          );
-        })}
-      </View>
     </View>
   );
 }
@@ -2066,6 +2110,153 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 0
   },
+  monthlyOverviewCard: {
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderColor: "#e6ebf2",
+    borderRadius: 20,
+    borderWidth: 1,
+    elevation: 2,
+    gap: 10,
+    overflow: "hidden",
+    padding: 14,
+    position: "relative",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12
+  },
+  monthlyOverviewTitle: {
+    color: "#111827",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  monthlyCoreGrid: {
+    flexDirection: "row",
+    gap: 10
+  },
+  balanceHero: {
+    backgroundColor: "#f8fbff",
+    borderColor: "#e1eef8",
+    borderRadius: 16,
+    borderWidth: 1,
+    flex: 1.15,
+    gap: 4,
+    justifyContent: "center",
+    minWidth: 0,
+    padding: 12
+  },
+  balanceHeroAmount: {
+    color: "#138a49",
+    fontSize: 26,
+    fontWeight: "900",
+    letterSpacing: 0
+  },
+  balanceHeroAmountNegative: {
+    color: "#ef4444"
+  },
+  monthlySideMetrics: {
+    flex: 1,
+    gap: 8,
+    minWidth: 0
+  },
+  overviewMiniMetric: {
+    backgroundColor: "#ffffff",
+    borderColor: "#edf1f5",
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  overviewMetricLabel: {
+    color: "#697386",
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  overviewMiniAmount: {
+    fontSize: 16,
+    fontWeight: "900",
+    letterSpacing: 0
+  },
+  overviewMiniAmountIncome: {
+    color: "#16a34a"
+  },
+  overviewMiniAmountExpense: {
+    color: "#ef4444"
+  },
+  monthComparison: {
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  comparisonUp: {
+    color: "#16a34a"
+  },
+  comparisonDown: {
+    color: "#ef4444"
+  },
+  comparisonFlat: {
+    color: "#697386"
+  },
+  comparisonMuted: {
+    color: "#8b93a1"
+  },
+  overviewDivider: {
+    backgroundColor: "#eef2f7",
+    height: 1,
+    width: "100%"
+  },
+  categorySectionHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  categorySectionTitle: {
+    color: "#111827",
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  categorySectionHint: {
+    color: "#8b93a1",
+    fontSize: 11,
+    fontWeight: "800"
+  },
+  categoryDistribution: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10
+  },
+  categoryShareList: {
+    flex: 1,
+    gap: 7,
+    minWidth: 0
+  },
+  compactShareRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 7,
+    minHeight: 24
+  },
+  compactShareName: {
+    color: "#111827",
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "900",
+    minWidth: 0
+  },
+  compactSharePercent: {
+    color: "#697386",
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "right",
+    width: 38
+  },
+  compactShareAmount: {
+    color: "#111827",
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "right",
+    width: 68
+  },
   overviewCard: {
     backgroundColor: "rgba(255,255,255,0.92)",
     borderColor: "#e6ebf2",
@@ -2151,35 +2342,9 @@ const styles = StyleSheet.create({
     borderColor: "#edf1f5",
     borderRadius: 18,
     borderWidth: 1,
-    flexDirection: "row",
-    gap: 12,
-    padding: 12
-  },
-  pieLegend: {
-    flex: 1,
-    gap: 8
-  },
-  legendRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 8
-  },
-  legendDot: {
-    borderRadius: 999,
-    height: 10,
-    width: 10
-  },
-  legendName: {
-    color: "#111827",
-    flex: 1,
-    fontSize: 13,
-    fontWeight: "900"
-  },
-  legendPercent: {
-    fontSize: 13,
-    fontWeight: "900",
-    width: 40,
-    textAlign: "right"
+    flexShrink: 0,
+    justifyContent: "center",
+    padding: 8
   },
   pieTitle: {
     color: "#111827",
@@ -2701,6 +2866,51 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between"
+  },
+  statementMonthBlock: {
+    flex: 1,
+    minWidth: 0,
+    position: "relative"
+  },
+  monthSelectButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#f8fafc",
+    borderColor: "#e3e8ef",
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 7
+  },
+  monthMenu: {
+    backgroundColor: "#ffffff",
+    borderColor: "#e3e8ef",
+    borderRadius: 14,
+    borderWidth: 1,
+    elevation: 8,
+    gap: 3,
+    left: 0,
+    maxHeight: 230,
+    minWidth: 150,
+    padding: 6,
+    position: "absolute",
+    top: 40,
+    zIndex: 40
+  },
+  monthMenuItem: {
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9
+  },
+  monthMenuItemActive: {
+    backgroundColor: "#eaf6ff"
+  },
+  monthMenuText: {
+    color: "#697386",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  monthMenuTextActive: {
+    color: "#1677a8"
   },
   statementIconBox: {
     alignItems: "center",

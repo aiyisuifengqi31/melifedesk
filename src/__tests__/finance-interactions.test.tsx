@@ -177,6 +177,56 @@ describe("FinancePanel interactions", () => {
     expect(screen.getByText("+¥300.00")).toBeOnTheScreen();
   });
 
+  it("keeps monthly overview and statement list synced when selecting a history month", () => {
+    const storage = makeStorage();
+    saveFinanceTransactions(
+      [
+        {
+          amount: "100.00",
+          categoryName: "餐饮",
+          createTime: "2026-08-18T08:10:00.000Z",
+          id: "expense-aug",
+          localDate: "2026-08-18",
+          note: "八月晚饭",
+          transactionType: "expense"
+        },
+        {
+          amount: "500.00",
+          categoryName: "工资",
+          createTime: "2026-08-18T09:10:00.000Z",
+          id: "income-aug",
+          localDate: "2026-08-18",
+          note: "八月收入",
+          transactionType: "income"
+        },
+        {
+          amount: "60.00",
+          categoryName: "出行",
+          createTime: "2026-07-12T08:10:00.000Z",
+          id: "expense-jul",
+          localDate: "2026-07-12",
+          note: "七月公交",
+          transactionType: "expense"
+        }
+      ],
+      storage
+    );
+
+    render(<FinancePanel storage={storage} />);
+
+    expect(screen.getByTestId("finance-monthly-overview-card")).toBeOnTheScreen();
+    expect(screen.getByText("2026年8月收支概览")).toBeOnTheScreen();
+    expect(screen.queryByText("本月分类占比")).toBeNull();
+
+    fireEvent.press(screen.getByRole("button", { name: "选择月份：2026年8月" }));
+    fireEvent.press(screen.getByRole("button", { name: "筛选月份：2026年7月" }));
+
+    expect(screen.getByText("2026年7月收支概览")).toBeOnTheScreen();
+    expect(screen.getByText("本月支出 ¥60.00 · 1 笔")).toBeOnTheScreen();
+    expect(screen.getByText("七月公交")).toBeOnTheScreen();
+    expect(screen.queryByText("八月晚饭")).toBeNull();
+  });
+
   it("uses four-column category buttons inside the quick accounting sheet", () => {
     render(<AppShell initialRoute="/home" viewport="mobile" />);
 
@@ -318,15 +368,15 @@ describe("FinancePanel interactions", () => {
 
     expect(screen.queryByText("本月总结")).toBeNull();
     expect(screen.queryByText("收入与支出概览")).toBeNull();
+    expect(screen.getByTestId("finance-monthly-overview-card")).toBeOnTheScreen();
+    expect(screen.getByText("2026年8月收支概览")).toBeOnTheScreen();
     expect(screen.getAllByText("本月结余").length).toBeGreaterThan(0);
     expect(screen.queryByText("今日支出")).toBeNull();
     expect(screen.queryByText("今日收入")).toBeNull();
-    expect(screen.getByTestId("finance-metric-本月结余")).toHaveStyle({ flexBasis: "100%" });
-    expect(screen.getByTestId("finance-balance-summary")).toHaveStyle({ flexDirection: "row" });
-    expect(screen.getAllByText(/收入 ¥0\.00/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/支出 ¥0\.00/).length).toBeGreaterThan(0);
-    expect(screen.queryByText("本月支出")).toBeNull();
-    expect(screen.queryByText("本月收入")).toBeNull();
+    expect(screen.getByTestId("finance-metric-本月结余")).toBeOnTheScreen();
+    expect(screen.getAllByText("收入").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("支出").length).toBeGreaterThan(0);
+    expect(screen.queryByText("本月分类占比")).toBeNull();
   });
 
   it("renders very large monthly totals inside the summary card without breaking layout", () => {
@@ -344,8 +394,8 @@ describe("FinancePanel interactions", () => {
 
     render(<FinancePanel storage={storage} />);
 
-    expect(screen.getByTestId("finance-balance-summary")).toBeOnTheScreen();
-    expect(screen.getByText("¥1500000.00")).toBeOnTheScreen();
+    expect(screen.getByTestId("finance-monthly-overview-card")).toBeOnTheScreen();
+    expect(screen.getAllByText("¥1500000.00").length).toBeGreaterThan(0);
   });
 
   it("deletes transactions from the compact statement list and recalculates summaries", async () => {

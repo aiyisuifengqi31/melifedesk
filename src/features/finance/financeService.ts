@@ -29,6 +29,18 @@ type FinanceSummaryInput = {
   transactions: FinanceTransactionForStats[];
 };
 
+type MonthlyFinanceOverviewInput = {
+  selectedMonth: string;
+  transactions: FinanceTransactionForStats[];
+};
+
+export type MonthComparisonTone = "down" | "flat" | "muted" | "up";
+
+export type MonthComparisonResult = {
+  label: string;
+  tone: MonthComparisonTone;
+};
+
 type GiftSummaryInput = {
   now: string;
   records: GiftRecordForStats[];
@@ -108,6 +120,73 @@ export function buildFinanceSummary({ budgets, now, transactions }: FinanceSumma
     todayExpense: formatCents(sumTransactions(transactions, (transaction) => transaction.localDate === now && transaction.transactionType === "expense")),
     todayIncome: formatCents(sumTransactions(transactions, (transaction) => transaction.localDate === now && transaction.transactionType === "income"))
   };
+}
+
+export function buildMonthlyFinanceOverview({ selectedMonth, transactions }: MonthlyFinanceOverviewInput) {
+  const previousMonth = previousMonthKey(selectedMonth);
+  const currentTransactions = transactions.filter((transaction) => monthKey(transaction.localDate) === selectedMonth);
+  const previousTransactions = transactions.filter((transaction) => monthKey(transaction.localDate) === previousMonth);
+  const expenseCents = sumTransactions(currentTransactions, (transaction) => transaction.transactionType === "expense");
+  const incomeCents = sumTransactions(currentTransactions, (transaction) => transaction.transactionType === "income");
+  const previousExpenseCents = sumTransactions(previousTransactions, (transaction) => transaction.transactionType === "expense");
+  const previousIncomeCents = sumTransactions(previousTransactions, (transaction) => transaction.transactionType === "income");
+  const balanceCents = incomeCents - expenseCents;
+  const previousBalanceCents = previousIncomeCents - previousExpenseCents;
+  const categoryTotals = new Map<string, number>();
+
+  for (const transaction of currentTransactions) {
+    if (transaction.transactionType === "expense") {
+      categoryTotals.set(transaction.categoryName, (categoryTotals.get(transaction.categoryName) ?? 0) + parseMoneyToCents(transaction.amount));
+    }
+  }
+
+  const categoryShares = [...categoryTotals.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .map(([categoryName, cents]) => ({
+      amount: formatCents(cents),
+      categoryName,
+      ratio: expenseCents === 0 ? 0 : Number((cents / expenseCents).toFixed(4))
+    }));
+
+  return {
+    balance: {
+      amount: formatCents(balanceCents),
+      comparison: compareMonthValue(balanceCents, previousBalanceCents, previousTransactions.length, true)
+    },
+    categoryShares,
+    expense: {
+      amount: formatCents(expenseCents),
+      comparison: compareMonthValue(expenseCents, previousExpenseCents, previousTransactions.filter((transaction) => transaction.transactionType === "expense").length)
+    },
+    income: {
+      amount: formatCents(incomeCents),
+      comparison: compareMonthValue(incomeCents, previousIncomeCents, previousTransactions.filter((transaction) => transaction.transactionType === "income").length)
+    },
+    monthLabel: formatMonthKeyLabel(selectedMonth),
+    previousMonth
+  };
+}
+
+function compareMonthValue(currentCents: number, previousCents: number, previousRecordCount: number, allowSignTransition = false): MonthComparisonResult {
+  if (previousRecordCount === 0) return { label: "暂无上月数据", tone: "muted" };
+  if (previousCents === 0) return { label: "暂无可比数据", tone: "muted" };
+
+  if (allowSignTransition) {
+    if (previousCents < 0 && currentCents >= 0) return { label: "较上月 由负转正", tone: "up" };
+    if (previousCents >= 0 && currentCents < 0) return { label: "较上月 由正转负", tone: "down" };
+  }
+
+  const change = ((currentCents - previousCents) / Math.abs(previousCents)) * 100;
+  if (change === 0) return { label: "较上月 0.0%", tone: "flat" };
+  return {
+    label: `较上月 ${change > 0 ? "↑" : "↓"} ${Math.abs(change).toFixed(1)}%`,
+    tone: change > 0 ? "up" : "down"
+  };
+}
+
+function formatMonthKeyLabel(month: string) {
+  const [year, value] = month.split("-");
+  return `${year}年${Number(value)}月`;
 }
 
 export function planGiftFinanceSync({ existingTransactionGiftIds, giftRecordId }: { existingTransactionGiftIds: string[]; giftRecordId: string }) {

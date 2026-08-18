@@ -1,4 +1,4 @@
-import { buildFinanceSummary, buildGiftContactSummary, planGiftFinanceSync } from "@/features/finance/financeService";
+import { buildFinanceSummary, buildGiftContactSummary, buildMonthlyFinanceOverview, planGiftFinanceSync } from "@/features/finance/financeService";
 
 const julyTransactions = [
   { amount: "30.50", categoryName: "餐饮", giftRecordId: null, id: "t1", localDate: "2026-07-30", transactionType: "expense" as const },
@@ -42,6 +42,47 @@ describe("Task 5 finance service", () => {
   it("prevents duplicate gift finance sync plans", () => {
     expect(planGiftFinanceSync({ existingTransactionGiftIds: ["g1"], giftRecordId: "g1" })).toEqual({ shouldCreate: false });
     expect(planGiftFinanceSync({ existingTransactionGiftIds: ["g1"], giftRecordId: "g2" })).toEqual({ categoryName: "份子", shouldCreate: true, transactionType: "expense" });
+  });
+
+  it("builds a selected-month overview with month-over-month labels and category shares", () => {
+    const overview = buildMonthlyFinanceOverview({
+      selectedMonth: "2026-08",
+      transactions: [
+        { amount: "500.00", categoryName: "工资", giftRecordId: null, id: "aug-income", localDate: "2026-08-01", transactionType: "income" },
+        { amount: "120.00", categoryName: "餐饮", giftRecordId: null, id: "aug-food", localDate: "2026-08-02", transactionType: "expense" },
+        { amount: "80.00", categoryName: "出行", giftRecordId: null, id: "aug-travel", localDate: "2026-08-03", transactionType: "expense" },
+        { amount: "400.00", categoryName: "工资", giftRecordId: null, id: "jul-income", localDate: "2026-07-01", transactionType: "income" },
+        { amount: "500.00", categoryName: "餐饮", giftRecordId: null, id: "jul-food", localDate: "2026-07-02", transactionType: "expense" }
+      ]
+    });
+
+    expect(overview.monthLabel).toBe("2026年8月");
+    expect(overview.income.amount).toBe("500.00");
+    expect(overview.expense.amount).toBe("200.00");
+    expect(overview.balance.amount).toBe("300.00");
+    expect(overview.income.comparison).toEqual({ label: "较上月 ↑ 25.0%", tone: "up" });
+    expect(overview.expense.comparison).toEqual({ label: "较上月 ↓ 60.0%", tone: "down" });
+    expect(overview.balance.comparison).toEqual({ label: "较上月 由负转正", tone: "up" });
+    expect(overview.categoryShares).toEqual([
+      { amount: "120.00", categoryName: "餐饮", ratio: 0.6 },
+      { amount: "80.00", categoryName: "出行", ratio: 0.4 }
+    ]);
+  });
+
+  it("handles cross-year previous month and unavailable comparison data", () => {
+    const overview = buildMonthlyFinanceOverview({
+      selectedMonth: "2027-01",
+      transactions: [
+        { amount: "100.00", categoryName: "工资", giftRecordId: null, id: "jan-income", localDate: "2027-01-05", transactionType: "income" },
+        { amount: "20.00", categoryName: "餐饮", giftRecordId: null, id: "jan-food", localDate: "2027-01-05", transactionType: "expense" },
+        { amount: "0.00", categoryName: "工资", giftRecordId: null, id: "dec-zero-income", localDate: "2026-12-05", transactionType: "income" }
+      ]
+    });
+
+    expect(overview.previousMonth).toBe("2026-12");
+    expect(overview.income.comparison).toEqual({ label: "暂无可比数据", tone: "muted" });
+    expect(overview.expense.comparison).toEqual({ label: "暂无上月数据", tone: "muted" });
+    expect(overview.balance.comparison).toEqual({ label: "暂无可比数据", tone: "muted" });
   });
 });
 
