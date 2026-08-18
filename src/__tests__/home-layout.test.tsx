@@ -111,4 +111,12 @@ describe("HomePanel layout (Phase 2)", () => {
     const savedOrder = JSON.parse(storage.data.get(ORDER_KEY) ?? "[]");
     expect(savedOrder).toContain("notes");
   });
+
+  it("keeps the compact quick accounting action as a single plus", () => {
+    render(<HomePanel themeTokens={testTokens} />);
+
+    const quickAccountingCard = screen.getByTestId("home-quick-accounting-card");
+    expect(within(quickAccountingCard).getByText("＋")).toBeOnTheScreen();
+    expect(within(quickAccountingCard).queryByText("＋ 记一笔")).toBeNull();
+  });
 });

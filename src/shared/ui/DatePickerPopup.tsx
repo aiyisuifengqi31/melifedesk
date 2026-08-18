@@ -30,7 +30,7 @@ export function DatePickerPopup({
   const [viewYear, setViewYear] = useState(initial.getFullYear());
   const [viewMonth, setViewMonth] = useState(initial.getMonth());
   const [pickedDate, setPickedDate] = useState(selectedDate || todayIso());
-  const days = buildMonthDays(viewYear, viewMonth);
+  const rows = buildMonthRows(viewYear, viewMonth);
 
   const goPrevMonth = () => {
     if (viewMonth === 0) {
@@ -85,28 +85,32 @@ export function DatePickerPopup({
               ))}
             </View>
             <View style={styles.dayGrid}>
-              {days.map((day) => {
-                const selected = day.date === pickedDate;
-                return (
-                  <Pressable
-                    key={day.date}
-                    accessibilityRole="button"
-                    accessibilityLabel={`选择日期：${day.date}`}
-                    onPress={() => {
-                      if (!day.inMonth) return;
-                      setPickedDate(day.date);
-                      onConfirm(day.date);
-                    }}
-                    style={[styles.dayCell, selected ? styles.dayCellSelected : null]}
-                  >
-                    <Text style={[
-                      styles.dayText,
-                      !day.inMonth ? styles.dayMuted : null,
-                      selected ? styles.dayTextSelected : null
-                    ]}>{day.day}</Text>
-                  </Pressable>
-                );
-              })}
+              {rows.map((row) => (
+                <View key={row.map((day) => day.date).join(":")} style={styles.dayRow}>
+                  {row.map((day) => {
+                    const selected = day.date === pickedDate;
+                    return (
+                      <Pressable
+                        key={day.date}
+                        accessibilityRole="button"
+                        accessibilityLabel={`选择日期：${day.date}`}
+                        onPress={() => {
+                          if (!day.inMonth) return;
+                          setPickedDate(day.date);
+                          onConfirm(day.date);
+                        }}
+                        style={[styles.dayCell, selected ? styles.dayCellSelected : null]}
+                      >
+                        <Text style={[
+                          styles.dayText,
+                          !day.inMonth ? styles.dayMuted : null,
+                          selected ? styles.dayTextSelected : null
+                        ]}>{day.day}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ))}
             </View>
             <View style={styles.actions}>
               <Pressable accessibilityRole="button" accessibilityLabel="取消" onPress={onCancel} style={styles.cancelBtn}>
@@ -123,12 +127,12 @@ export function DatePickerPopup({
   );
 }
 
-function buildMonthDays(year: number, monthIndex: number): MonthDay[] {
+export function buildMonthRows(year: number, monthIndex: number): MonthDay[][] {
   const first = new Date(year, monthIndex, 1);
   const mondayOffset = (first.getDay() + 6) % 7;
   const start = new Date(year, monthIndex, 1 - mondayOffset);
 
-  return Array.from({ length: 42 }, (_, index) => {
+  const days = Array.from({ length: 42 }, (_, index) => {
     const date = new Date(start);
     date.setDate(start.getDate() + index);
     return {
@@ -137,6 +141,8 @@ function buildMonthDays(year: number, monthIndex: number): MonthDay[] {
       inMonth: date.getMonth() === monthIndex
     };
   });
+
+  return Array.from({ length: 6 }, (_, rowIndex) => days.slice(rowIndex * 7, rowIndex * 7 + 7));
 }
 
 function parseIsoDate(value: string) {
@@ -207,18 +213,19 @@ const styles = StyleSheet.create({
   dayCell: {
     alignItems: "center",
     borderRadius: 10,
+    flex: 1,
     height: 36,
-    justifyContent: "center",
-    width: "13.2%"
+    justifyContent: "center"
   },
   dayCellSelected: {
     backgroundColor: "#1fa8e2"
   },
   dayGrid: {
+    gap: 4
+  },
+  dayRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 4,
-    justifyContent: "space-between"
+    gap: 4
   },
   dayMuted: {
     color: "#c6ccd5"
@@ -256,9 +263,9 @@ const styles = StyleSheet.create({
   },
   weekText: {
     color: "#697386",
+    flex: 1,
     fontSize: 13,
     fontWeight: "800",
-    textAlign: "center",
-    width: "13.2%"
+    textAlign: "center"
   }
 });
