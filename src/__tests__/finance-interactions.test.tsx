@@ -216,7 +216,8 @@ describe("FinancePanel interactions", () => {
 
     expect(screen.getByTestId("finance-summary-panel")).toBeOnTheScreen();
     expect(screen.queryByTestId("finance-monthly-overview-card")).toBeNull();
-    expect(screen.queryByText("本月分类占比")).toBeNull();
+    expect(screen.getByText("本月分类占比")).toBeOnTheScreen();
+    expect(screen.getByTestId("finance-category-pie-legend")).toBeOnTheScreen();
 
     fireEvent.press(screen.getByRole("button", { name: "选择月份：2026年8月" }));
     expect(screen.getByTestId("finance-month-menu")).toHaveStyle({ zIndex: 200 });
@@ -378,7 +379,7 @@ describe("FinancePanel interactions", () => {
     expect(screen.getByTestId("finance-metric-本月结余")).toBeOnTheScreen();
     expect(screen.getAllByText(/收入 ¥0\.00/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/支出 ¥0\.00/).length).toBeGreaterThan(0);
-    expect(screen.queryByText("本月分类占比")).toBeNull();
+    expect(screen.getByText("本月分类占比")).toBeOnTheScreen();
   });
 
   it("renders very large monthly totals inside the summary card without breaking layout", () => {

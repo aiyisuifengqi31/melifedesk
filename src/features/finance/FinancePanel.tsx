@@ -673,8 +673,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
           </View>
           <View style={styles.card}>
             <View style={styles.categorySectionHeader}>
-              <Text style={styles.cardTitle}>支出分类</Text>
-              <Text style={styles.categorySectionHint}>{monthlyOverview.monthLabel}</Text>
+              <Text style={styles.cardTitle}>本月分类占比</Text>
             </View>
             {monthlyOverview.categoryShares.length === 0 ? <Text style={styles.emptyText}>暂无支出分类数据。</Text> : monthlyOverview.categoryShares.map((share, index) => {
               const color = getCategoryColor(share.categoryName, index);
@@ -1493,12 +1492,13 @@ function CategoryPieChart({ shares }: { shares: MonthlyCategoryShares }) {
   let offset = 0;
 
   return (
-    <View accessibilityLabel="支出分类饼图" style={styles.piePanel}>
+    <View accessibilityLabel="本月分类占比饼图" style={styles.piePanel}>
       <Svg height={size} viewBox={`0 0 ${size} ${size}`} width={size}>
         <Circle cx={center} cy={center} fill="#ffffff" r={radius} stroke="#eef2f7" strokeWidth={stroke} />
         {shares.map((share, index) => {
           const length = Math.max(share.ratio * circumference, shares.length === 1 ? circumference : 2);
           const dashOffset = -offset;
+          const color = getCategoryColor(share.categoryName, index);
           offset += length;
           return (
             <Circle
@@ -1509,7 +1509,7 @@ function CategoryPieChart({ shares }: { shares: MonthlyCategoryShares }) {
               r={radius}
               rotation="-90"
               origin={`${center}, ${center}`}
-              stroke={chartColors[index % chartColors.length]}
+              stroke={color}
               strokeDasharray={`${length} ${circumference - length}`}
               strokeDashoffset={dashOffset}
               strokeLinecap="round"
@@ -1519,6 +1519,19 @@ function CategoryPieChart({ shares }: { shares: MonthlyCategoryShares }) {
         })}
         <Circle cx={center} cy={center} fill="#ffffff" r={radius - stroke / 2 - 2} />
       </Svg>
+      <View testID="finance-category-pie-legend" style={styles.pieLegend}>
+        {shares.map((share, index) => {
+          const color = getCategoryColor(share.categoryName, index);
+          const percent = Math.round(share.ratio * 100);
+          return (
+            <View key={share.categoryName} style={styles.legendRow}>
+              <View style={[styles.legendDot, { backgroundColor: color }]} />
+              <Text numberOfLines={1} style={styles.legendName}>{share.categoryName}</Text>
+              <Text style={[styles.legendPercent, { color }]}>{percent}%</Text>
+            </View>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -2310,9 +2323,16 @@ const styles = StyleSheet.create({
     borderColor: "#edf1f5",
     borderRadius: 18,
     borderWidth: 1,
-    flexShrink: 0,
-    justifyContent: "center",
-    padding: 8
+    flexDirection: "row",
+    gap: 14,
+    justifyContent: "space-between",
+    marginTop: 10,
+    padding: 14
+  },
+  pieLegend: {
+    flex: 1,
+    gap: 8,
+    minWidth: 0
   },
   pieTitle: {
     color: "#111827",
@@ -2662,6 +2682,29 @@ const styles = StyleSheet.create({
     color: "#111827",
     fontSize: 11,
     fontWeight: "900"
+  },
+  legendDot: {
+    borderRadius: 999,
+    height: 10,
+    width: 10
+  },
+  legendName: {
+    color: "#111827",
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "900",
+    minWidth: 0
+  },
+  legendPercent: {
+    fontSize: 13,
+    fontWeight: "900",
+    textAlign: "right",
+    width: 40
+  },
+  legendRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8
   },
   segment: {
     backgroundColor: "#f8fafc",
