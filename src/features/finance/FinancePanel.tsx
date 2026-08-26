@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type NativeSyntheticEvent, type TextInputChangeEventData } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View, type NativeSyntheticEvent, type TextInputChangeEventData } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
 import { CollapsibleSectionFooter, sortByNewest, useCollapsibleList } from "@/shared/ui/CollapsibleList";
@@ -97,6 +97,7 @@ const savingNoteInputWebProps = { id: "finance-saving-note-input" } as object;
 const categoryInputWebProps = { id: "finance-category-input" } as object;
 
 export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, shortcutNonce, showInlineTabs = true, storage, themeTokens = financeTokens }: FinancePanelProps) {
+  const { width: windowWidth } = useWindowDimensions();
   const financeStorage = useMemo(() => storage ?? getDefaultFinanceStorage(), [storage]);
   const [localTab, setLocalTab] = useState<FinanceTab>("stats");
   const tab = activeTab ?? localTab;
@@ -211,6 +212,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
     }, null),
     [monthExpenseTransactions]
   );
+  const statsMonthMenuMaxWidth = Math.max(120, Math.min(170, windowWidth - 40));
   const savingTotal = useMemo(() => sumSavingEntries(savingEntries), [savingEntries]);
   const savingStats = useMemo(() => getSavingStats(savingEntries, todayIso()), [savingEntries]);
   const savingVisibleEntries = useMemo(
@@ -705,7 +707,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
                   <Text numberOfLines={1} style={styles.statsMonthText}>{formatMonthLabel(detailMonth)} ▼</Text>
                 </Pressable>
                 {statsMonthMenuOpen ? (
-                  <View testID="finance-month-menu" style={[styles.monthMenu, styles.statsMonthMenu]}>
+                  <View testID="finance-month-menu" style={[styles.monthMenu, styles.statsMonthMenu, { maxWidth: statsMonthMenuMaxWidth }]}>
                     {detailMonths.map((item) => (
                       <Pressable
                         key={item}
@@ -725,22 +727,23 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
               </View>
             </View>
             <View testID="finance-summary-panel" style={styles.statsHeroContent}>
-              <View testID="finance-balance-summary" style={styles.statsBalanceBlock}>
-                <View testID="finance-metric-本月结余" style={styles.statsBalanceInner}>
-                  <Text style={styles.statsMetricLabel}>本月结余</Text>
-                  <Text
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    style={[styles.statsBalanceValue, moneyToCents(monthlyOverview.balance.amount) < 0 ? styles.balanceHeroAmountNegative : null]}
-                  >
-                    ¥{monthlyOverview.balance.amount}
-                  </Text>
+              <View testID="finance-hero-core" style={styles.statsHeroCore}>
+                <View testID="finance-balance-summary" style={styles.statsBalanceBlock}>
+                  <View testID="finance-metric-本月结余" style={styles.statsBalanceInner}>
+                    <Text style={styles.statsMetricLabel}>本月结余</Text>
+                    <Text
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      style={[styles.statsBalanceValue, moneyToCents(monthlyOverview.balance.amount) < 0 ? styles.balanceHeroAmountNegative : null]}
+                    >
+                      ¥{monthlyOverview.balance.amount}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-              <View style={styles.statsIncomeExpenseRow}>
-                <Text numberOfLines={1} style={styles.statsIncomeExpenseText}>收入 ¥{monthlyOverview.income.amount}</Text>
-                <Text numberOfLines={1} style={styles.statsIncomeExpenseText}>支出 ¥{monthlyOverview.expense.amount}</Text>
-                <Text numberOfLines={1} style={styles.statsRecordCount}>{monthTransactions.length}笔记录</Text>
+                <View testID="finance-hero-income-expense" style={styles.statsIncomeExpenseStack}>
+                  <Text numberOfLines={1} adjustsFontSizeToFit style={styles.statsIncomeExpenseText}>收入 ¥{monthlyOverview.income.amount}</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit style={styles.statsIncomeExpenseText}>支出 ¥{monthlyOverview.expense.amount}</Text>
+                </View>
               </View>
               <View style={styles.summaryTrack}>
                 <View style={[styles.summaryFill, { width: `${getExpenseRatio(monthlyOverview.income.amount, monthlyOverview.expense.amount)}%` }]} />
@@ -755,7 +758,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
                 </View>
                 <View style={styles.statsSecondaryItem}>
                   <Text numberOfLines={1} style={styles.statsSecondaryLabel}>最大单笔 {maxExpenseTransaction ? `¥${maxExpenseTransaction.amount}` : "--"}</Text>
-                  <Text numberOfLines={1} style={styles.statsSecondaryHint}>{maxExpenseTransaction ? maxExpenseTransaction.categoryName : "暂无支出记录"}</Text>
+                  <Text style={styles.statsSecondaryHint}>{maxExpenseTransaction ? maxExpenseTransaction.categoryName : "暂无支出记录"}</Text>
                 </View>
               </View>
             </View>
@@ -2411,9 +2414,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     elevation: 2,
-    gap: 9,
+    gap: 7,
     overflow: "visible",
-    padding: 12,
+    padding: 11,
     position: "relative",
     shadowColor: "#000000",
     shadowOffset: { width: 0, height: 3 },
@@ -2424,7 +2427,7 @@ const styles = StyleSheet.create({
   statsHeroHeader: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 10,
+    gap: 8,
     justifyContent: "space-between",
     zIndex: 30
   },
@@ -2447,25 +2450,33 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     justifyContent: "center",
-    minHeight: 34,
-    paddingHorizontal: 12,
-    paddingVertical: 6
+    minHeight: 32,
+    paddingHorizontal: 10,
+    paddingVertical: 5
   },
   statsMonthText: {
     color: "#4f6757",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "900"
   },
   statsMonthMenu: {
-    left: undefined,
+    left: "auto",
     right: 0,
-    top: 42
+    top: 36,
+    width: 132
   },
   statsHeroContent: {
-    gap: 8,
+    gap: 6,
+    minWidth: 0
+  },
+  statsHeroCore: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
     minWidth: 0
   },
   statsBalanceBlock: {
+    flex: 1.36,
     minWidth: 0
   },
   statsBalanceInner: {
@@ -2474,7 +2485,7 @@ const styles = StyleSheet.create({
   },
   statsMetricLabel: {
     color: "#63706a",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "900"
   },
   statsBalanceValue: {
@@ -2487,28 +2498,22 @@ const styles = StyleSheet.create({
   statsIncomeExpenseText: {
     color: "#63706a",
     flexShrink: 1,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "900",
     minWidth: 0
   },
-  statsIncomeExpenseRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+  statsIncomeExpenseStack: {
+    alignItems: "flex-start",
+    flex: 1,
+    gap: 3,
     minWidth: 0
-  },
-  statsRecordCount: {
-    color: "#8b93a1",
-    fontSize: 11,
-    fontWeight: "800"
   },
   summaryTrack: {
     backgroundColor: "#dff3e6",
     borderColor: "#cfe8da",
     borderRadius: 999,
     borderWidth: 1,
-    height: 10,
+    height: 7,
     overflow: "hidden",
     width: "100%"
   },
@@ -2521,23 +2526,25 @@ const styles = StyleSheet.create({
     borderTopColor: "#edf1f5",
     borderTopWidth: 1,
     flexDirection: "row",
-    gap: 10,
-    paddingTop: 8
+    gap: 8,
+    paddingTop: 6
   },
   statsSecondaryItem: {
     flex: 1,
     minWidth: 0
   },
   statsSecondaryLabel: {
-    color: "#63706a",
-    fontSize: 12,
-    fontWeight: "900"
+    color: "#7a857f",
+    fontSize: 11,
+    fontWeight: "800"
   },
   statsSecondaryHint: {
     color: "#8b93a1",
-    fontSize: 11,
+    flexWrap: "wrap",
+    fontSize: 10,
     fontWeight: "800",
-    marginTop: 2
+    lineHeight: 13,
+    marginTop: 1
   },
   overviewMetricStack: {
     gap: 8
