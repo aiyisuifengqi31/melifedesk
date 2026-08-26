@@ -724,7 +724,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
                 ) : null}
               </View>
             </View>
-            <View testID="finance-summary-panel" style={styles.statsHeroGrid}>
+            <View testID="finance-summary-panel" style={styles.statsHeroContent}>
               <View testID="finance-balance-summary" style={styles.statsBalanceBlock}>
                 <View testID="finance-metric-本月结余" style={styles.statsBalanceInner}>
                   <Text style={styles.statsMetricLabel}>本月结余</Text>
@@ -736,36 +736,26 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
                     ¥{monthlyOverview.balance.amount}
                   </Text>
                 </View>
-                <View style={styles.statsIncomeExpense}>
-                  <Text style={styles.statsIncomeExpenseText}>收入 ¥{monthlyOverview.income.amount}</Text>
-                  <Text style={styles.statsIncomeExpenseText}>支出 ¥{monthlyOverview.expense.amount}</Text>
-                  <View style={styles.summaryTrack}>
-                    <View style={[styles.summaryFill, { width: `${getExpenseRatio(monthlyOverview.income.amount, monthlyOverview.expense.amount)}%` }]} />
-                  </View>
-                </View>
               </View>
-              <View style={styles.statsMiniGrid}>
-                <View testID="finance-stat-month-expense" style={styles.statsMiniCard}>
-                  <Text style={styles.statsMiniLabel}>本月支出</Text>
-                  <Text numberOfLines={1} adjustsFontSizeToFit style={styles.statsMiniValue}>¥{monthlyOverview.expense.amount}</Text>
-                  <Text style={styles.statsMiniHint}>本月所有支出合计</Text>
-                </View>
-                <View testID="finance-stat-month-comparison" style={styles.statsMiniCard}>
-                  <Text style={styles.statsMiniLabel}>较上月</Text>
-                  <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.statsMiniValue, getComparisonTextStyle(monthlyOverview.expense.comparison.tone)]}>
+              <View style={styles.statsIncomeExpenseRow}>
+                <Text numberOfLines={1} style={styles.statsIncomeExpenseText}>收入 ¥{monthlyOverview.income.amount}</Text>
+                <Text numberOfLines={1} style={styles.statsIncomeExpenseText}>支出 ¥{monthlyOverview.expense.amount}</Text>
+                <Text numberOfLines={1} style={styles.statsRecordCount}>{monthTransactions.length}笔记录</Text>
+              </View>
+              <View style={styles.summaryTrack}>
+                <View style={[styles.summaryFill, { width: `${getExpenseRatio(monthlyOverview.income.amount, monthlyOverview.expense.amount)}%` }]} />
+              </View>
+              <View testID="finance-hero-secondary-metrics" style={styles.statsSecondaryMetrics}>
+                <View style={styles.statsSecondaryItem}>
+                  <Text numberOfLines={1} style={styles.statsSecondaryLabel}>
+                    较上月 <Text style={getComparisonTextStyle(monthlyOverview.expense.comparison.tone)}>
                     {formatCompactComparison(monthlyOverview.expense.comparison.label)}
+                    </Text>
                   </Text>
-                  <Text style={styles.statsMiniHint}>按支出金额对比</Text>
                 </View>
-                <View style={styles.statsMiniCard}>
-                  <Text style={styles.statsMiniLabel}>最大单笔支出</Text>
-                  <Text numberOfLines={1} adjustsFontSizeToFit style={styles.statsMiniValue}>{maxExpenseTransaction ? `¥${maxExpenseTransaction.amount}` : "--"}</Text>
-                  <Text numberOfLines={1} style={styles.statsMiniHint}>{maxExpenseTransaction ? `${maxExpenseTransaction.categoryName} · ${formatShortDate(maxExpenseTransaction.localDate)}` : "暂无支出记录"}</Text>
-                </View>
-                <View style={styles.statsMiniCard}>
-                  <Text style={styles.statsMiniLabel}>本月记账</Text>
-                  <Text numberOfLines={1} adjustsFontSizeToFit style={styles.statsMiniValue}>{monthTransactions.length} 笔</Text>
-                  <Text style={styles.statsMiniHint}>收入和支出合计</Text>
+                <View style={styles.statsSecondaryItem}>
+                  <Text numberOfLines={1} style={styles.statsSecondaryLabel}>最大单笔 {maxExpenseTransaction ? `¥${maxExpenseTransaction.amount}` : "--"}</Text>
+                  <Text numberOfLines={1} style={styles.statsSecondaryHint}>{maxExpenseTransaction ? maxExpenseTransaction.categoryName : "暂无支出记录"}</Text>
                 </View>
               </View>
             </View>
@@ -773,7 +763,6 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
           <View style={styles.card}>
             <View style={styles.categorySectionHeader}>
               <Text style={styles.cardTitle}>本月分类占比</Text>
-              <Text style={styles.categorySectionHint}>{formatMonthLabel(detailMonth)}</Text>
             </View>
             {monthlyOverview.categoryShares.length === 0 ? <Text style={styles.emptyText}>暂无支出分类数据。</Text> : (
               <CategoryShareChart
@@ -1552,12 +1541,8 @@ function getExpenseRatio(income: string, expense: string) {
 }
 
 function formatCompactComparison(label: string) {
+  if (label === "暂无上月数据" || label === "暂无可比数据") return "暂无环比";
   return label.replace(/^较上月\s*/, "");
-}
-
-function formatShortDate(date: string) {
-  const [, month, day] = date.split("-");
-  return `${Number(month)}月${Number(day)}日`;
 }
 
 function getComparisonTextStyle(tone: string) {
@@ -2423,12 +2408,12 @@ const styles = StyleSheet.create({
   statsHeroCard: {
     backgroundColor: "rgba(255,255,255,0.94)",
     borderColor: "#dfe8e5",
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
     elevation: 2,
-    gap: 12,
+    gap: 9,
     overflow: "visible",
-    padding: 14,
+    padding: 12,
     position: "relative",
     shadowColor: "#000000",
     shadowOffset: { width: 0, height: 3 },
@@ -2446,7 +2431,7 @@ const styles = StyleSheet.create({
   statsHeroTitle: {
     color: "#111827",
     flex: 1,
-    fontSize: 19,
+    fontSize: 18,
     fontWeight: "900",
     minWidth: 0
   },
@@ -2476,24 +2461,15 @@ const styles = StyleSheet.create({
     right: 0,
     top: 42
   },
-  statsHeroGrid: {
-    flexDirection: "row",
-    gap: 10,
+  statsHeroContent: {
+    gap: 8,
     minWidth: 0
   },
   statsBalanceBlock: {
-    backgroundColor: "#f8fbff",
-    borderColor: "#dfe8ef",
-    borderRadius: 16,
-    borderWidth: 1,
-    flex: 1.16,
-    gap: 7,
-    justifyContent: "center",
-    minWidth: 0,
-    padding: 12
+    minWidth: 0
   },
   statsBalanceInner: {
-    gap: 4,
+    gap: 2,
     minWidth: 0
   },
   statsMetricLabel: {
@@ -2508,14 +2484,24 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     lineHeight: 34
   },
-  statsIncomeExpense: {
-    gap: 3,
-    minWidth: 0
-  },
   statsIncomeExpenseText: {
     color: "#63706a",
-    fontSize: 12,
-    fontWeight: "900"
+    flexShrink: 1,
+    fontSize: 13,
+    fontWeight: "900",
+    minWidth: 0
+  },
+  statsIncomeExpenseRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    minWidth: 0
+  },
+  statsRecordCount: {
+    color: "#8b93a1",
+    fontSize: 11,
+    fontWeight: "800"
   },
   summaryTrack: {
     backgroundColor: "#dff3e6",
@@ -2523,7 +2509,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     height: 10,
-    marginTop: 2,
     overflow: "hidden",
     width: "100%"
   },
@@ -2532,38 +2517,27 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     height: "100%"
   },
-  statsMiniGrid: {
-    flex: 0.86,
-    gap: 8,
+  statsSecondaryMetrics: {
+    borderTopColor: "#edf1f5",
+    borderTopWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    paddingTop: 8
+  },
+  statsSecondaryItem: {
+    flex: 1,
     minWidth: 0
   },
-  statsMiniCard: {
-    backgroundColor: "#ffffff",
-    borderColor: "#edf1f5",
-    borderRadius: 14,
-    borderWidth: 1,
-    gap: 3,
-    minWidth: 0,
-    overflow: "hidden",
-    paddingHorizontal: 9,
-    paddingVertical: 8
-  },
-  statsMiniLabel: {
+  statsSecondaryLabel: {
     color: "#63706a",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "900"
   },
-  statsMiniValue: {
-    color: "#111827",
-    fontSize: 17,
-    fontWeight: "900",
-    letterSpacing: 0,
-    lineHeight: 21
-  },
-  statsMiniHint: {
+  statsSecondaryHint: {
     color: "#8b93a1",
-    fontSize: 10,
-    fontWeight: "800"
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 2
   },
   overviewMetricStack: {
     gap: 8

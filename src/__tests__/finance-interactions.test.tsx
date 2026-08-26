@@ -216,12 +216,16 @@ describe("FinancePanel interactions", () => {
 
     expect(screen.getByTestId("finance-summary-panel")).toBeOnTheScreen();
     expect(screen.getByTestId("finance-stats-hero")).toBeOnTheScreen();
-    expect(screen.getByTestId("finance-stat-month-expense")).toBeOnTheScreen();
-    expect(screen.getByTestId("finance-stat-month-comparison")).toBeOnTheScreen();
-    expect(screen.getByText("最大单笔支出")).toBeOnTheScreen();
-    expect(screen.getByText("本月记账")).toBeOnTheScreen();
+    expect(screen.getByTestId("finance-hero-secondary-metrics")).toBeOnTheScreen();
+    expect(screen.queryByTestId("finance-stat-month-expense")).toBeNull();
+    expect(screen.queryByTestId("finance-stat-month-comparison")).toBeNull();
+    expect(screen.queryByText("本月记账")).toBeNull();
+    expect(screen.getByText("2笔记录")).toBeOnTheScreen();
+    expect(screen.getByText(/较上月/)).toBeOnTheScreen();
+    expect(screen.getByText(/最大单笔 ¥100\.00/)).toBeOnTheScreen();
     expect(screen.queryByTestId("finance-monthly-overview-card")).toBeNull();
     expect(screen.getByText("本月分类占比")).toBeOnTheScreen();
+    expect(screen.queryByTestId("finance-category-month-label")).toBeNull();
     expect(screen.getByTestId("finance-category-share-chart")).toBeOnTheScreen();
     expect(screen.queryByTestId("finance-category-progress-list")).toBeNull();
     expect(screen.getAllByRole("button", { name: "选择月份：2026年8月" })).toHaveLength(1);
@@ -232,6 +236,8 @@ describe("FinancePanel interactions", () => {
 
     expect(screen.getByText("本月结余")).toBeOnTheScreen();
     expect(screen.getByText("¥-60.00")).toBeOnTheScreen();
+    expect(screen.getByText("1笔记录")).toBeOnTheScreen();
+    expect(screen.getByText(/最大单笔 ¥60\.00/)).toBeOnTheScreen();
     expect(screen.queryByText("本月支出 ¥60.00 · 1 笔")).toBeNull();
     expect(screen.getByText("七月公交")).toBeOnTheScreen();
     expect(screen.queryByText("八月晚饭")).toBeNull();
