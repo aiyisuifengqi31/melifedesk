@@ -8,7 +8,6 @@ import { ButtonFormField, TextFormField } from "@/shared/ui/FormField";
 import { MobileFormLayout, MobileFormRow } from "@/shared/ui/MobileFormLayout";
 import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
 import { StatusSticker } from "@/shared/ui/StatusSticker";
-import { BalanceSummaryCard } from "@/shared/ui/SummaryCard";
 import { IconPiggyBank, IconWalletCards } from "@/shared/ui/lineIcons";
 import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
@@ -106,6 +105,9 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
   const [detailCategory, setDetailCategory] = useState("全部");
   const [detailMonth, setDetailMonth] = useState(todayIso().slice(0, 7));
   const [openActionId, setOpenActionId] = useState<string | null>(null);
+  const [statsMonthMenuOpen, setStatsMonthMenuOpen] = useState(false);
+  const [categorySharesExpanded, setCategorySharesExpanded] = useState(false);
+  const [selectedShareCategory, setSelectedShareCategory] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<FinanceTransaction[]>(() => sortTransactions(loadFinanceTransactions(financeStorage)));
   const [savingEntries, setSavingEntries] = useState<SavingEntry[]>(() => loadSavingEntries(financeStorage));
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>(() => loadCustomCategories(financeStorage));
@@ -194,6 +196,21 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
     () => buildMonthlyFinanceOverview({ selectedMonth: detailMonth, transactions: statsTransactions }),
     [detailMonth, statsTransactions]
   );
+  const monthTransactions = useMemo(
+    () => transactions.filter((transaction) => transaction.localDate.startsWith(detailMonth)),
+    [detailMonth, transactions]
+  );
+  const monthExpenseTransactions = useMemo(
+    () => monthTransactions.filter((transaction) => transaction.transactionType === "expense"),
+    [monthTransactions]
+  );
+  const maxExpenseTransaction = useMemo(
+    () => monthExpenseTransactions.reduce<FinanceTransaction | null>((best, transaction) => {
+      if (!best) return transaction;
+      return moneyToCents(transaction.amount) > moneyToCents(best.amount) ? transaction : best;
+    }, null),
+    [monthExpenseTransactions]
+  );
   const savingTotal = useMemo(() => sumSavingEntries(savingEntries), [savingEntries]);
   const savingStats = useMemo(() => getSavingStats(savingEntries, todayIso()), [savingEntries]);
   const savingVisibleEntries = useMemo(
@@ -205,9 +222,11 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
   const savingTrend = useMemo(() => getSavingTrend(savingEntries), [savingEntries]);
   const savingSticker = useMemo(() => getSavingSticker(savingEntries, savingTotal, todayIso()), [savingEntries, savingTotal]);
   const detailCategories = useMemo(() => {
-    const names = transactions.filter((transaction) => transaction.transactionType === detailType).map((transaction) => transaction.categoryName);
+    const names = transactions
+      .filter((transaction) => transaction.transactionType === detailType && transaction.localDate.startsWith(detailMonth))
+      .map((transaction) => transaction.categoryName);
     return ["全部", ...Array.from(new Set(names))];
-  }, [detailType, transactions]);
+  }, [detailMonth, detailType, transactions]);
   const detailMonths = useMemo(() => {
     const months = transactions.map((transaction) => transaction.localDate.slice(0, 7));
     return Array.from(new Set([todayIso().slice(0, 7), ...months])).sort((left, right) => right.localeCompare(left));
@@ -542,6 +561,21 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
     setFeedback("份子记录已删除。");
   };
 
+  const selectDetailMonth = (nextMonth: string) => {
+    setDetailMonth(nextMonth);
+    setDetailCategory("全部");
+    setOpenActionId(null);
+    setSelectedShareCategory(null);
+    setCategorySharesExpanded(false);
+  };
+
+  const selectCategoryShare = (categoryName: string) => {
+    setDetailType("expense");
+    setDetailCategory(categoryName);
+    setSelectedShareCategory(categoryName);
+    setOpenActionId(null);
+  };
+
   return (
     <View style={styles.stack}>
       {tab === "record" ? (
@@ -655,42 +689,102 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
 
       {tab === "stats" ? (
         <>
-          <View style={styles.overviewCard}>
+          <View testID="finance-stats-hero" style={styles.statsHeroCard}>
             <View pointerEvents="none" style={styles.pageWatermark}>
               <IconWalletCards color="#111827" size={82} />
             </View>
-            <View testID="finance-summary-panel" style={styles.overviewMetricStack}>
-              <View testID="finance-metric-本月结余" style={styles.balanceMetricWrap}>
-                <BalanceSummaryCard
-                  expense={`¥${monthlyOverview.expense.amount}`}
-                  income={`¥${monthlyOverview.income.amount}`}
-                  title="本月结余"
-                  tokens={themeTokens}
-                  value={`¥${monthlyOverview.balance.amount}`}
-                />
+            <View style={styles.statsHeroHeader}>
+              <Text style={styles.statsHeroTitle}>本月财务总览</Text>
+              <View style={styles.statsMonthControl}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`选择月份：${formatMonthLabel(detailMonth)}`}
+                  onPress={() => setStatsMonthMenuOpen((value) => !value)}
+                  style={styles.statsMonthButton}
+                >
+                  <Text numberOfLines={1} style={styles.statsMonthText}>{formatMonthLabel(detailMonth)} ▼</Text>
+                </Pressable>
+                {statsMonthMenuOpen ? (
+                  <View testID="finance-month-menu" style={[styles.monthMenu, styles.statsMonthMenu]}>
+                    {detailMonths.map((item) => (
+                      <Pressable
+                        key={item}
+                        accessibilityRole="button"
+                        accessibilityLabel={`筛选月份：${formatMonthLabel(item)}`}
+                        onPress={() => {
+                          selectDetailMonth(item);
+                          setStatsMonthMenuOpen(false);
+                        }}
+                        style={[styles.monthMenuItem, detailMonth === item ? styles.monthMenuItemActive : null]}
+                      >
+                        <Text style={[styles.monthMenuText, detailMonth === item ? styles.monthMenuTextActive : null]}>{formatMonthLabel(item)}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            </View>
+            <View testID="finance-summary-panel" style={styles.statsHeroGrid}>
+              <View testID="finance-balance-summary" style={styles.statsBalanceBlock}>
+                <View testID="finance-metric-本月结余" style={styles.statsBalanceInner}>
+                  <Text style={styles.statsMetricLabel}>本月结余</Text>
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    style={[styles.statsBalanceValue, moneyToCents(monthlyOverview.balance.amount) < 0 ? styles.balanceHeroAmountNegative : null]}
+                  >
+                    ¥{monthlyOverview.balance.amount}
+                  </Text>
+                </View>
+                <View style={styles.statsIncomeExpense}>
+                  <Text style={styles.statsIncomeExpenseText}>收入 ¥{monthlyOverview.income.amount}</Text>
+                  <Text style={styles.statsIncomeExpenseText}>支出 ¥{monthlyOverview.expense.amount}</Text>
+                  <View style={styles.summaryTrack}>
+                    <View style={[styles.summaryFill, { width: `${getExpenseRatio(monthlyOverview.income.amount, monthlyOverview.expense.amount)}%` }]} />
+                  </View>
+                </View>
+              </View>
+              <View style={styles.statsMiniGrid}>
+                <View testID="finance-stat-month-expense" style={styles.statsMiniCard}>
+                  <Text style={styles.statsMiniLabel}>本月支出</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit style={styles.statsMiniValue}>¥{monthlyOverview.expense.amount}</Text>
+                  <Text style={styles.statsMiniHint}>本月所有支出合计</Text>
+                </View>
+                <View testID="finance-stat-month-comparison" style={styles.statsMiniCard}>
+                  <Text style={styles.statsMiniLabel}>较上月</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.statsMiniValue, getComparisonTextStyle(monthlyOverview.expense.comparison.tone)]}>
+                    {formatCompactComparison(monthlyOverview.expense.comparison.label)}
+                  </Text>
+                  <Text style={styles.statsMiniHint}>按支出金额对比</Text>
+                </View>
+                <View style={styles.statsMiniCard}>
+                  <Text style={styles.statsMiniLabel}>最大单笔支出</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit style={styles.statsMiniValue}>{maxExpenseTransaction ? `¥${maxExpenseTransaction.amount}` : "--"}</Text>
+                  <Text numberOfLines={1} style={styles.statsMiniHint}>{maxExpenseTransaction ? `${maxExpenseTransaction.categoryName} · ${formatShortDate(maxExpenseTransaction.localDate)}` : "暂无支出记录"}</Text>
+                </View>
+                <View style={styles.statsMiniCard}>
+                  <Text style={styles.statsMiniLabel}>本月记账</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit style={styles.statsMiniValue}>{monthTransactions.length} 笔</Text>
+                  <Text style={styles.statsMiniHint}>收入和支出合计</Text>
+                </View>
               </View>
             </View>
           </View>
           <View style={styles.card}>
             <View style={styles.categorySectionHeader}>
               <Text style={styles.cardTitle}>本月分类占比</Text>
+              <Text style={styles.categorySectionHint}>{formatMonthLabel(detailMonth)}</Text>
             </View>
-            {monthlyOverview.categoryShares.length === 0 ? <Text style={styles.emptyText}>暂无支出分类数据。</Text> : monthlyOverview.categoryShares.map((share, index) => {
-              const color = getCategoryColor(share.categoryName, index);
-              const percent = Math.round(share.ratio * 100);
-              return (
-                <View key={share.categoryName} style={styles.shareRow}>
-                  <View style={[styles.shareDot, { backgroundColor: color }]} />
-                  <Text numberOfLines={2} style={styles.shareName}>{share.categoryName}</Text>
-                  <View style={styles.shareTrack}>
-                    <View style={[styles.shareFill, { width: `${percent}%`, backgroundColor: color }]} />
-                  </View>
-                  <Text style={[styles.sharePercent, { color }]}>{percent}%</Text>
-                  <Text style={[styles.shareAmount, { color }]}>¥{share.amount}</Text>
-                </View>
-              );
-            })}
-            {monthlyOverview.categoryShares.length > 0 ? <CategoryPieChart shares={monthlyOverview.categoryShares} /> : null}
+            {monthlyOverview.categoryShares.length === 0 ? <Text style={styles.emptyText}>暂无支出分类数据。</Text> : (
+              <CategoryShareChart
+                expanded={categorySharesExpanded}
+                onSelect={selectCategoryShare}
+                onToggleExpanded={() => setCategorySharesExpanded((value) => !value)}
+                selectedCategory={selectedShareCategory}
+                shares={monthlyOverview.categoryShares}
+                total={monthlyOverview.expense.amount}
+              />
+            )}
           </View>
           <View style={styles.card}>
             <View style={styles.detailTabs}>
@@ -698,6 +792,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
                 setDetailType("expense");
                 setDetailCategory("全部");
                 setOpenActionId(null);
+                setSelectedShareCategory(null);
               }} style={[styles.detailTab, detailType === "expense" ? styles.detailTabActive : null]}>
                 <Text style={[styles.detailTabText, detailType === "expense" ? styles.detailTabTextActive : null]}>支出明细</Text>
               </Pressable>
@@ -705,6 +800,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
                 setDetailType("income");
                 setDetailCategory("全部");
                 setOpenActionId(null);
+                setSelectedShareCategory(null);
               }} style={[styles.detailTab, detailType === "income" ? styles.detailTabActive : null]}>
                 <Text style={[styles.detailTabText, detailType === "income" ? styles.detailTabTextActive : null]}>收入明细</Text>
               </Pressable>
@@ -714,11 +810,15 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
               categories={detailCategories}
               month={detailMonth}
               months={detailMonths}
-              onCategoryChange={setDetailCategory}
+              onCategoryChange={(category) => {
+                setDetailCategory(category);
+                setSelectedShareCategory(category === "全部" ? null : category);
+              }}
               onDelete={deleteTransaction}
-              onMonthChange={setDetailMonth}
+              onMonthChange={selectDetailMonth}
               onToggleActions={(id) => setOpenActionId((current) => (current === id ? null : id))}
               selectedCategory={detailCategory}
+              showMonthPicker={false}
               total={detailTotal}
               transactions={detailTransactions}
               type={detailType}
@@ -1273,6 +1373,7 @@ function FinanceStatementList({
   onMonthChange,
   onToggleActions,
   selectedCategory,
+  showMonthPicker = true,
   total,
   transactions,
   type
@@ -1286,6 +1387,7 @@ function FinanceStatementList({
   onMonthChange: (month: string) => void;
   onToggleActions: (transactionId: string) => void;
   selectedCategory: string;
+  showMonthPicker?: boolean;
   total: string;
   transactions: FinanceTransaction[];
   type: TransactionType;
@@ -1301,42 +1403,44 @@ function FinanceStatementList({
 
   return (
     <View testID="finance-statement-list" style={styles.statementList}>
-      <View style={styles.statementHeader}>
-        <View style={styles.statementMonthBlock}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`选择月份：${formatMonthLabel(month)}`}
-            onPress={() => setMonthMenuOpen((value) => !value)}
-            style={styles.monthSelectButton}
-          >
-            <Text style={styles.statementMonth}>{formatMonthLabel(month)} ▼</Text>
-          </Pressable>
-          <Text style={styles.statementMeta}>{summaryLabel} ¥{total} · {transactions.length} 笔</Text>
-          {monthMenuOpen ? (
-            <View testID="finance-month-menu" style={styles.monthMenu}>
-              {months.map((item) => (
-                <Pressable
-                  key={item}
-                  accessibilityRole="button"
-                  accessibilityLabel={`筛选月份：${formatMonthLabel(item)}`}
-                  onPress={() => {
-                    onMonthChange(item);
-                    setMonthMenuOpen(false);
-                  }}
-                  style={[styles.monthMenuItem, month === item ? styles.monthMenuItemActive : null]}
-                >
-                  <Text style={[styles.monthMenuText, month === item ? styles.monthMenuTextActive : null]}>{formatMonthLabel(item)}</Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
+      {showMonthPicker ? (
+        <View style={styles.statementHeader}>
+          <View style={styles.statementMonthBlock}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`选择月份：${formatMonthLabel(month)}`}
+              onPress={() => setMonthMenuOpen((value) => !value)}
+              style={styles.monthSelectButton}
+            >
+              <Text style={styles.statementMonth}>{formatMonthLabel(month)} ▼</Text>
+            </Pressable>
+            <Text style={styles.statementMeta}>{summaryLabel} ¥{total} · {transactions.length} 笔</Text>
+            {monthMenuOpen ? (
+              <View testID="finance-month-menu" style={styles.monthMenu}>
+                {months.map((item) => (
+                  <Pressable
+                    key={item}
+                    accessibilityRole="button"
+                    accessibilityLabel={`筛选月份：${formatMonthLabel(item)}`}
+                    onPress={() => {
+                      onMonthChange(item);
+                      setMonthMenuOpen(false);
+                    }}
+                    style={[styles.monthMenuItem, month === item ? styles.monthMenuItemActive : null]}
+                  >
+                    <Text style={[styles.monthMenuText, month === item ? styles.monthMenuTextActive : null]}>{formatMonthLabel(item)}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+          </View>
         </View>
-      </View>
+      ) : null}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
         {categories.map((item) => (
           <Pressable key={item} accessibilityRole="button" accessibilityLabel={`筛选分类：${item}`} onPress={() => onCategoryChange(item)} style={[styles.filterChip, selectedCategory === item ? styles.filterChipActive : null]}>
-            <Text style={[styles.filterText, selectedCategory === item ? styles.filterTextActive : null]}>{item}</Text>
+            <Text style={[styles.filterText, selectedCategory === item ? styles.filterTextActive : null]}>{selectedCategory === item && item !== "全部" ? `${item} ×` : item}</Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -1440,6 +1544,29 @@ function groupTransactionsByDate(transactions: FinanceTransaction[]) {
     }));
 }
 
+function getExpenseRatio(income: string, expense: string) {
+  const incomeCents = Math.max(moneyToCents(income), 0);
+  const expenseCents = Math.max(moneyToCents(expense), 0);
+  const base = Math.max(incomeCents, expenseCents, 1);
+  return Math.min(100, Math.max(4, Math.round((expenseCents / base) * 100)));
+}
+
+function formatCompactComparison(label: string) {
+  return label.replace(/^较上月\s*/, "");
+}
+
+function formatShortDate(date: string) {
+  const [, month, day] = date.split("-");
+  return `${Number(month)}月${Number(day)}日`;
+}
+
+function getComparisonTextStyle(tone: string) {
+  if (tone === "up") return styles.comparisonUp;
+  if (tone === "down") return styles.comparisonDown;
+  if (tone === "flat") return styles.comparisonFlat;
+  return styles.comparisonMuted;
+}
+
 function formatStatementDate(date: string) {
   const today = todayIso();
   const yesterday = shiftDate(new Date(), -1).toISOString().slice(0, 10);
@@ -1483,54 +1610,94 @@ function GiftItem({ onDelete, record }: { onDelete: (giftId: string) => void; re
 
 type MonthlyCategoryShares = ReturnType<typeof buildMonthlyFinanceOverview>["categoryShares"];
 
-function CategoryPieChart({ shares }: { shares: MonthlyCategoryShares }) {
+function CategoryShareChart({
+  expanded,
+  onSelect,
+  onToggleExpanded,
+  selectedCategory,
+  shares,
+  total
+}: {
+  expanded: boolean;
+  onSelect: (categoryName: string) => void;
+  onToggleExpanded: () => void;
+  selectedCategory: string | null;
+  shares: MonthlyCategoryShares;
+  total: string;
+}) {
   const size = 110;
   const radius = 36;
   const stroke = 18;
   const center = size / 2;
   const circumference = 2 * Math.PI * radius;
   let offset = 0;
+  const visibleShares = expanded ? shares : shares.slice(0, 5);
+  const selectedShare = shares.find((share) => share.categoryName === selectedCategory) ?? null;
+  const centerLabel = selectedShare?.categoryName ?? "本月支出";
+  const centerAmount = selectedShare?.amount ?? total;
+  const centerPercent = selectedShare ? `${Math.round(selectedShare.ratio * 100)}%` : null;
+  const hiddenCount = Math.max(shares.length - visibleShares.length, 0);
 
   return (
-    <View accessibilityLabel="本月分类占比饼图" style={styles.piePanel}>
-      <Svg height={size} viewBox={`0 0 ${size} ${size}`} width={size}>
-        <Circle cx={center} cy={center} fill="#ffffff" r={radius} stroke="#eef2f7" strokeWidth={stroke} />
-        {shares.map((share, index) => {
-          const length = Math.max(share.ratio * circumference, shares.length === 1 ? circumference : 2);
-          const dashOffset = -offset;
-          const color = getCategoryColor(share.categoryName, index);
-          offset += length;
-          return (
-            <Circle
-              key={share.categoryName}
-              cx={center}
-              cy={center}
-              fill="transparent"
-              r={radius}
-              rotation="-90"
-              origin={`${center}, ${center}`}
-              stroke={color}
-              strokeDasharray={`${length} ${circumference - length}`}
-              strokeDashoffset={dashOffset}
-              strokeLinecap="round"
-              strokeWidth={stroke}
-            />
-          );
-        })}
-        <Circle cx={center} cy={center} fill="#ffffff" r={radius - stroke / 2 - 2} />
-      </Svg>
+    <View testID="finance-category-share-chart" accessibilityLabel="本月分类占比饼图" style={styles.piePanel}>
+      <View style={styles.donutWrap}>
+        <Svg height={size} viewBox={`0 0 ${size} ${size}`} width={size}>
+          <Circle cx={center} cy={center} fill="#ffffff" r={radius} stroke="#eef2f7" strokeWidth={stroke} />
+          {shares.map((share, index) => {
+            const length = Math.max(share.ratio * circumference, shares.length === 1 ? circumference : 2);
+            const dashOffset = -offset;
+            const color = getCategoryColor(share.categoryName, index);
+            offset += length;
+            return (
+              <Circle
+                key={share.categoryName}
+                cx={center}
+                cy={center}
+                fill="transparent"
+                r={radius}
+                rotation="-90"
+                origin={`${center}, ${center}`}
+                stroke={color}
+                strokeDasharray={`${length} ${circumference - length}`}
+                strokeDashoffset={dashOffset}
+                strokeLinecap="round"
+                strokeWidth={stroke}
+              />
+            );
+          })}
+          <Circle cx={center} cy={center} fill="#ffffff" r={radius - stroke / 2 - 2} />
+        </Svg>
+        <View pointerEvents="none" style={styles.donutCenter}>
+          <Text numberOfLines={1} adjustsFontSizeToFit style={styles.donutCenterLabel}>{centerLabel}</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit style={styles.donutCenterValue}>¥{centerAmount}</Text>
+          {centerPercent ? <Text style={styles.donutCenterPercent}>{centerPercent}</Text> : null}
+        </View>
+      </View>
       <View testID="finance-category-pie-legend" style={styles.pieLegend}>
-        {shares.map((share, index) => {
+        {visibleShares.map((share, index) => {
           const color = getCategoryColor(share.categoryName, index);
           const percent = Math.round(share.ratio * 100);
+          const active = selectedCategory === share.categoryName;
           return (
-            <View key={share.categoryName} style={styles.legendRow}>
+            <Pressable
+              key={share.categoryName}
+              accessibilityRole="button"
+              accessibilityLabel={`查看${share.categoryName}明细`}
+              onPress={() => onSelect(share.categoryName)}
+              style={[styles.legendRow, active ? styles.legendRowActive : null]}
+            >
               <View style={[styles.legendDot, { backgroundColor: color }]} />
               <Text numberOfLines={1} style={styles.legendName}>{share.categoryName}</Text>
               <Text style={[styles.legendPercent, { color }]}>{percent}%</Text>
-            </View>
+              <Text style={[styles.legendAmount, { color }]}>¥{share.amount}</Text>
+            </Pressable>
           );
         })}
+        {shares.length > 5 ? (
+          <Pressable accessibilityRole="button" accessibilityLabel={expanded ? "收起分类" : `展开其他 ${hiddenCount} 类`} onPress={onToggleExpanded} style={styles.categoryExpandButton}>
+            <Text style={styles.categoryExpandText}>{expanded ? "收起分类 ↑" : `展开其他 ${hiddenCount} 类 ↓`}</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -2253,6 +2420,151 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 12
   },
+  statsHeroCard: {
+    backgroundColor: "rgba(255,255,255,0.94)",
+    borderColor: "#dfe8e5",
+    borderRadius: 20,
+    borderWidth: 1,
+    elevation: 2,
+    gap: 12,
+    overflow: "visible",
+    padding: 14,
+    position: "relative",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    zIndex: 20
+  },
+  statsHeroHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+    zIndex: 30
+  },
+  statsHeroTitle: {
+    color: "#111827",
+    flex: 1,
+    fontSize: 19,
+    fontWeight: "900",
+    minWidth: 0
+  },
+  statsMonthControl: {
+    flexShrink: 0,
+    position: "relative",
+    zIndex: 40
+  },
+  statsMonthButton: {
+    alignItems: "center",
+    backgroundColor: "#f2faf5",
+    borderColor: "#d7eadc",
+    borderRadius: 999,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 34,
+    paddingHorizontal: 12,
+    paddingVertical: 6
+  },
+  statsMonthText: {
+    color: "#4f6757",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  statsMonthMenu: {
+    left: undefined,
+    right: 0,
+    top: 42
+  },
+  statsHeroGrid: {
+    flexDirection: "row",
+    gap: 10,
+    minWidth: 0
+  },
+  statsBalanceBlock: {
+    backgroundColor: "#f8fbff",
+    borderColor: "#dfe8ef",
+    borderRadius: 16,
+    borderWidth: 1,
+    flex: 1.16,
+    gap: 7,
+    justifyContent: "center",
+    minWidth: 0,
+    padding: 12
+  },
+  statsBalanceInner: {
+    gap: 4,
+    minWidth: 0
+  },
+  statsMetricLabel: {
+    color: "#63706a",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  statsBalanceValue: {
+    color: "#63ad68",
+    fontSize: 30,
+    fontWeight: "900",
+    letterSpacing: 0,
+    lineHeight: 34
+  },
+  statsIncomeExpense: {
+    gap: 3,
+    minWidth: 0
+  },
+  statsIncomeExpenseText: {
+    color: "#63706a",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  summaryTrack: {
+    backgroundColor: "#dff3e6",
+    borderColor: "#cfe8da",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 10,
+    marginTop: 2,
+    overflow: "hidden",
+    width: "100%"
+  },
+  summaryFill: {
+    backgroundColor: "#24aee0",
+    borderRadius: 999,
+    height: "100%"
+  },
+  statsMiniGrid: {
+    flex: 0.86,
+    gap: 8,
+    minWidth: 0
+  },
+  statsMiniCard: {
+    backgroundColor: "#ffffff",
+    borderColor: "#edf1f5",
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 3,
+    minWidth: 0,
+    overflow: "hidden",
+    paddingHorizontal: 9,
+    paddingVertical: 8
+  },
+  statsMiniLabel: {
+    color: "#63706a",
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  statsMiniValue: {
+    color: "#111827",
+    fontSize: 17,
+    fontWeight: "900",
+    letterSpacing: 0,
+    lineHeight: 21
+  },
+  statsMiniHint: {
+    color: "#8b93a1",
+    fontSize: 10,
+    fontWeight: "800"
+  },
   overviewMetricStack: {
     gap: 8
   },
@@ -2324,14 +2636,51 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     flexDirection: "row",
-    gap: 14,
+    gap: 12,
     justifyContent: "space-between",
     marginTop: 10,
-    padding: 14
+    minWidth: 0,
+    padding: 12
+  },
+  donutWrap: {
+    alignItems: "center",
+    height: 110,
+    justifyContent: "center",
+    position: "relative",
+    width: 110
+  },
+  donutCenter: {
+    alignItems: "center",
+    gap: 1,
+    justifyContent: "center",
+    left: 27,
+    position: "absolute",
+    top: 34,
+    width: 56
+  },
+  donutCenterLabel: {
+    color: "#6b766f",
+    fontSize: 10,
+    fontWeight: "900",
+    maxWidth: 54,
+    textAlign: "center"
+  },
+  donutCenterValue: {
+    color: "#111827",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0,
+    maxWidth: 54,
+    textAlign: "center"
+  },
+  donutCenterPercent: {
+    color: "#8b93a1",
+    fontSize: 9,
+    fontWeight: "900"
   },
   pieLegend: {
     flex: 1,
-    gap: 8,
+    gap: 6,
     minWidth: 0
   },
   pieTitle: {
@@ -2704,7 +3053,36 @@ const styles = StyleSheet.create({
   legendRow: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 8
+    gap: 6,
+    minHeight: 27,
+    minWidth: 0,
+    paddingHorizontal: 5,
+    paddingVertical: 3
+  },
+  legendRowActive: {
+    backgroundColor: "#f2faf5",
+    borderRadius: 10
+  },
+  legendAmount: {
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "right",
+    width: 68
+  },
+  categoryExpandButton: {
+    alignItems: "center",
+    backgroundColor: "#f8fcf9",
+    borderColor: "#dceade",
+    borderRadius: 999,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 30,
+    marginTop: 2
+  },
+  categoryExpandText: {
+    color: "#63ad68",
+    fontSize: 12,
+    fontWeight: "900"
   },
   segment: {
     backgroundColor: "#f8fafc",
@@ -2934,7 +3312,7 @@ const styles = StyleSheet.create({
   },
   statementList: {
     gap: 12,
-    paddingBottom: 88
+    paddingBottom: 12
   },
   statementMeta: {
     color: "#697386",

@@ -215,9 +215,16 @@ describe("FinancePanel interactions", () => {
     render(<FinancePanel storage={storage} />);
 
     expect(screen.getByTestId("finance-summary-panel")).toBeOnTheScreen();
+    expect(screen.getByTestId("finance-stats-hero")).toBeOnTheScreen();
+    expect(screen.getByTestId("finance-stat-month-expense")).toBeOnTheScreen();
+    expect(screen.getByTestId("finance-stat-month-comparison")).toBeOnTheScreen();
+    expect(screen.getByText("最大单笔支出")).toBeOnTheScreen();
+    expect(screen.getByText("本月记账")).toBeOnTheScreen();
     expect(screen.queryByTestId("finance-monthly-overview-card")).toBeNull();
     expect(screen.getByText("本月分类占比")).toBeOnTheScreen();
-    expect(screen.getByTestId("finance-category-pie-legend")).toBeOnTheScreen();
+    expect(screen.getByTestId("finance-category-share-chart")).toBeOnTheScreen();
+    expect(screen.queryByTestId("finance-category-progress-list")).toBeNull();
+    expect(screen.getAllByRole("button", { name: "选择月份：2026年8月" })).toHaveLength(1);
 
     fireEvent.press(screen.getByRole("button", { name: "选择月份：2026年8月" }));
     expect(screen.getByTestId("finance-month-menu")).toHaveStyle({ zIndex: 200 });
@@ -225,9 +232,49 @@ describe("FinancePanel interactions", () => {
 
     expect(screen.getByText("本月结余")).toBeOnTheScreen();
     expect(screen.getByText("¥-60.00")).toBeOnTheScreen();
-    expect(screen.getByText("本月支出 ¥60.00 · 1 笔")).toBeOnTheScreen();
+    expect(screen.queryByText("本月支出 ¥60.00 · 1 笔")).toBeNull();
     expect(screen.getByText("七月公交")).toBeOnTheScreen();
     expect(screen.queryByText("八月晚饭")).toBeNull();
+  });
+
+  it("keeps the category share chart compact, expandable, and linked to detail filters", () => {
+    const storage = makeStorage();
+    saveFinanceTransactions(
+      [
+        ["餐饮", "100.00", "晚饭"],
+        ["情侣约会攒钱", "90.00", "约会预算"],
+        ["购物", "80.00", "买衣服"],
+        ["出行", "70.00", "打车"],
+        ["娱乐", "60.00", "电影"],
+        ["宠物", "50.00", "猫粮"]
+      ].map(([categoryName, amount, note], index) => ({
+        amount,
+        categoryName,
+        createTime: `2026-08-18T0${index}:10:00.000Z`,
+        id: `expense-share-${index}`,
+        localDate: "2026-08-18",
+        note,
+        transactionType: "expense" as const
+      })),
+      storage
+    );
+
+    render(<FinancePanel storage={storage} />);
+
+    expect(screen.getByTestId("finance-category-share-chart")).toBeOnTheScreen();
+    expect(screen.getByTestId("finance-category-pie-legend")).toBeOnTheScreen();
+    expect(screen.queryByTestId("finance-category-progress-list")).toBeNull();
+    expect(screen.getByRole("button", { name: "查看餐饮明细" })).toBeOnTheScreen();
+    expect(screen.queryByRole("button", { name: "查看宠物明细" })).toBeNull();
+
+    fireEvent.press(screen.getByRole("button", { name: "展开其他 1 类" }));
+    expect(screen.getByRole("button", { name: "查看宠物明细" })).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "收起分类" })).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole("button", { name: "查看餐饮明细" }));
+    expect(screen.getByText("餐饮 ×")).toBeOnTheScreen();
+    expect(screen.getByText("晚饭")).toBeOnTheScreen();
+    expect(screen.queryByText("买衣服")).toBeNull();
   });
 
   it("uses four-column category buttons inside the quick accounting sheet", () => {
