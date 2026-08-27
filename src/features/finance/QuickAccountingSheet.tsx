@@ -242,7 +242,13 @@ function TypeButton({ active, label, onPress, styles }: { active: boolean; label
   );
 }
 
-export function CategoryLineIcon({ color, name, size = 24 }: { color: string; name: string; size?: number }) {
+export function getCategoryIconName(name: string) {
+  if (name === "情侣约会攒钱" || name === "情侣约会" || name.includes("情侣约会")) return "情侣存款";
+  return name;
+}
+
+export function CategoryLineIcon({ color, name: rawName, size = 24 }: { color: string; name: string; size?: number }) {
+  const name = getCategoryIconName(rawName);
   const common = { fill: "none", stroke: color, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, strokeWidth: 2 };
   if (name === "餐饮") return <Svg height={size} viewBox="0 0 24 24" width={size}><Path {...common} d="M7 3v8" /><Path {...common} d="M10 3v8" /><Path {...common} d="M8.5 11v10" /><Path {...common} d="M17 3v18" /><Path {...common} d="M14 3c3 2 3 6 0 8" /></Svg>;
   if (name === "买菜" || name === "生鲜") return <Svg height={size} viewBox="0 0 24 24" width={size}><Path {...common} d="M4 8h16l-1.5 12h-13L4 8Z" /><Path {...common} d="M9 8V6a3 3 0 0 1 6 0v2" /><Path {...common} d="M9 12v4M15 12v4" /></Svg>;

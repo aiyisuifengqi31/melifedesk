@@ -116,7 +116,18 @@ describe("HomePanel layout (Phase 2)", () => {
     render(<HomePanel themeTokens={testTokens} />);
 
     const quickAccountingCard = screen.getByTestId("home-quick-accounting-card");
-    expect(within(quickAccountingCard).getByText("＋")).toBeOnTheScreen();
+    expect(within(quickAccountingCard).getByText("+")).toBeOnTheScreen();
+    expect(within(quickAccountingCard).queryByText("＋")).toBeNull();
+    expect(within(quickAccountingCard).queryByText("..")).toBeNull();
     expect(within(quickAccountingCard).queryByText("＋ 记一笔")).toBeNull();
+  });
+
+  it("keeps the meal spinner call to action prominent in the compact card", () => {
+    render(<HomePanel themeTokens={testTokens} />);
+
+    const mealCard = screen.getByTestId("home-meal-card");
+    const cta = within(mealCard).getByTestId("meal-spinner-compact-cta");
+    expect(cta).toHaveTextContent("去转盘 →");
+    expect(cta.props.style).toEqual(expect.objectContaining({ fontSize: 20, marginTop: "auto" }));
   });
 });

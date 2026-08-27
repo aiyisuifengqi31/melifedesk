@@ -329,7 +329,7 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
                 wrapperStyle={styles.qaPrimaryWrap}
                 vibrate={12}
               >
-                <Text numberOfLines={1} style={styles.qaPrimaryText}>＋ 记一笔</Text>
+                <Text style={styles.qaPrimaryText}>+</Text>
               </PressableScale>
               <PressableScale
                 accessibilityLabel="账单"
@@ -440,7 +440,7 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
               testID="meal-spinner-compact-entry"
             >
               <Text numberOfLines={1} style={styles.mealCount}>{`${MEAL_PRESET_COUNT} 个候选`}</Text>
-              <Text numberOfLines={1} style={styles.mealCta}>去转盘 →</Text>
+              <Text numberOfLines={1} style={styles.mealCta} testID="meal-spinner-compact-cta">去转盘 →</Text>
             </Pressable>
           </HomeCard>
         );
@@ -659,8 +659,7 @@ function createStyles(tokens: UiTokens) {
       gap: 6
     },
     qaPrimaryWrap: {
-      flex: 3,
-      minWidth: 0
+      flexShrink: 0
     },
     qaSecondaryWrap: {
       flex: 1,
@@ -671,15 +670,14 @@ function createStyles(tokens: UiTokens) {
       alignItems: "center",
       backgroundColor: tokens.accent,
       borderRadius: 12,
+      height: 40,
       justifyContent: "center",
-      minHeight: 40,
-      paddingHorizontal: 4,
-      paddingVertical: 9
+      width: 40
     },
     qaPrimaryText: {
       color: "#ffffff",
       flexShrink: 0,
-      fontSize: 14,
+      fontSize: 20,
       fontWeight: "900"
     },
     qaSecondaryButton: {
@@ -701,8 +699,10 @@ function createStyles(tokens: UiTokens) {
     mealCardBody: {
       alignItems: "flex-start",
       flex: 1,
-      justifyContent: "center",
-      paddingTop: 4
+      gap: 8,
+      justifyContent: "space-between",
+      minHeight: 84,
+      paddingTop: 12
     },
     mealCount: {
       color: tokens.textMuted,
@@ -713,8 +713,10 @@ function createStyles(tokens: UiTokens) {
     mealCta: {
       color: tokens.accent,
       flexShrink: 0,
-      fontSize: 17,
-      fontWeight: "900"
+      fontSize: 20,
+      fontWeight: "900",
+      lineHeight: 24,
+      marginTop: "auto"
     },
     summaryCard: {
       backgroundColor: "#ffffff",

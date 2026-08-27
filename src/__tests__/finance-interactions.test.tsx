@@ -278,6 +278,10 @@ describe("FinancePanel interactions", () => {
     expect(screen.getByTestId("finance-category-pie-legend")).toBeOnTheScreen();
     expect(screen.queryByTestId("finance-category-progress-list")).toBeNull();
     expect(screen.getByRole("button", { name: "查看餐饮明细" })).toBeOnTheScreen();
+    expect(screen.getByTestId("finance-category-legend-icon-餐饮")).toBeOnTheScreen();
+    expect(screen.getByTestId("finance-category-legend-icon-情侣约会攒钱")).toBeOnTheScreen();
+    expect(screen.queryByTestId("finance-category-legend-dot-餐饮")).toBeNull();
+    expect(screen.getAllByText("情侣约会攒钱").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "查看宠物明细" })).toBeNull();
 
     fireEvent.press(screen.getByRole("button", { name: "展开其他 1 类" }));

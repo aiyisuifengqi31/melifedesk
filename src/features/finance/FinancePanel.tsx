@@ -85,6 +85,11 @@ function getCategoryColor(categoryName: string, index?: number): string {
   const hash = categoryName.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
   return chartColors[hash % chartColors.length];
 }
+
+function withAlpha(hexColor: string, alpha: string) {
+  return hexColor.startsWith("#") && hexColor.length === 7 ? `${hexColor}${alpha}` : hexColor;
+}
+
 const transactionTypeOptions: Array<{ label: string; value: TransactionType }> = [
   { label: "支出", value: "expense" },
   { label: "收入", value: "income" }
@@ -1674,8 +1679,10 @@ function CategoryShareChart({
               onPress={() => onSelect(share.categoryName)}
               style={[styles.legendRow, active ? styles.legendRowActive : null]}
             >
-              <View style={[styles.legendDot, { backgroundColor: color }]} />
-              <Text numberOfLines={1} style={styles.legendName}>{share.categoryName}</Text>
+              <View testID={`finance-category-legend-icon-${share.categoryName}`} style={[styles.legendIconBadge, { backgroundColor: withAlpha(color, "20") }]}>
+                <CategoryLineIcon color={color} name={share.categoryName} size={15} />
+              </View>
+              <Text numberOfLines={2} style={styles.legendName}>{share.categoryName}</Text>
               <Text style={[styles.legendPercent, { color }]}>{percent}%</Text>
               <Text style={[styles.legendAmount, { color }]}>¥{share.amount}</Text>
             </Pressable>
@@ -3013,29 +3020,34 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900"
   },
-  legendDot: {
+  legendIconBadge: {
+    alignItems: "center",
     borderRadius: 999,
-    height: 10,
-    width: 10
+    height: 24,
+    justifyContent: "center",
+    width: 24
   },
   legendName: {
     color: "#111827",
     flex: 1,
-    fontSize: 13,
+    flexShrink: 1,
+    fontSize: 12,
     fontWeight: "900",
+    lineHeight: 15,
     minWidth: 0
   },
   legendPercent: {
-    fontSize: 13,
+    flexShrink: 0,
+    fontSize: 12,
     fontWeight: "900",
     textAlign: "right",
-    width: 40
+    width: 34
   },
   legendRow: {
     alignItems: "center",
     flexDirection: "row",
     gap: 6,
-    minHeight: 27,
+    minHeight: 30,
     minWidth: 0,
     paddingHorizontal: 5,
     paddingVertical: 3
@@ -3045,10 +3057,11 @@ const styles = StyleSheet.create({
     borderRadius: 10
   },
   legendAmount: {
-    fontSize: 12,
+    flexShrink: 0,
+    fontSize: 11,
     fontWeight: "900",
     textAlign: "right",
-    width: 68
+    width: 62
   },
   categoryExpandButton: {
     alignItems: "center",
