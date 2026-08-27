@@ -37,6 +37,8 @@ import { hydrateBackgroundFromCloud, loadBackground, saveBackground, type Backgr
 import { FixedBottomTabs } from "@/shared/ui/FixedBottomTabs";
 import { UndoToastHost, showUndoToast } from "@/shared/ui/UndoToast";
 import { useDisableTouchCallout } from "@/shared/ui/useDisableTouchCallout";
+import { StartupPerf } from "@/lib/startupPerf";
+import { runAfterFirstPaint } from "@/lib/afterFirstPaint";
 import { setPlanFocus } from "@/features/plan/planFocus";
 import { ThemedNavIcon } from "./ThemedNavIcon";
 
@@ -53,8 +55,8 @@ type ShortcutRequest = {
 };
 
 const app = getPublicAppConfig();
-const PRIMARY_ROUTE_KEYS: RouteKey[] = ["home", "plan", "finance", "love", "exam"];
-const MORE_ROUTE_KEYS: RouteKey[] = ["workout", "fun"];
+const PRIMARY_ROUTE_KEYS: RouteKey[] = ["home", "plan", "finance", "exam"];
+const MORE_ROUTE_KEYS: RouteKey[] = ["love", "workout", "fun"];
 const navItemByKey = (key: RouteKey) => NAV_ITEMS.find((item) => item.key === key);
 const PRIMARY_NAV_ITEMS = PRIMARY_ROUTE_KEYS.map(navItemByKey).filter((item): item is NavItem => Boolean(item));
 const MORE_NAV_ITEMS = MORE_ROUTE_KEYS.map(navItemByKey).filter((item): item is NavItem => Boolean(item));
@@ -81,32 +83,44 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const [background, setBackground] = useState<BackgroundSource | null>(() => loadBackground());
   const backgroundDirtyRef = useRef(false);
 
+  // 首帧已经用本地数据画出来了：这里只记录“页面已渲染 / 已可交互”。
+  useEffect(() => {
+    StartupPerf.mark("Homepage rendered");
+    const cancel = runAfterFirstPaint(() => StartupPerf.mark("Homepage interactive"));
+    return cancel;
+  }, []);
+
+  // 资料与背景都属于“非必需数据”：等首帧画完再去云端刷新，失败/超时都只保留本地值。
   useEffect(() => {
     let cancelled = false;
-    hydrateProfileFromCloud()
-      .then((next) => {
-        if (!cancelled) {
-          setProfile(next);
-        }
-      })
-      .catch(() => {});
+    const cancel = runAfterFirstPaint(() => {
+      hydrateProfileFromCloud()
+        .then((next) => {
+          if (!cancelled) {
+            setProfile(next);
+            StartupPerf.mark("User profile ready");
+          }
+        })
+        .catch(() => {});
+      hydrateBackgroundFromCloud()
+        .then((next) => {
+          if (!cancelled && !backgroundDirtyRef.current) {
+            setBackground(next);
+            StartupPerf.mark("Background cloud ready");
+          }
+        })
+        .catch(() => {});
+    });
     return () => {
       cancelled = true;
+      cancel();
     };
   }, []);
 
+  // 启动后 3s 打印完整时间线（此时云端水合与背景图片通常已返回）。
   useEffect(() => {
-    let cancelled = false;
-    hydrateBackgroundFromCloud()
-      .then((next) => {
-        if (!cancelled && !backgroundDirtyRef.current) {
-          setBackground(next);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
+    const id = setTimeout(() => StartupPerf.report(), 3000);
+    return () => clearTimeout(id);
   }, []);
 
   const activeRoute = route ?? currentRoute;
@@ -122,7 +136,23 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const viewportHeight = isMobile && Platform.OS === "web" ? ("100dvh" as const) : Math.max(dimensions.height, 640);
   const hasSecondaryTabs = activeKey === "finance" || activeKey === "love" || activeKey === "exam" || activeKey === "fun";
   const imageSource = useMemo(() => getImageSource(background), [background]);
+  // A/B 对照开关：?nobg=1 时关闭主题背景图（纯色），用于测量背景对首屏的影响。默认开启，不改变正常体验。
+  const disableBackground = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return new URLSearchParams(window.location.search).get("nobg") === "1";
+    } catch {
+      return false;
+    }
+  }, []);
   const styles = useMemo(() => createStyles(tokens, sidebarWidth, isMobile, viewportHeight, hasSecondaryTabs, navOffset), [tokens, sidebarWidth, isMobile, viewportHeight, hasSecondaryTabs, navOffset]);
+
+  // 无背景图（关闭背景 / 未设置）时，首屏背景即时就绪，打点收尾。
+  useEffect(() => {
+    if (disableBackground || !imageSource) {
+      StartupPerf.mark("Background image ready");
+    }
+  }, [disableBackground, imageSource]);
 
   useEffect(() => {
     if (route && !moreRouteActive) {
@@ -173,6 +203,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const handleNavigate = (href: NavItem["href"]) => {
     setQuickMenuOpen(false);
     setShortcutRequest(null);
+    const nextKey = routeToKey(href);
     setManualMoreOpen(null);
     if (onNavigate) {
       onNavigate(href);
@@ -363,6 +394,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
                 <ShortcutButton icon="□" label="添加待办" testID="quick-shortcut-todos" onPress={() => openShortcut("todos")} />
                 <ShortcutButton icon="✎" label="写备忘录" testID="quick-shortcut-notes" onPress={() => openShortcut("notes")} />
                 <ShortcutButton icon="↗" label="记录运动" testID="quick-shortcut-workout" onPress={() => openShortcut("workout")} />
+                <ShortcutButton icon="📷" label="智能相机" testID="quick-shortcut-camera" onPress={() => handleNavigate("/smart-camera" as unknown as NavItem["href"])} />
               </View>
             ) : null}
             <Pressable
@@ -388,9 +420,10 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
         </View>
       </View>
 
-      {imageSource ? (
+      {imageSource && !disableBackground ? (
         <ImageBackground
           imageStyle={styles.backgroundImage as ImageStyle}
+          onLoadEnd={() => StartupPerf.mark("Background image ready")}
           resizeMode="cover"
           source={imageSource}
           style={styles.content}
@@ -459,7 +492,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
         visible={quickAccountingOpen}
       />
 
-      <UndoToastHost routeKey={activeKey} style={styles.undoToastHost} tokens={tokens} />
+      <UndoToastHost tokens={tokens} />
 
       {settingsOpen ? (
         <SettingsPanel
@@ -814,18 +847,17 @@ function createStyles(
       color: tokens.accent
     },
     morePanel: {
-      alignItems: "center",
-      alignSelf: "center",
-      gap: 5,
-      paddingLeft: 0,
+      alignItems: "flex-start",
+      gap: 4,
+      paddingLeft: compactSidebar ? 18 : 24,
       paddingTop: 4,
       position: "relative",
-      width: compactSidebar ? 54 : "80%"
+      width: "100%"
     },
     moreConnector: {
       backgroundColor: tokens.border,
       bottom: 6,
-      left: compactSidebar ? 5 : 8,
+      left: compactSidebar ? 8 : 11,
       position: "absolute",
       top: 6,
       width: 1,
@@ -841,16 +873,16 @@ function createStyles(
       paddingHorizontal: 4,
       paddingVertical: 5,
       position: "relative",
-      width: "100%",
+      width: compactSidebar ? 48 : "74%",
       zIndex: 1
     },
     navSubTick: {
       backgroundColor: tokens.border,
       height: 1,
-      left: compactSidebar ? -5 : -7,
+      left: compactSidebar ? -10 : -13,
       position: "absolute",
       top: "50%",
-      width: compactSidebar ? 5 : 7,
+      width: compactSidebar ? 10 : 13,
       zIndex: 0
     },
     navSubItemSelected: {
@@ -1004,12 +1036,6 @@ function createStyles(
       position: "absolute",
       right: contentPadding,
       zIndex: 80
-    },
-    undoToastHost: {
-      left: sidebarWidth + contentPadding,
-      right: contentPadding,
-      top: Platform.OS === "web" ? ("calc(14px + env(safe-area-inset-top))" as unknown as number) : 14,
-      zIndex: 1200
     },
     card: {
       backgroundColor: tokens.surface,

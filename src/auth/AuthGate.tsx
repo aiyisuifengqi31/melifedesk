@@ -1,21 +1,51 @@
 import { usePathname, useRouter } from "expo-router";
 import type { Href } from "expo-router";
-import { useEffect, useMemo, useState, type PropsWithChildren } from "react";
+import { useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { getPublicAppConfig } from "@/config/app";
 import { readActiveUser, syncActiveUser } from "./localScope";
+import { isPeekUsable, peekPersistedSession } from "./persistedSession";
 import { getSupabaseClient } from "./supabaseClient";
+import { StartupPerf } from "@/lib/startupPerf";
 
 type GateState = "loading" | "signedIn" | "signedOut";
 
 const app = getPublicAppConfig();
-const STARTUP_SESSION_GRACE_MS = 300;
+/** 本地无法直接判定时的兜底等待（越短越好，超时后按上次活跃账号放行）。 */
+const STARTUP_SESSION_GRACE_MS = 600;
 
-function getInitialGateState(client: ReturnType<typeof getSupabaseClient>, pathname: string): GateState {
-  if (!client) return "signedIn";
-  if (pathname === "/login") return "loading";
-  return readActiveUser() ? "signedIn" : "loading";
+let activeUserBootstrapped = false;
+
+/** 只做一次：把本地会话里的 userId 同步为“当前活跃账号”（换人时会清空上一个人的本地缓存）。 */
+function bootstrapActiveUserOnce(userId: string) {
+  if (activeUserBootstrapped) return;
+  activeUserBootstrapped = true;
+  syncActiveUser(userId);
+}
+
+/** OAuth / 邮件登录回调：URL 里带 token 或 code，必须交给 supabase 自己解析，不能走快速通道。 */
+function hasAuthCallbackInUrl(): boolean {
+  if (typeof window === "undefined" || !window.location) return false;
+  const href = window.location.href ?? "";
+  return /[#&?](access_token|refresh_token|error_description)=/.test(href) || /[?&]code=/.test(href);
+}
+
+/**
+ * 首帧就地判定登录态：
+ * - 本地已有未过期会话 → 直接进入工作台（后台继续校验，失效会跳登录页）
+ * - 其它情况 → 保持原有异步等待 + 兜底逻辑
+ */
+export function resolveInitialGateState(hasClient: boolean): GateState {
+  if (!hasClient) return "signedIn";
+  if (typeof window === "undefined") return "loading";
+  if (hasAuthCallbackInUrl()) return "loading";
+  const peek = peekPersistedSession();
+  if (isPeekUsable(peek) && peek.userId) {
+    bootstrapActiveUserOnce(peek.userId);
+    return "signedIn";
+  }
+  return "loading";
 }
 
 /**
@@ -29,7 +59,7 @@ export function AuthGate({ children }: PropsWithChildren) {
   const client = useMemo(() => getSupabaseClient(), []);
   const pathname = usePathname();
   const router = useRouter();
-  const [state, setState] = useState<GateState>(() => getInitialGateState(client, pathname));
+  const [state, setState] = useState<GateState>(() => resolveInitialGateState(Boolean(client)));
 
   useEffect(() => {
     if (!client) {
@@ -38,11 +68,13 @@ export function AuthGate({ children }: PropsWithChildren) {
 
     let alive = true;
     let settled = false;
+    StartupPerf.mark("Auth start");
 
     const startupFallback = setTimeout(() => {
       if (!alive || settled) {
         return;
       }
+      StartupPerf.mark(`Auth grace fallback (${STARTUP_SESSION_GRACE_MS}ms)`);
       setState(readActiveUser() ? "signedIn" : "signedOut");
     }, STARTUP_SESSION_GRACE_MS);
 
@@ -52,6 +84,7 @@ export function AuthGate({ children }: PropsWithChildren) {
       }
       settled = true;
       clearTimeout(startupFallback);
+      StartupPerf.mark("Auth ready");
       const userId = data.session?.user?.id ?? null;
       syncActiveUser(userId);
       setState(userId ? "signedIn" : "signedOut");
@@ -69,6 +102,14 @@ export function AuthGate({ children }: PropsWithChildren) {
       listener.subscription.unsubscribe();
     };
   }, [client]);
+
+  const dismissedRef = useRef(false);
+  useEffect(() => {
+    if (!dismissedRef.current && state !== "loading") {
+      dismissedRef.current = true;
+      StartupPerf.mark("Loading dismissed");
+    }
+  }, [state]);
 
   const onLoginPage = pathname === "/login";
 

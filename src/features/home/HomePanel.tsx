@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 
@@ -24,6 +24,8 @@ import { ExpiryHomeCard } from "@/features/expiry/ExpiryHomeCard";
 import { ExpiryAddModal } from "@/features/expiry/ExpiryAddModal";
 import { hydrateExpiryFromCloud, loadExpiryItems, saveExpiryItems } from "@/features/expiry/expiryStorage";
 import { daysUntil, sortExpiryByUrgency, type ExpiryItem } from "@/features/expiry/expiryUtils";
+import { StartupPerf } from "@/lib/startupPerf";
+import { runAfterFirstPaint } from "@/lib/afterFirstPaint";
 
 const MEAL_PRESET_COUNT = 8;
 
@@ -165,15 +167,32 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
   }, [shortcutNonce, shortcutView]);
 
   useEffect(() => {
+    StartupPerf.mark("Home core data ready");
+  }, []);
+
+  // 首页首帧完全用本地数据渲染（上面的 useState 初始值），云端只做“静默刷新”：
+  // 等首帧画完再发起，任一项失败/超时都只保留本地数据，不会让页面回到加载态。
+  const cloudHydratedRef = useRef(false);
+  useEffect(() => {
+    if (cloudHydratedRef.current) return;
+    cloudHydratedRef.current = true;
     let cancelled = false;
-    hydrateTodosFromCloud(todoStorage).then((next) => !cancelled && setTodos(next)).catch(() => {});
-    hydrateNotesFromCloud().then((next) => !cancelled && setNotes(next)).catch(() => {});
-    hydratePackagesFromCloud().then((next) => !cancelled && setPackages(next)).catch(() => {});
-    hydrateRemindersFromCloud().then((next) => !cancelled && setReminders(next)).catch(() => {});
-    hydrateFinanceTransactionsFromCloud().then((next) => !cancelled && setTransactions(next)).catch(() => {});
-    hydrateExpiryFromCloud().then((next) => !cancelled && setExpiryItems(next)).catch(() => {});
+    const cancel = runAfterFirstPaint(() => {
+      const pTodos = hydrateTodosFromCloud(todoStorage).then((next) => !cancelled && setTodos(next)).catch(() => {});
+      const pNotes = hydrateNotesFromCloud().then((next) => !cancelled && setNotes(next)).catch(() => {});
+      const pPackages = hydratePackagesFromCloud().then((next) => !cancelled && setPackages(next)).catch(() => {});
+      const pReminders = hydrateRemindersFromCloud().then((next) => !cancelled && setReminders(next)).catch(() => {});
+      const pFinance = hydrateFinanceTransactionsFromCloud().then((next) => !cancelled && setTransactions(next)).catch(() => {});
+      const pExpiry = hydrateExpiryFromCloud().then((next) => !cancelled && setExpiryItems(next)).catch(() => {});
+      void Promise.allSettled([pTodos, pNotes, pPackages, pReminders, pFinance, pExpiry]).then(() => {
+        if (!cancelled) {
+          StartupPerf.mark("Home cloud hydrations settled");
+        }
+      });
+    });
     return () => {
       cancelled = true;
+      cancel();
     };
   }, [todoStorage]);
 
@@ -310,7 +329,7 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
                 wrapperStyle={styles.qaPrimaryWrap}
                 vibrate={12}
               >
-                <Text numberOfLines={1} style={styles.qaPrimaryText}>＋</Text>
+                <Text numberOfLines={1} style={styles.qaPrimaryText}>＋ 记一笔</Text>
               </PressableScale>
               <PressableScale
                 accessibilityLabel="账单"
@@ -640,7 +659,8 @@ function createStyles(tokens: UiTokens) {
       gap: 6
     },
     qaPrimaryWrap: {
-      flexShrink: 0
+      flex: 3,
+      minWidth: 0
     },
     qaSecondaryWrap: {
       flex: 1,
@@ -651,14 +671,15 @@ function createStyles(tokens: UiTokens) {
       alignItems: "center",
       backgroundColor: tokens.accent,
       borderRadius: 12,
-      height: 40,
       justifyContent: "center",
-      width: 40
+      minHeight: 40,
+      paddingHorizontal: 4,
+      paddingVertical: 9
     },
     qaPrimaryText: {
       color: "#ffffff",
       flexShrink: 0,
-      fontSize: 20,
+      fontSize: 14,
       fontWeight: "900"
     },
     qaSecondaryButton: {
@@ -680,10 +701,8 @@ function createStyles(tokens: UiTokens) {
     mealCardBody: {
       alignItems: "flex-start",
       flex: 1,
-      gap: 6,
-      justifyContent: "flex-end",
-      minHeight: 84,
-      paddingTop: 10
+      justifyContent: "center",
+      paddingTop: 4
     },
     mealCount: {
       color: tokens.textMuted,
