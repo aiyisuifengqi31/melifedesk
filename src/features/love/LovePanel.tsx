@@ -8,6 +8,7 @@ import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { getCurrentPartnerId } from "@/auth/partnership";
 import { getCurrentLoveUserId, hydrateLoveSharedValue, saveLoveSharedValue } from "./loveSharedCloud";
+import { deleteDiaryCommentFromCloud, loadDiaryCommentsFromCloud, saveDiaryCommentToCloud, type DiaryComment } from "./loveDiaryComments";
 
 export type LoveTab = "diary" | "gifts" | "anniversary" | "photos";
 type DiaryVisibility = "private" | "couple_read" | "couple_edit";
@@ -20,6 +21,9 @@ export const loveTabs: FixedBottomTabItem<LoveTab>[] = [
 ];
 
 export type DiaryEntry = {
+  authorAvatar?: string;
+  authorId?: string;
+  authorName?: string;
   category?: string;
   content: string;
   createTime: string;
@@ -178,6 +182,9 @@ export function LovePanel({
   const [detailItem, setDetailItem] = useState<DetailState | null>(null);
   const [editingDiaryId, setEditingDiaryId] = useState<string | null>(null);
   const [editingGiftId, setEditingGiftId] = useState<string | null>(null);
+  const [diaryComposerOpen, setDiaryComposerOpen] = useState(false);
+  const [diaryComments, setDiaryComments] = useState<Record<string, DiaryComment[]>>({});
+  const [commentDraft, setCommentDraft] = useState("");
   const localDirtyRef = useRef(false);
   const diaryFileInputRef = useRef<HTMLInputElement | null>(null);
   const giftFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -218,6 +225,28 @@ export function LovePanel({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [pickerPopover]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const diaryIds = diaries.map((entry) => entry.id).filter(isUuid);
+    if (diaryIds.length === 0) {
+      setDiaryComments({});
+      return () => {
+        cancelled = true;
+      };
+    }
+    void Promise.all(diaryIds.map(async (diaryId) => [diaryId, await loadDiaryCommentsFromCloud(diaryId)] as const))
+      .then((pairs) => {
+        if (cancelled) return;
+        setDiaryComments(Object.fromEntries(pairs));
+      })
+      .catch(() => {
+        if (!cancelled) setDiaryComments({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [diaries]);
+
   // 主动从云端重新拉取对方（及自己）的共享内容。PWA 没有浏览器地址栏刷新，
   // 对方写了新内容后必须手动触发才能看到最新的。
   const refreshShared = async () => {
@@ -256,6 +285,8 @@ export function LovePanel({
     const authorId = currentUserId ?? await getCurrentLoveUserId();
 
     const entry: DiaryEntry = {
+      authorId: authorId ?? undefined,
+      authorName: "我",
       category,
       content: cleanContent,
       createTime: new Date().toISOString(),
@@ -286,6 +317,7 @@ export function LovePanel({
     setDiaryImages([]);
     setDiaryFolderId(null);
     setEditingDiaryId(null);
+    setDiaryComposerOpen(false);
     setFeedback(partnerId ? "✓ 已保存 · 已同步" : "✓ 已保存");
   };
 
@@ -436,6 +468,17 @@ export function LovePanel({
   };
 
   const getFolderName = (folderId?: string | null) => folders.find((folder) => folder.id === folderId)?.name ?? "未分类";
+  const getDiaryAuthor = (entry: DiaryEntry) => {
+    const sourceId = entry.authorId ?? entry.ownerUserId ?? entry.updatedBy;
+    const isCurrentUser = Boolean(sourceId && currentUserId && sourceId === currentUserId);
+    const isPartner = Boolean(sourceId && partnerId && sourceId === partnerId);
+    const name = entry.authorName ?? (isCurrentUser ? "我" : isPartner ? "TA" : entry.creator ?? (sourceId ? "TA" : "历史记录"));
+    return {
+      avatar: entry.authorAvatar,
+      initial: Array.from(name.trim())[0] ?? "爱",
+      name
+    };
+  };
   const togglePicker = (next: PickerPopoverState) => {
     setPickerPopover((current) => (current?.id === next.id ? null : next));
   };
@@ -484,6 +527,7 @@ export function LovePanel({
     setDiaryFolderId(entry.folderId ?? null);
     setDiaryImages(entry.images ?? []);
     setOpenDiaryMenuId(null);
+    setDiaryComposerOpen(true);
   };
   const moveDiary = (entry: DiaryEntry, folderId: string) => {
     const nextEntries = diaries.map((item) => (item.id === entry.id ? { ...item, folderId: folderId || null, updatedAt: new Date().toISOString(), updatedBy: currentUserId ?? undefined } : item));
@@ -510,6 +554,62 @@ export function LovePanel({
     setOpenGiftMenuId(null);
     setFeedback("✓ 已移动");
   };
+  const openDiaryComposer = () => {
+    setEditingDiaryId(null);
+    setTitle("");
+    setContent("");
+    setCategory("日常记录");
+    setMood("开心");
+    setDate(todayIso());
+    setDiaryFolderId(null);
+    setDiaryImages([]);
+    setDiaryHeight(44);
+    setDiaryComposerOpen(true);
+  };
+  const closeDiaryComposer = () => {
+    setDiaryComposerOpen(false);
+    setEditingDiaryId(null);
+    setTitle("");
+    setContent("");
+    setDiaryImages([]);
+    setDiaryFolderId(null);
+    setDiaryHeight(44);
+  };
+  const getCommentsForDiary = (diaryId: string) => diaryComments[diaryId] ?? [];
+  const saveComment = async (entry: DiaryEntry) => {
+    const cleanContent = commentDraft.trim();
+    if (!cleanContent) return;
+    const commentId = createLoveId("comment");
+    try {
+      await saveDiaryCommentToCloud({ content: cleanContent, diaryId: entry.id, id: commentId });
+      const userId = currentUserId ?? await getCurrentLoveUserId();
+      const nextComment: DiaryComment = {
+        content: cleanContent,
+        createTime: new Date().toISOString(),
+        diaryId: entry.id,
+        id: commentId,
+        updatedAt: new Date().toISOString(),
+        userId: userId ?? "unknown"
+      };
+      setDiaryComments((current) => ({ ...current, [entry.id]: [...(current[entry.id] ?? []), nextComment] }));
+      setCommentDraft("");
+      setFeedback("✓ 评论已发布");
+    } catch {
+      setFeedback("评论保存失败，请确认数据库迁移已上线后重试。");
+    }
+  };
+  const deleteComment = async (comment: DiaryComment) => {
+    try {
+      await deleteDiaryCommentFromCloud(comment.id);
+      setDiaryComments((current) => ({
+        ...current,
+        [comment.diaryId]: (current[comment.diaryId] ?? []).filter((item) => item.id !== comment.id)
+      }));
+      setFeedback("✓ 评论已删除");
+    } catch {
+      setFeedback("评论删除失败，请稍后再试。");
+    }
+  };
 
   return (
     <View style={styles.stack}>
@@ -529,109 +629,10 @@ export function LovePanel({
           <Text style={styles.refreshText}>{syncing ? "…" : "⟳"}</Text>
         </Pressable>
       </View>
+      {feedback ? <Text nativeID="love-feedback" style={styles.feedback}>{feedback}</Text> : null}
 
       {tab === "diary" ? (
         <>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>写日记</Text>
-            <View style={styles.inlineRow}>
-              <TextInput
-                onChangeText={setTitle}
-                placeholder="标题，例如：一起吃饭"
-                style={[styles.input, styles.titleField]}
-                testID="love-diary-title-input"
-                value={title}
-              />
-              <Pressable accessibilityRole="button" accessibilityLabel="选择日记日期" onPress={() => setDiaryDatePickerOpen((value) => !value)} style={[styles.input, styles.dateCompact]}>
-                <Text style={styles.dateValue}>{date.replaceAll("-", "/")}</Text>
-              </Pressable>
-            </View>
-            <TextInput
-              scrollEnabled
-              multiline
-              onChangeText={setContent}
-              onContentSizeChange={(event) => setDiaryHeight(event.nativeEvent.contentSize.height)}
-              placeholder="今天发生了什么..."
-              style={[styles.input, styles.diaryInput, { height: Math.min(Math.max(44, diaryHeight), 168) }]}
-              value={content}
-            />
-            <View style={styles.choiceGridThree}>
-              <PickerButton
-                accessibilityLabel="选择日记类型"
-                compact
-                id="diary-type"
-                label={category}
-                onSelect={setCategory}
-                onToggle={togglePicker}
-                open={openPickerId === "diary-type"}
-                options={diaryCategories.map((item) => ({ label: item, value: item }))}
-                selectedValue={category}
-              />
-              <PickerButton
-                accessibilityLabel="选择日记心情"
-                compact
-                id="diary-mood"
-                label={`${moodIcons[mood]} ${mood}`}
-                onSelect={setMood}
-                onToggle={togglePicker}
-                open={openPickerId === "diary-mood"}
-                options={moods.map((item) => ({ label: `${moodIcons[item]} ${item}`, value: item }))}
-                selectedValue={mood}
-              />
-              <PickerButton
-                accessibilityLabel="选择日记文件夹"
-                compact
-                id="diary-folder"
-                label={diaryFolderId ? getFolderName(diaryFolderId) : "文件夹"}
-                onSelect={(value) => setDiaryFolderId(value || null)}
-                onToggle={togglePicker}
-                open={openPickerId === "diary-folder"}
-                options={folderOptions}
-                selectedValue={diaryFolderId ?? ""}
-              />
-            </View>
-
-            {diaryImages.length > 0 ? (
-              <View style={styles.imageGrid}>
-                {diaryImages.map((image, index) => (
-                  <View key={index} style={styles.imageThumbWrap}>
-                    <Pressable onPress={() => setExpandedImage(image)}>
-                      <Image source={{ uri: image }} style={styles.imageThumb} />
-                    </Pressable>
-                    <Pressable accessibilityRole="button" accessibilityLabel="删除图片" onPress={() => setDiaryImages((current) => current.filter((_, i) => i !== index))} style={styles.imageRemove}>
-                      <Text style={styles.imageRemoveText}>×</Text>
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-
-            <View style={styles.saveRow}>
-              <Pressable accessibilityRole="button" accessibilityLabel="上传图片" onPress={() => diaryFileInputRef.current?.click()} style={styles.secondaryButton}>
-                <Text style={styles.secondaryText}>图片</Text>
-              </Pressable>
-              <input
-                accept="image/*"
-                multiple
-                onChange={handleDiaryImagePick}
-                ref={diaryFileInputRef}
-                style={{ display: "none" }}
-                type="file"
-              />
-              <Pressable accessibilityRole="button" accessibilityLabel="保存日记" nativeID="love-save-diary-button" onPress={() => void saveDiary()} style={styles.primaryButton}>
-                <Text style={styles.primaryText}>{editingDiaryId ? "更新" : "保存"}</Text>
-              </Pressable>
-            </View>
-            <DatePickerPopup
-              onCancel={() => setDiaryDatePickerOpen(false)}
-              onConfirm={(selectedDate) => { setDate(selectedDate); setDiaryDatePickerOpen(false); }}
-              selectedDate={date}
-              title="选择日记日期"
-              visible={diaryDatePickerOpen}
-            />
-            {feedback ? <Text nativeID="love-feedback" style={styles.feedback}>{feedback}</Text> : null}
-          </View>
-
           <View style={styles.card} testID="love-diary-archive-card">
             <View style={styles.archiveHeader}>
               <Text style={styles.cardTitle}>日记档案</Text>
@@ -672,10 +673,20 @@ export function LovePanel({
               </View>
             ) : (
               <View style={styles.archiveList}>
-                  {diaryList.visibleItems.map((entry) => (
-                <Pressable key={entry.id} accessibilityRole="button" accessibilityLabel={`查看日记：${entry.title ?? "恋爱日记"}`} onPress={() => setDetailItem({ item: entry, type: "diary" })} style={styles.memoryCard}>
-                  <View style={styles.memoryTopRow}>
-                    <Text style={styles.diaryDate}>{formatChineseDate(entry.date)}</Text>
+                  {diaryList.visibleItems.map((entry) => {
+                const author = getDiaryAuthor(entry);
+                return (
+                <Pressable key={entry.id} accessibilityRole="button" accessibilityLabel={`查看日记：${entry.title ?? "恋爱日记"}`} onPress={() => setDetailItem({ item: entry, type: "diary" })} style={styles.storyCard}>
+                  <View style={styles.storyAuthorRow}>
+                    <View style={styles.storyAuthorLeft}>
+                      <View style={styles.storyAvatar}>
+                        {author.avatar ? <Image source={{ uri: author.avatar }} style={styles.storyAvatarImage} /> : <Text style={styles.storyAvatarText}>{author.initial}</Text>}
+                      </View>
+                      <View style={styles.storyAuthorMeta}>
+                        <Text style={styles.storyAuthorName}>{author.name}</Text>
+                        <Text style={styles.diaryDate}>{formatChineseDate(entry.date)}</Text>
+                      </View>
+                    </View>
                     <Pressable accessibilityRole="button" accessibilityLabel={`打开日记菜单：${entry.title ?? "恋爱日记"}`} onPress={() => setOpenDiaryMenuId(openDiaryMenuId === entry.id ? null : entry.id)} style={styles.moreButton}>
                       <Text style={styles.moreButtonText}>•••</Text>
                     </Pressable>
@@ -696,6 +707,10 @@ export function LovePanel({
                       </Pressable>
                     ) : null}
                   </View>
+                  <View style={styles.storyActionRow}>
+                    <Text style={styles.storyActionText}>♡ 喜欢</Text>
+                    <Text style={styles.storyActionText}>评论 {getCommentsForDiary(entry.id).length}</Text>
+                  </View>
                   {openDiaryMenuId === entry.id ? (
                     <View style={styles.menuRow}>
                       <Pressable accessibilityRole="button" accessibilityLabel={`编辑日记：${entry.title ?? "恋爱日记"}`} onPress={() => editDiary(entry)} style={styles.menuButton}><Text style={styles.menuText}>编辑</Text></Pressable>
@@ -704,7 +719,8 @@ export function LovePanel({
                     </View>
                   ) : null}
                 </Pressable>
-              ))}
+                );
+              })}
               <CollapsibleSectionFooter
                 expanded={diaryList.expanded}
                 hiddenCount={diaryList.hiddenCount}
@@ -717,6 +733,15 @@ export function LovePanel({
               </View>
             )}
           </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="发布恋爱日记"
+            onPress={openDiaryComposer}
+            style={styles.diaryFab}
+            testID="love-diary-publish-fab"
+          >
+            <Text style={styles.diaryFabText}>+</Text>
+          </Pressable>
         </>
       ) : null}
 
@@ -1028,9 +1053,121 @@ export function LovePanel({
         </Pressable>
       ) : null}
 
+      {diaryComposerOpen ? (
+        <Pressable accessibilityLabel="关闭写日记弹窗" onPress={closeDiaryComposer} style={styles.composerBackdrop}>
+          <View onStartShouldSetResponder={() => true} style={styles.composerSheet} testID="love-diary-composer-sheet">
+            <View style={styles.composerHandle} />
+            <View style={styles.composerHeader}>
+              <View>
+                <Text style={styles.cardTitle}>{editingDiaryId ? "编辑日记" : "写日记"}</Text>
+                <Text style={styles.composerSub}>像发动态一样，记录你们这一刻。</Text>
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel="取消写日记" onPress={closeDiaryComposer} style={styles.composerCloseButton}>
+                <Text style={styles.composerCloseText}>×</Text>
+              </Pressable>
+            </View>
+            <View style={styles.inlineRow}>
+              <TextInput
+                onChangeText={setTitle}
+                placeholder="标题，例如：一起吃饭"
+                style={[styles.input, styles.titleField]}
+                testID="love-diary-title-input"
+                value={title}
+              />
+              <Pressable accessibilityRole="button" accessibilityLabel="选择日记日期" onPress={() => setDiaryDatePickerOpen((value) => !value)} style={[styles.input, styles.dateCompact]}>
+                <Text style={styles.dateValue}>{date.replaceAll("-", "/")}</Text>
+              </Pressable>
+            </View>
+            <TextInput
+              scrollEnabled
+              multiline
+              onChangeText={setContent}
+              onContentSizeChange={(event) => setDiaryHeight(event.nativeEvent.contentSize.height)}
+              placeholder="今天发生了什么..."
+              style={[styles.input, styles.diaryInput, { height: Math.min(Math.max(44, diaryHeight), 168) }]}
+              value={content}
+            />
+            <View style={styles.choiceGridThree}>
+              <PickerButton
+                accessibilityLabel="选择日记类型"
+                compact
+                id="diary-type"
+                label={category}
+                onSelect={setCategory}
+                onToggle={togglePicker}
+                open={openPickerId === "diary-type"}
+                options={diaryCategories.map((item) => ({ label: item, value: item }))}
+                selectedValue={category}
+              />
+              <PickerButton
+                accessibilityLabel="选择日记心情"
+                compact
+                id="diary-mood"
+                label={`${moodIcons[mood]} ${mood}`}
+                onSelect={setMood}
+                onToggle={togglePicker}
+                open={openPickerId === "diary-mood"}
+                options={moods.map((item) => ({ label: `${moodIcons[item]} ${item}`, value: item }))}
+                selectedValue={mood}
+              />
+              <PickerButton
+                accessibilityLabel="选择日记文件夹"
+                compact
+                id="diary-folder"
+                label={diaryFolderId ? getFolderName(diaryFolderId) : "文件夹"}
+                onSelect={(value) => setDiaryFolderId(value || null)}
+                onToggle={togglePicker}
+                open={openPickerId === "diary-folder"}
+                options={folderOptions}
+                selectedValue={diaryFolderId ?? ""}
+              />
+            </View>
+
+            {diaryImages.length > 0 ? (
+              <View style={styles.imageGrid}>
+                {diaryImages.map((image, index) => (
+                  <View key={index} style={styles.imageThumbWrap}>
+                    <Pressable onPress={() => setExpandedImage(image)}>
+                      <Image source={{ uri: image }} style={styles.imageThumb} />
+                    </Pressable>
+                    <Pressable accessibilityRole="button" accessibilityLabel="删除图片" onPress={() => setDiaryImages((current) => current.filter((_, i) => i !== index))} style={styles.imageRemove}>
+                      <Text style={styles.imageRemoveText}>×</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            <View style={styles.saveRow}>
+              <Pressable accessibilityRole="button" accessibilityLabel="上传图片" onPress={() => diaryFileInputRef.current?.click()} style={styles.secondaryButton}>
+                <Text style={styles.secondaryText}>图片</Text>
+              </Pressable>
+              <input
+                accept="image/*"
+                multiple
+                onChange={handleDiaryImagePick}
+                ref={diaryFileInputRef}
+                style={{ display: "none" }}
+                type="file"
+              />
+              <Pressable accessibilityRole="button" accessibilityLabel="保存日记" nativeID="love-save-diary-button" onPress={() => void saveDiary()} style={styles.primaryButton}>
+                <Text style={styles.primaryText}>{editingDiaryId ? "更新" : "保存"}</Text>
+              </Pressable>
+            </View>
+            <DatePickerPopup
+              onCancel={() => setDiaryDatePickerOpen(false)}
+              onConfirm={(selectedDate) => { setDate(selectedDate); setDiaryDatePickerOpen(false); }}
+              selectedDate={date}
+              title="选择日记日期"
+              visible={diaryDatePickerOpen}
+            />
+          </View>
+        </Pressable>
+      ) : null}
+
       {detailItem ? (
         <Pressable onPress={() => setDetailItem(null)} style={styles.lightbox}>
-          <View style={styles.detailCard}>
+          <View onStartShouldSetResponder={() => true} style={styles.detailCard}>
             <Text style={styles.cardTitle}>{detailItem.type === "diary" ? detailItem.item.title ?? "恋爱日记" : detailItem.item.name}</Text>
             <Text style={styles.diaryCategory}>
               {detailItem.type === "diary"
@@ -1038,6 +1175,34 @@ export function LovePanel({
                 : `${detailItem.item.date} · ${detailItem.item.tag} · ${detailItem.item.direction ?? "未设置"}`}
             </Text>
             <Text style={styles.diaryContent}>{detailItem.type === "diary" ? detailItem.item.content : detailItem.item.description || "没有描述"}</Text>
+            {detailItem.type === "diary" ? (
+              <View style={styles.commentBox}>
+                <Text style={styles.commentTitle}>评论</Text>
+                {getCommentsForDiary(detailItem.item.id).length === 0 ? (
+                  <Text style={styles.commentEmpty}>还没有评论，写下第一句回应。</Text>
+                ) : (
+                  getCommentsForDiary(detailItem.item.id).map((comment) => (
+                    <View key={comment.id} style={styles.commentItem}>
+                      <View style={styles.commentBubble}>
+                        <Text style={styles.commentAuthor}>{comment.userId === currentUserId ? "我" : "TA"}</Text>
+                        <Text style={styles.commentContent}>{comment.content}</Text>
+                      </View>
+                      {comment.userId === currentUserId ? (
+                        <Pressable accessibilityRole="button" accessibilityLabel="删除评论" onPress={() => void deleteComment(comment)} style={styles.commentDeleteButton}>
+                          <Text style={styles.folderDelete}>删除</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  ))
+                )}
+                <View style={styles.commentInputRow}>
+                  <TextInput onChangeText={setCommentDraft} placeholder="写评论..." style={[styles.input, styles.commentInput]} value={commentDraft} />
+                  <Pressable accessibilityRole="button" accessibilityLabel="发布评论" onPress={() => void saveComment(detailItem.item)} style={styles.commentSendButton}>
+                    <Text style={styles.primaryText}>发送</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
             <Pressable accessibilityRole="button" accessibilityLabel="关闭详情" onPress={() => setDetailItem(null)} style={styles.primaryButton}>
               <Text style={styles.primaryText}>关闭</Text>
             </Pressable>
@@ -1242,6 +1407,10 @@ function createLoveId(prefix: string) {
     return hex.toString(16);
   });
   return `${prefix}-${fallbackId}`;
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 export function clearLoveMemoryForTests() {
@@ -1516,6 +1685,131 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "900"
   },
+  commentAuthor: {
+    color: "#c75670",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  commentBox: {
+    backgroundColor: "#fff6fa",
+    borderColor: "#f6dbe4",
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 8,
+    padding: 10
+  },
+  commentBubble: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0
+  },
+  commentContent: {
+    color: "#4b5563",
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18
+  },
+  commentDeleteButton: {
+    paddingHorizontal: 4,
+    paddingVertical: 4
+  },
+  commentEmpty: {
+    color: "#8b7280",
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  commentInput: {
+    flex: 1,
+    minHeight: 40,
+    minWidth: 0
+  },
+  commentInputRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8
+  },
+  commentItem: {
+    alignItems: "flex-start",
+    borderTopColor: "#f6e1e8",
+    borderTopWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    paddingTop: 7
+  },
+  commentSendButton: {
+    alignItems: "center",
+    backgroundColor: "#ff8fa3",
+    borderRadius: 12,
+    justifyContent: "center",
+    minHeight: 40,
+    paddingHorizontal: 12
+  },
+  commentTitle: {
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  composerBackdrop: {
+    backgroundColor: "rgba(17,24,39,0.34)",
+    bottom: 0,
+    justifyContent: "flex-end",
+    left: 0,
+    position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
+    right: 0,
+    top: 0,
+    zIndex: 10010
+  },
+  composerCloseButton: {
+    alignItems: "center",
+    backgroundColor: "#fff0f4",
+    borderRadius: 999,
+    height: 32,
+    justifyContent: "center",
+    width: 32
+  },
+  composerCloseText: {
+    color: "#c75670",
+    fontSize: 20,
+    fontWeight: "900",
+    lineHeight: 22
+  },
+  composerHandle: {
+    alignSelf: "center",
+    backgroundColor: "#f1cad4",
+    borderRadius: 999,
+    height: 4,
+    marginBottom: 4,
+    width: 38
+  },
+  composerHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  composerSheet: {
+    alignSelf: "center",
+    backgroundColor: "#fffafd",
+    borderColor: "#f3d6df",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    gap: 10,
+    maxHeight: "86%",
+    maxWidth: 560,
+    padding: 14,
+    paddingBottom: 24,
+    shadowColor: "#ef7f98",
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 22,
+    width: "100%"
+  },
+  composerSub: {
+    color: "#8b7280",
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 2
+  },
   archiveCount: {
     color: "#8b7280",
     fontSize: 12,
@@ -1601,6 +1895,31 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingVertical: 9,
     textAlignVertical: "top"
+  },
+  diaryFab: {
+    alignItems: "center",
+    backgroundColor: "#ff7f9d",
+    borderColor: "#ffd7e0",
+    borderRadius: 999,
+    borderWidth: 3,
+    bottom: 86,
+    elevation: 12,
+    height: 58,
+    justifyContent: "center",
+    position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
+    right: 18,
+    shadowColor: "#ef7f98",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    width: 58,
+    zIndex: 90
+  },
+  diaryFabText: {
+    color: "#ffffff",
+    fontSize: 34,
+    fontWeight: "800",
+    lineHeight: 38
   },
   diaryMetaRow: {
     alignItems: "center",
@@ -1976,6 +2295,72 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between"
+  },
+  storyActionRow: {
+    borderTopColor: "#f6e1e8",
+    borderTopWidth: 1,
+    flexDirection: "row",
+    gap: 18,
+    paddingTop: 7
+  },
+  storyActionText: {
+    color: "#9b7a86",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  storyAuthorLeft: {
+    alignItems: "center",
+    flexDirection: "row",
+    flex: 1,
+    gap: 8,
+    minWidth: 0
+  },
+  storyAuthorMeta: {
+    flex: 1,
+    minWidth: 0
+  },
+  storyAuthorName: {
+    color: "#111827",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  storyAuthorRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  storyAvatar: {
+    alignItems: "center",
+    backgroundColor: "#ffe4ec",
+    borderColor: "#ffffff",
+    borderRadius: 999,
+    borderWidth: 2,
+    height: 34,
+    justifyContent: "center",
+    overflow: "hidden",
+    width: 34
+  },
+  storyAvatarImage: {
+    height: "100%",
+    width: "100%"
+  },
+  storyAvatarText: {
+    color: "#c75670",
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  storyCard: {
+    backgroundColor: "rgba(255,250,253,0.98)",
+    borderColor: "#f1d5de",
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+    shadowColor: "#ef7f98",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12
   },
   moreButton: {
     alignItems: "center",

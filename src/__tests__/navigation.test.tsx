@@ -9,11 +9,11 @@ describe("primary navigation", () => {
   it("renders only the requested primary navigation and keeps more collapsed by default", () => {
     render(<AppShell initialRoute="/plan" />);
 
-    for (const item of NAV_ITEMS.filter((navItem) => !["workout", "fun"].includes(navItem.key))) {
+    for (const item of NAV_ITEMS.filter((navItem) => !["exam", "workout", "fun"].includes(navItem.key))) {
       expect(screen.getAllByText(item.label).length).toBeGreaterThan(0);
     }
     expect(screen.getByTestId("sidebar-more-button")).toBeOnTheScreen();
-    expect(screen.queryByTestId("sidebar-subitem-love")).toBeNull();
+    expect(screen.queryByTestId("sidebar-subitem-exam")).toBeNull();
     expect(screen.queryByTestId("sidebar-subitem-workout")).toBeNull();
     expect(screen.queryByTestId("sidebar-subitem-fun")).toBeNull();
   });
@@ -22,7 +22,7 @@ describe("primary navigation", () => {
     render(<AppShell initialRoute="/plan" />);
 
     fireEvent.press(screen.getByTestId("sidebar-more-button"));
-    expect(screen.queryByTestId("sidebar-subitem-love")).toBeNull();
+    expect(screen.getByTestId("sidebar-subitem-exam")).toBeOnTheScreen();
     expect(screen.getByTestId("sidebar-subitem-workout")).toBeOnTheScreen();
     expect(screen.getByTestId("sidebar-subitem-fun")).toBeOnTheScreen();
     fireEvent.press(screen.getByTestId("sidebar-subitem-workout"));
@@ -40,18 +40,21 @@ describe("primary navigation", () => {
     fireEvent.press(screen.getByTestId("sidebar-more-button"));
 
     expect(screen.getByTestId("sidebar-more-panel")).toBeOnTheScreen();
+    expect(screen.getByTestId("sidebar-subitem-exam")).toHaveStyle({ minHeight: 44 });
     expect(screen.getByTestId("sidebar-subitem-workout")).toHaveStyle({ minHeight: 44 });
     expect(screen.getByTestId("sidebar-subitem-fun")).toHaveStyle({ minHeight: 44 });
     expect(screen.getByTestId("sidebar-footer")).toBeOnTheScreen();
   });
 
-  it("keeps love as a primary route and auto-expands more only for workout and fun", () => {
+  it("keeps love story as a primary route and auto-expands more only for exam, workout, and fun", () => {
     render(<AppShell initialRoute="/love" viewport="mobile" />);
 
     expect(screen.queryByTestId("sidebar-more-panel")).toBeNull();
     expect(screen.getByTestId("nav-icon-love")).toHaveProp("accessibilityLabel", "default love selected icon");
+    expect(screen.getAllByText("恋爱\n故事").length).toBeGreaterThan(0);
 
     fireEvent.press(screen.getByTestId("sidebar-more-button"));
+    expect(screen.getByTestId("sidebar-subitem-exam")).toBeOnTheScreen();
     fireEvent.press(screen.getByTestId("sidebar-subitem-fun"));
     expect(screen.getByTestId("sidebar-more-panel")).toBeOnTheScreen();
     expect(screen.getByTestId("sidebar-subitem-fun")).toHaveStyle({ backgroundColor: "#e9f7ee" });

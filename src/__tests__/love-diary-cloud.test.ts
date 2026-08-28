@@ -3,6 +3,11 @@ import {
   loadDiariesFromCloud,
   saveDiariesToCloud
 } from "@/features/love/loveDiaryCloud";
+import {
+  deleteDiaryCommentFromCloud,
+  loadDiaryCommentsFromCloud,
+  saveDiaryCommentToCloud
+} from "@/features/love/loveDiaryComments";
 import type { DiaryEntry } from "@/features/love/LovePanel";
 
 function createDiaryClient(options?: { coupleId?: string | null; rows?: unknown[]; userId?: string }) {
@@ -43,6 +48,12 @@ function createDiaryClient(options?: { coupleId?: string | null; rows?: unknown[
           calls.select.push(columns);
           return query;
         }),
+        update: jest.fn((row: unknown) => ({
+          eq: jest.fn((column: string, value: unknown) => {
+            calls.upsert.push({ action: "update", column, row, value });
+            return Promise.resolve({ data: null, error: null });
+          })
+        })),
         upsert: jest.fn(async (rows: unknown, opts: unknown) => {
           calls.upsert.push({ opts, rows });
           return { data: null, error: null };
@@ -148,6 +159,7 @@ describe("love diary cloud sharing", () => {
           id: "55555555-5555-4555-8555-555555555555",
           owner_user_id: "user-b",
           updated_by: "user-a",
+          author_id: "user-b",
           visibility: "couple_edit"
         })
       ]
@@ -165,6 +177,7 @@ describe("love diary cloud sharing", () => {
           id: "22222222-2222-4222-8222-222222222222",
           owner_user_id: "user-b",
           tags: ["mood:甜蜜"],
+          author_id: "user-b",
           visibility: "couple_read"
         }
       ],
@@ -183,6 +196,8 @@ describe("love diary cloud sharing", () => {
         id: "22222222-2222-4222-8222-222222222222",
         mood: "甜蜜",
         ownerUserId: "user-b",
+        authorId: "user-b",
+        authorName: "TA",
         title: "对方写的日记",
         updatedAt: "2026-08-02T08:00:00.000Z",
         updatedBy: "user-b",
@@ -228,5 +243,69 @@ describe("love diary cloud sharing", () => {
       args: { p_diary_id: "22222222-2222-4222-8222-222222222222" },
       name: "soft_delete_diary_entry"
     });
+  });
+
+  it("loads persistent shared diary comments", async () => {
+    const { client } = createDiaryClient({
+      rows: [
+        {
+          content: "我也记得这里",
+          created_at: "2026-08-02T09:00:00.000Z",
+          diary_id: "22222222-2222-4222-8222-222222222222",
+          id: "comment-1",
+          updated_at: "2026-08-02T09:00:00.000Z",
+          user_id: "user-b"
+        }
+      ],
+      userId: "user-a"
+    });
+
+    const comments = await loadDiaryCommentsFromCloud("22222222-2222-4222-8222-222222222222", client as never);
+
+    expect(comments).toEqual([
+      {
+        content: "我也记得这里",
+        createTime: "2026-08-02T09:00:00.000Z",
+        diaryId: "22222222-2222-4222-8222-222222222222",
+        id: "comment-1",
+        updatedAt: "2026-08-02T09:00:00.000Z",
+        userId: "user-b"
+      }
+    ]);
+  });
+
+  it("saves and soft deletes only the current user's diary comments", async () => {
+    const { calls, client } = createDiaryClient({ userId: "user-a" });
+
+    await saveDiaryCommentToCloud(
+      {
+        content: "这条动态好甜",
+        diaryId: "22222222-2222-4222-8222-222222222222",
+        id: "comment-2"
+      },
+      client as never
+    );
+    await deleteDiaryCommentFromCloud("comment-2", client as never);
+
+    expect(calls.table).toContain("diary_comments");
+    expect(calls.upsert).toEqual([
+      {
+        opts: { onConflict: "id" },
+        rows: [
+          expect.objectContaining({
+            content: "这条动态好甜",
+            diary_id: "22222222-2222-4222-8222-222222222222",
+            id: "comment-2",
+            user_id: "user-a"
+          })
+        ]
+      },
+      expect.objectContaining({
+        action: "update",
+        column: "id",
+        row: expect.objectContaining({ deleted_by: "user-a" }),
+        value: "comment-2"
+      })
+    ]);
   });
 });

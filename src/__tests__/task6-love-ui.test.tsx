@@ -36,12 +36,11 @@ describe("Task 6 love page and UI polish", () => {
     expect(screen.getAllByText("纪念日").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("照片墙").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("生理周期")).toBeNull();
-    expect(screen.getByText("写日记")).toBeOnTheScreen();
-    expect(screen.getByPlaceholderText("标题，例如：一起吃饭")).toBeOnTheScreen();
-    expect(screen.getByPlaceholderText("今天发生了什么...")).toBeOnTheScreen();
-    expect(screen.getByRole("button", { name: "选择日记类型" })).toBeOnTheScreen();
-    expect(screen.getByRole("button", { name: "选择日记心情" })).toBeOnTheScreen();
-    expect(screen.getByRole("button", { name: "选择日记文件夹" })).toBeOnTheScreen();
+    expect(screen.getByText("日记档案")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "发布恋爱日记" })).toBeOnTheScreen();
+    expect(screen.queryByText("写日记")).toBeNull();
+    expect(screen.queryByPlaceholderText("标题，例如：一起吃饭")).toBeNull();
+    expect(screen.queryByPlaceholderText("今天发生了什么...")).toBeNull();
     expect(screen.queryByRole("button", { name: "仅自己可见" })).toBeNull();
     expect(screen.queryByText("恋爱空间内容会保存到双方共享空间，双方都可以查看和编辑。")).toBeNull();
   });
@@ -49,6 +48,7 @@ describe("Task 6 love page and UI polish", () => {
   it("saves a diary directly into shared couple space", async () => {
     render(<AppShell initialRoute="/love" />);
 
+    fireEvent.press(await screen.findByRole("button", { name: "发布恋爱日记" }));
     fireEvent.changeText(screen.getByPlaceholderText("标题，例如：一起吃饭"), "一起散步");
     fireEvent.changeText(screen.getByPlaceholderText("今天发生了什么..."), "今天一起散步，很开心");
     fireEvent.press(screen.getByRole("button", { name: "保存日记" }));
@@ -67,6 +67,7 @@ describe("Task 6 love page and UI polish", () => {
     render(<AppShell initialRoute="/love" />);
 
     expect(await screen.findByText("❤️ 已绑定")).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("button", { name: "发布恋爱日记" }));
     fireEvent.press(screen.getByRole("button", { name: "选择日记心情" }));
 
     expect(screen.getByTestId("love-dropdown-popover")).toBeOnTheScreen();
@@ -74,9 +75,23 @@ describe("Task 6 love page and UI polish", () => {
     expect(screen.queryByTestId("love-choice-bottom-sheet")).toBeNull();
   });
 
+  it("opens the diary composer from a floating publish button", async () => {
+    render(<AppShell initialRoute="/love" />);
+
+    expect(await screen.findByRole("button", { name: "发布恋爱日记" })).toBeOnTheScreen();
+    expect(screen.queryByText("写日记")).toBeNull();
+
+    fireEvent.press(screen.getByRole("button", { name: "发布恋爱日记" }));
+
+    expect(screen.getByText("写日记")).toBeOnTheScreen();
+    expect(screen.getByPlaceholderText("标题，例如：一起吃饭")).toBeOnTheScreen();
+    expect(screen.getByPlaceholderText("今天发生了什么...")).toBeOnTheScreen();
+  });
+
   it("keeps archive filters and diary history inside one compact archive area", async () => {
     render(<AppShell initialRoute="/love" />);
 
+    fireEvent.press(await screen.findByRole("button", { name: "发布恋爱日记" }));
     fireEvent.changeText(screen.getByPlaceholderText("标题，例如：一起吃饭"), "一起散步");
     fireEvent.changeText(screen.getByPlaceholderText("今天发生了什么..."), "今天一起散步，很开心");
     fireEvent.press(screen.getByRole("button", { name: "保存日记" }));
@@ -84,6 +99,8 @@ describe("Task 6 love page and UI polish", () => {
     expect(await screen.findByText(/✓ 已保存/)).toBeOnTheScreen();
     const archive = screen.getByTestId("love-diary-archive-card");
     expect(within(archive).getByText("日记档案")).toBeOnTheScreen();
+    expect(within(archive).getAllByText("我").length).toBeGreaterThan(0);
+    expect(within(archive).getAllByText("评论 0").length).toBeGreaterThan(0);
     for (const label of ["日期", "类型", "文件夹", "排序"]) {
       expect(within(archive).getByText(label)).toBeOnTheScreen();
     }

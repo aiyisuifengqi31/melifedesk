@@ -5,6 +5,7 @@ import { getSupabaseClient } from "@/auth/supabaseClient";
 import type { DiaryEntry } from "./LovePanel";
 
 type DiaryRow = {
+  author_id: string | null;
   body: string | null;
   category: string | null;
   created_at: string | null;
@@ -21,7 +22,7 @@ type DiaryRow = {
 type LoveClient = SupabaseClient;
 
 const BASE_DIARY_COLUMNS = "id, owner_user_id, visibility, entry_date, title, body, tags, created_at, updated_at";
-const ENRICHED_DIARY_COLUMNS = "id, owner_user_id, updated_by, visibility, entry_date, title, body, category, tags, created_at, updated_at";
+const ENRICHED_DIARY_COLUMNS = "id, owner_user_id, author_id, updated_by, visibility, entry_date, title, body, category, tags, created_at, updated_at";
 
 export async function loadDiariesFromCloud(
   localDiaries: DiaryEntry[],
@@ -65,7 +66,7 @@ async function handleLoadedDiaryRows(
     return migratedDiaries;
   }
 
-  const diaries = data.map((row) => mapDiaryRow(row as DiaryRow));
+  const diaries = data.map((row) => mapDiaryRow(row as DiaryRow, userId));
   writeLocal(diaries);
   return diaries;
 }
@@ -128,8 +129,10 @@ async function upsertOwnedDiaries(
     .map((entry) => {
       const canShare = entry.visibility !== "private" && Boolean(activeCoupleId);
       const ownerUserId = entry.ownerUserId ?? userId;
+      const authorId = entry.authorId ?? entry.ownerUserId ?? userId;
       return {
         ...(isUuid(entry.id) ? { id: entry.id } : {}),
+        author_id: authorId,
         body: entry.content,
         category: entry.category ?? "日常记录",
         couple_id: canShare ? activeCoupleId : null,
@@ -146,7 +149,7 @@ async function upsertOwnedDiaries(
   if (rows.length === 0) return;
   const { error } = await client.from("diary_entries").upsert(rows, { onConflict: "id" });
   if (error && isMissingColumnError(error)) {
-    const fallback = await client.from("diary_entries").upsert(rows.map(({ category: _category, updated_by: _updatedBy, ...row }) => row), { onConflict: "id" });
+    const fallback = await client.from("diary_entries").upsert(rows.map(({ author_id: _authorId, category: _category, updated_by: _updatedBy, ...row }) => row), { onConflict: "id" });
     if (fallback.error) throw fallback.error;
     return;
   }
@@ -160,8 +163,11 @@ async function getLoveSession(client: LoveClient | null): Promise<{ client: Love
   return { client, userId: data.user.id };
 }
 
-function mapDiaryRow(row: DiaryRow): DiaryEntry {
+function mapDiaryRow(row: DiaryRow, currentUserId: string): DiaryEntry {
+  const authorId = row.author_id ?? row.owner_user_id;
   return {
+    authorId,
+    authorName: authorId === currentUserId ? "我" : "TA",
     content: row.body ?? "",
     createTime: row.created_at ?? new Date().toISOString(),
     category: row.category ?? "日常记录",
@@ -187,5 +193,5 @@ function isUuid(value: string) {
 
 function isMissingColumnError(error: unknown) {
   const message = typeof error === "object" && error && "message" in error ? String((error as { message?: unknown }).message) : String(error);
-  return /column .* (category|updated_by).* does not exist|Could not find .*['"]?(category|updated_by)['"]?/i.test(message);
+  return /column .* (author_id|category|updated_by).* does not exist|Could not find .*['"]?(author_id|category|updated_by)['"]?/i.test(message);
 }

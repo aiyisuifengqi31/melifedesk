@@ -11,7 +11,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: "plan", label: "每日\n计划", href: "/plan" },
   { key: "workout", label: "运动\n健身", href: "/workout" },
   { key: "finance", label: "收支\n记账", href: "/finance" },
-  { key: "love", label: "恋爱\n日记", href: "/love" },
+  { key: "love", label: "恋爱\n故事", href: "/love" },
   { key: "exam", label: "考公\n练习", href: "/exam" },
   { key: "fun", label: "娱乐", href: "/fun" }
 ];
