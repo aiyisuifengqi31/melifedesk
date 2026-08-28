@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { createPortal } from "react-dom";
 import { CollapsibleSectionFooter, useCollapsibleList } from "@/shared/ui/CollapsibleList";
@@ -103,6 +103,8 @@ const giftDirections = ["我送 TA", "TA 送我"] as const;
 type GiftDirection = (typeof giftDirections)[number];
 const dateFilters = ["全部日期", "今天", "昨天", "本周", "本月"] as const;
 const sortOptions = ["最新优先", "最早优先"] as const;
+const diaryAuthorFilters = ["全部", "我", "TA", "历史记录"] as const;
+type DiaryAuthorFilter = (typeof diaryAuthorFilters)[number];
 const anniversaryFilters = ["全部", "即将到来", "每年重复"] as const;
 const repeatOptions = ["不重复", "每年重复"] as const;
 const reminderOptions = [
@@ -115,12 +117,14 @@ const reminderOptions = [
 
 export function LovePanel({
   activeTab,
+  onCommentComposerActiveChange,
   onTabChange,
   showInlineTabs = true,
   storage,
   themeTokens
 }: {
   activeTab?: LoveTab;
+  onCommentComposerActiveChange?: (active: boolean) => void;
   onTabChange?: (tab: LoveTab) => void;
   showInlineTabs?: boolean;
   storage?: LoveStorage;
@@ -168,6 +172,7 @@ export function LovePanel({
   const [diaryTypeFilter, setDiaryTypeFilter] = useState("全部");
   const [diaryFolderFilter, setDiaryFolderFilter] = useState<string | null>(null);
   const [diarySort, setDiarySort] = useState<(typeof sortOptions)[number]>("最新优先");
+  const [diaryAuthorFilter, setDiaryAuthorFilter] = useState<DiaryAuthorFilter>("全部");
   const [giftSearch, setGiftSearch] = useState("");
   const [giftDateFilter, setGiftDateFilter] = useState<(typeof dateFilters)[number]>("全部日期");
   const [giftTypeFilter, setGiftTypeFilter] = useState("全部");
@@ -189,8 +194,12 @@ export function LovePanel({
   const [activeCommentDiaryId, setActiveCommentDiaryId] = useState<string | null>(null);
   const [expandedCommentDiaryIds, setExpandedCommentDiaryIds] = useState<Set<string>>(() => new Set());
   const [commentDraft, setCommentDraft] = useState("");
+  const [commentKeyboardOffset, setCommentKeyboardOffset] = useState(0);
+  const diaryScrollLockRef = useRef<ScrollLockSnapshot | null>(null);
+  const commentScrollLockRef = useRef<ScrollLockSnapshot | null>(null);
   const localDirtyRef = useRef(false);
   const commentInputRef = useRef<TextInput | null>(null);
+  const previousTabRef = useRef<LoveTab>(tab);
   const diaryFileInputRef = useRef<HTMLInputElement | null>(null);
   const giftFileInputRef = useRef<HTMLInputElement | null>(null);
   const anniFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -285,13 +294,54 @@ export function LovePanel({
   }, [diaries]);
 
   useEffect(() => {
+    if (previousTabRef.current === tab) return;
+    previousTabRef.current = tab;
+    setDiaryComposerOpen(false);
+    setActiveCommentDiaryId(null);
+    setOpenDiaryMenuId(null);
+    setOpenGiftMenuId(null);
+    setPickerPopover(null);
+  }, [tab]);
+
+  useEffect(() => {
+    onCommentComposerActiveChange?.(Boolean(activeCommentDiaryId));
+    return () => onCommentComposerActiveChange?.(false);
+  }, [activeCommentDiaryId, onCommentComposerActiveChange]);
+
+  useEffect(() => {
     if (!diaryComposerOpen || typeof document === "undefined") return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    diaryScrollLockRef.current = lockBodyScroll();
     return () => {
-      document.body.style.overflow = previousOverflow;
+      unlockBodyScroll(diaryScrollLockRef.current);
+      diaryScrollLockRef.current = null;
     };
   }, [diaryComposerOpen]);
+
+  useEffect(() => {
+    if (!activeCommentDiaryId || typeof document === "undefined") return undefined;
+    setVirtualKeyboardOverlay(true);
+    commentScrollLockRef.current = lockBodyScroll();
+    const updateKeyboardOffset = () => {
+      const viewport = window.visualViewport;
+      if (!viewport) {
+        setCommentKeyboardOffset(0);
+        return;
+      }
+      const offset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+      setCommentKeyboardOffset(offset);
+    };
+    updateKeyboardOffset();
+    window.visualViewport?.addEventListener("resize", updateKeyboardOffset);
+    window.visualViewport?.addEventListener("scroll", updateKeyboardOffset);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", updateKeyboardOffset);
+      window.visualViewport?.removeEventListener("scroll", updateKeyboardOffset);
+      setCommentKeyboardOffset(0);
+      unlockBodyScroll(commentScrollLockRef.current);
+      commentScrollLockRef.current = null;
+      setVirtualKeyboardOverlay(false);
+    };
+  }, [activeCommentDiaryId]);
 
   // 主动从云端重新拉取对方（及自己）的共享内容。PWA 没有浏览器地址栏刷新，
   // 对方写了新内容后必须手动触发才能看到最新的。
@@ -478,8 +528,8 @@ export function LovePanel({
   const groupedPhotos = useMemo(() => buildPhotoGroups(diaries, gifts, anniversaries, folders), [anniversaries, diaries, folders, gifts]);
   const folderOptions = useMemo(() => [{ label: "未分类", value: "" }, ...folders.map((folder) => ({ label: folder.name, value: folder.id }))], [folders]);
   const diaryArchive = useMemo(
-    () => filterDiaries(diaries, { dateFilter: diaryDateFilter, folderId: diaryFolderFilter, query: diarySearch, sort: diarySort, type: diaryTypeFilter }),
-    [diaries, diaryDateFilter, diaryFolderFilter, diarySearch, diarySort, diaryTypeFilter]
+    () => filterDiaries(diaries, { authorFilter: diaryAuthorFilter, currentUserId, dateFilter: diaryDateFilter, folderId: diaryFolderFilter, partnerId, query: diarySearch, sort: diarySort, type: diaryTypeFilter }),
+    [currentUserId, diaries, diaryAuthorFilter, diaryDateFilter, diaryFolderFilter, diarySearch, diarySort, diaryTypeFilter, partnerId]
   );
   const giftArchive = useMemo(
     () => filterGifts(gifts, { dateFilter: giftDateFilter, direction: giftDirectionFilter, folderId: giftFolderFilter, query: giftSearch, sort: giftSort, type: giftTypeFilter }),
@@ -498,6 +548,46 @@ export function LovePanel({
   const anniversaryList = useCollapsibleList(anniversaryArchive);
   const photoList = useCollapsibleList(groupedPhotos);
   const openPickerId = pickerPopover?.id ?? null;
+  const diaryTimeLabel = diaryDateFilter === "全部日期" && diarySort === "最新优先" ? "时间" : diaryDateFilter !== "全部日期" ? diaryDateFilter.replace("日期", "时间") : diarySort;
+  const diaryTimeOptions: ChoiceOption[] = [
+    { label: "排序方式", value: "__heading_sort", type: "heading" },
+    { label: `${diarySort === "最新优先" ? "✓ " : ""}最新优先`, value: "sort:最新优先" },
+    { label: `${diarySort === "最早优先" ? "✓ " : ""}最早优先`, value: "sort:最早优先" },
+    { label: "时间范围", value: "__heading_range", type: "heading" },
+    { label: `${diaryDateFilter === "全部日期" ? "✓ " : ""}全部时间`, value: "date:全部日期" },
+    { label: `${diaryDateFilter === "今天" ? "✓ " : ""}今天`, value: "date:今天" },
+    { label: `${diaryDateFilter === "本周" ? "✓ " : ""}本周`, value: "date:本周" },
+    { label: `${diaryDateFilter === "本月" ? "✓ " : ""}本月`, value: "date:本月" },
+    { label: "自定义日期", value: "date:自定义日期" }
+  ];
+  const diaryAuthorOptions = useMemo(() => diaryAuthorFilters.map((item) => ({ label: getAuthorFilterLabel(item, currentUserId, partnerId), value: item })), [currentUserId, partnerId]);
+  const handleDiaryTimeSelect = (value: string) => {
+    if (value.startsWith("sort:")) {
+      setDiarySort(value.replace("sort:", "") as typeof diarySort);
+      return;
+    }
+    if (value === "date:自定义日期") {
+      setDiaryDatePickerOpen(true);
+      return;
+    }
+    if (value.startsWith("date:")) {
+      setDiaryDateFilter(value.replace("date:", "") as typeof diaryDateFilter);
+    }
+  };
+  const closeCommentComposer = () => {
+    setActiveCommentDiaryId(null);
+    setCommentDraft("");
+  };
+  const handleLoveTabChange = (nextTab: LoveTab) => {
+    setTab(nextTab);
+    setDiaryComposerOpen(false);
+    closeCommentComposer();
+    setOpenDiaryMenuId(null);
+    setOpenGiftMenuId(null);
+    setPickerPopover(null);
+  };
+  const showDiaryFab = tab === "diary" && !diaryComposerOpen && !activeCommentDiaryId;
+  const showLoveTabs = showInlineTabs && !activeCommentDiaryId;
 
   const navigateToPhotoSource = () => {
     if (!selectedPhotoSource) return;
@@ -515,7 +605,7 @@ export function LovePanel({
 
   const getFolderName = (folderId?: string | null) => folders.find((folder) => folder.id === folderId)?.name ?? "未分类";
   const getDiaryAuthor = (entry: DiaryEntry) => {
-    const sourceId = entry.authorId ?? entry.ownerUserId ?? entry.updatedBy;
+    const sourceId = getDiaryAuthorId(entry);
     const isCurrentUser = Boolean(sourceId && currentUserId && sourceId === currentUserId);
     const isPartner = Boolean(sourceId && partnerId && sourceId === partnerId);
     const name = entry.authorName ?? (isCurrentUser ? "我" : isPartner ? "TA" : entry.creator ?? (sourceId ? "TA" : "历史记录"));
@@ -629,14 +719,18 @@ export function LovePanel({
     return "TA";
   };
   const focusCommentInput = () => {
+    const focus = () => {
+      const input = commentInputRef.current as unknown as { focus?: (options?: FocusOptions) => void } | null;
+      input?.focus?.({ preventScroll: true });
+    };
     if (typeof requestAnimationFrame === "function") {
       requestAnimationFrame(() => {
-        commentInputRef.current?.focus();
-        setTimeout(() => commentInputRef.current?.focus(), 50);
+        focus();
+        setTimeout(focus, 50);
       });
       return;
     }
-    setTimeout(() => commentInputRef.current?.focus(), 50);
+    setTimeout(focus, 50);
   };
   const openCommentComposer = (diaryId: string) => {
     setActiveCommentDiaryId(diaryId);
@@ -726,22 +820,22 @@ export function LovePanel({
 
       {tab === "diary" ? (
         <>
-          <View style={styles.card} testID="love-diary-archive-card">
+          <View style={styles.diaryFeedSection} testID="love-diary-archive-card">
             <View style={styles.archiveHeader}>
-              <Text style={styles.cardTitle}>日记档案</Text>
+              <Text style={styles.cardTitle}>日记本</Text>
               <Text style={styles.archiveCount}>{diaryArchive.length} 篇</Text>
             </View>
             <View style={styles.searchCreateRow}>
-              <TextInput onChangeText={setDiarySearch} placeholder="搜索日记" style={[styles.input, styles.searchInput, styles.searchField]} value={diarySearch} />
-              <Pressable accessibilityRole="button" accessibilityLabel="打开新建文件夹" onPress={() => setFolderDialogOpen(true)} style={styles.folderCreateButton}>
-                <Text style={styles.folderCreateText}>+ 文件夹</Text>
+              <TextInput onChangeText={setDiarySearch} placeholder="🔍 搜索日记" style={[styles.input, styles.searchInput, styles.searchField]} value={diarySearch} />
+              <Pressable accessibilityRole="button" accessibilityLabel="打开文件夹管理" onPress={() => setFolderDialogOpen(true)} style={styles.folderIconButton}>
+                <Text style={styles.folderIconText}>📁</Text>
               </Pressable>
             </View>
-            <View style={styles.filterGrid}>
-              <PickerButton accessibilityLabel="筛选日记日期" active={diaryDateFilter !== "全部日期"} grid id="diary-date-filter" label="日期" onSelect={(value) => setDiaryDateFilter(value as typeof diaryDateFilter)} onToggle={togglePicker} open={openPickerId === "diary-date-filter"} options={dateFilters.map((item) => ({ label: item, value: item }))} selectedValue={diaryDateFilter} />
+            <View style={styles.filterScroll}>
+              <PickerButton accessibilityLabel="筛选日记时间" active={diaryDateFilter !== "全部日期" || diarySort !== "最新优先"} grid id="diary-time-filter" label={diaryTimeLabel} onSelect={handleDiaryTimeSelect} onToggle={togglePicker} open={openPickerId === "diary-time-filter"} options={diaryTimeOptions} selectedValue={diarySort === "最新优先" ? `date:${diaryDateFilter}` : `sort:${diarySort}`} />
               <PickerButton accessibilityLabel="筛选日记类型" active={diaryTypeFilter !== "全部"} grid id="diary-type-filter" label="类型" onSelect={setDiaryTypeFilter} onToggle={togglePicker} open={openPickerId === "diary-type-filter"} options={["全部", ...diaryCategories].map((item) => ({ label: item, value: item }))} selectedValue={diaryTypeFilter} />
               <PickerButton accessibilityLabel="筛选日记文件夹" active={diaryFolderFilter !== null} grid id="diary-folder-filter" label="文件夹" onSelect={(value) => setDiaryFolderFilter(value === "__all" ? null : value || null)} onToggle={togglePicker} open={openPickerId === "diary-folder-filter"} options={[{ label: "全部", value: "__all" }, ...folderOptions]} selectedValue={diaryFolderFilter ?? "__all"} />
-              <PickerButton accessibilityLabel="日记排序" active={diarySort !== "最新优先"} grid id="diary-sort" label="排序" onSelect={(value) => setDiarySort(value as typeof diarySort)} onToggle={togglePicker} open={openPickerId === "diary-sort"} options={sortOptions.map((item) => ({ label: item, value: item }))} selectedValue={diarySort} />
+              <PickerButton accessibilityLabel="筛选日记作者" active={diaryAuthorFilter !== "全部"} grid id="diary-author-filter" label="作者" onSelect={(value) => setDiaryAuthorFilter(value as DiaryAuthorFilter)} onToggle={togglePicker} open={openPickerId === "diary-author-filter"} options={diaryAuthorOptions} selectedValue={diaryAuthorFilter} />
             </View>
             {folders.length > 0 ? (
               <View style={styles.folderList}>
@@ -769,7 +863,7 @@ export function LovePanel({
                   {diaryList.visibleItems.map((entry) => {
                 const author = getDiaryAuthor(entry);
                 return (
-                <View key={entry.id} style={styles.storyCard}>
+                  <View key={entry.id} style={styles.storyCard}>
                   <View style={styles.storyAuthorRow}>
                     <View style={styles.storyAuthorLeft}>
                       <View style={styles.storyAvatar}>
@@ -777,7 +871,7 @@ export function LovePanel({
                       </View>
                       <View style={styles.storyAuthorMeta}>
                         <Text style={styles.storyAuthorName}>{author.name}</Text>
-                        <Text style={styles.diaryDate}>{formatChineseDate(entry.date)}</Text>
+                        <Text style={styles.diaryDate}>{formatDiaryTimestamp(entry)}</Text>
                       </View>
                     </View>
                     <Pressable accessibilityRole="button" accessibilityLabel={`打开日记菜单：${entry.title ?? "恋爱日记"}`} onPress={() => setOpenDiaryMenuId(openDiaryMenuId === entry.id ? null : entry.id)} style={styles.moreButton}>
@@ -790,6 +884,7 @@ export function LovePanel({
                       {entry.content ? <Text numberOfLines={2} style={styles.diaryContent}>{entry.content}</Text> : null}
                       <View style={styles.memoryTagRow}>
                         <Text style={styles.memoryTag}>{moodIcons[entry.mood]} {entry.mood}</Text>
+                        <Text style={styles.memoryDivider}>·</Text>
                         <Text style={styles.memoryTag}>{entry.category ?? "日常记录"}</Text>
                         {entry.folderId ? <Text style={styles.memoryFolder}>📁 {getFolderName(entry.folderId)}</Text> : null}
                       </View>
@@ -811,7 +906,7 @@ export function LovePanel({
                       style={({ pressed }) => [styles.storyActionButton, getLikeSummary(entry.id).likedByMe ? styles.storyActionButtonActive : null, pressed ? styles.actionPressed : null]}
                     >
                       <Text style={[styles.storyActionText, getLikeSummary(entry.id).likedByMe ? styles.storyActionTextActive : null]}>
-                        {getLikeSummary(entry.id).likedByMe ? "♥ 已喜欢" : "♡ 喜欢"} {getLikeSummary(entry.id).count}
+                        {getLikeSummary(entry.id).likedByMe ? "♥" : "♡"} {getLikeSummary(entry.id).count}
                       </Text>
                     </Pressable>
                     <Pressable
@@ -824,7 +919,7 @@ export function LovePanel({
                       style={({ pressed }) => [styles.storyActionButton, activeCommentDiaryId === entry.id ? styles.storyActionButtonActive : null, pressed ? styles.actionPressed : null]}
                     >
                       <Text style={[styles.storyActionText, activeCommentDiaryId === entry.id ? styles.storyActionTextActive : null]}>
-                        评论 {getCommentsForDiary(entry.id).length}
+                        💬 {getCommentsForDiary(entry.id).length}
                       </Text>
                     </Pressable>
                   </View>
@@ -890,7 +985,7 @@ export function LovePanel({
               </View>
             )}
           </View>
-          <Pressable
+          {showDiaryFab ? <Pressable
             accessibilityRole="button"
             accessibilityLabel="发布恋爱日记"
             onPress={openDiaryComposer}
@@ -898,7 +993,7 @@ export function LovePanel({
             testID="love-diary-publish-fab"
           >
             <Text style={styles.diaryFabText}>+</Text>
-          </Pressable>
+          </Pressable> : null}
         </>
       ) : null}
 
@@ -1177,10 +1272,10 @@ export function LovePanel({
         )
       ) : null}
 
-      {showInlineTabs ? (
+      {showLoveTabs ? (
         <View testID="love-floating-tabs" style={[styles.tabs, styles.floatingTabs]}>
           {loveTabs.map((item) => (
-            <TabButton key={item.value} active={tab === item.value} label={item.label} onPress={() => setTab(item.value)} />
+            <TabButton key={item.value} active={tab === item.value} label={item.label} onPress={() => handleLoveTabChange(item.value)} />
           ))}
         </View>
       ) : null}
@@ -1211,9 +1306,9 @@ export function LovePanel({
       ) : null}
 
       {diaryComposerOpen ? (
+        <PortalLayer>
         <Pressable accessibilityLabel="关闭写日记弹窗" onPress={closeDiaryComposer} style={styles.composerBackdrop}>
-          <View onStartShouldSetResponder={() => true} style={styles.composerSheet} testID="love-diary-composer-sheet">
-            <View style={styles.composerHandle} />
+          <View onStartShouldSetResponder={() => true} style={styles.composerModal} testID="love-diary-composer-modal">
             <View style={styles.composerHeader}>
               <View>
                 <Text style={styles.cardTitle}>{editingDiaryId ? "编辑日记" : "写日记"}</Text>
@@ -1320,10 +1415,12 @@ export function LovePanel({
             />
           </View>
         </Pressable>
+        </PortalLayer>
       ) : null}
 
       {activeCommentDiaryId ? (
-        <View style={styles.inlineCommentComposer} testID="love-inline-comment-composer">
+        <PortalLayer>
+        <View style={[styles.inlineCommentComposer, { bottom: commentKeyboardOffset }]} testID="love-inline-comment-composer">
           <View style={styles.commentComposerAvatar}>
             <Text style={styles.commentComposerAvatarText}>我</Text>
           </View>
@@ -1345,6 +1442,7 @@ export function LovePanel({
             <Text style={styles.bottomCommentSendText}>发送</Text>
           </Pressable>
         </View>
+        </PortalLayer>
       ) : null}
 
       {detailItem ? (
@@ -1376,6 +1474,13 @@ export function LovePanel({
       ) : null}
     </View>
   );
+}
+
+function PortalLayer({ children }: { children: ReactNode }) {
+  if (shouldUsePortal()) {
+    return createPortal(children, document.body);
+  }
+  return <>{children}</>;
 }
 
 function PickerButton({
@@ -1424,18 +1529,22 @@ function AnchoredDropdown({ onClose, picker }: { onClose: () => void; picker: Pi
     <Pressable accessibilityLabel="关闭选择菜单" onPress={onClose} style={styles.dropdownBackdrop} testID="love-dropdown-dismiss">
       <View onStartShouldSetResponder={() => true} style={[styles.dropdownPopover, style]} testID="love-dropdown-popover">
         {picker.options.map((option) => (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`选择${picker.accessibilityLabel.replace(/^选择日记|^选择礼物|^选择纪念日|^筛选日记|^筛选礼物/, "选择")}：${option.label}`}
-            key={option.value}
-            onPress={() => {
-              picker.onSelect(option.value);
-              onClose();
-            }}
-            style={[styles.dropdownOption, picker.selectedValue === option.value ? styles.dropdownOptionActive : null]}
-          >
-            <Text style={[styles.dropdownOptionText, picker.selectedValue === option.value ? styles.dropdownOptionTextActive : null]}>{option.label}</Text>
-          </Pressable>
+          option.type === "heading" ? (
+            <Text key={option.value} style={styles.dropdownHeading}>{option.label}</Text>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`选择${picker.accessibilityLabel.replace(/^选择日记|^选择礼物|^选择纪念日|^筛选日记|^筛选礼物/, "选择")}：${option.label}`}
+              key={option.value}
+              onPress={() => {
+                picker.onSelect(option.value);
+                onClose();
+              }}
+              style={[styles.dropdownOption, picker.selectedValue === option.value ? styles.dropdownOptionActive : null]}
+            >
+              <Text style={[styles.dropdownOptionText, picker.selectedValue === option.value ? styles.dropdownOptionTextActive : null]}>{option.label}</Text>
+            </Pressable>
+          )
         ))}
       </View>
     </Pressable>
@@ -1601,16 +1710,30 @@ function filterAnniversaries(entries: AnniversaryEntry[], filters: { filter: str
 
 function filterDiaries(
   entries: DiaryEntry[],
-  filters: { dateFilter: string; folderId: string | null; query: string; sort: string; type: string }
+  filters: { authorFilter: DiaryAuthorFilter; currentUserId: string | null; dateFilter: string; folderId: string | null; partnerId: string | null; query: string; sort: string; type: string }
 ) {
   const query = filters.query.trim().toLowerCase();
   const filtered = entries.filter((entry) => {
     if (query && !`${entry.title ?? ""} ${entry.content}`.toLowerCase().includes(query)) return false;
     if (filters.type !== "全部" && (entry.category ?? "日常记录") !== filters.type) return false;
     if (filters.folderId !== null && (entry.folderId ?? "") !== filters.folderId) return false;
+    if (!matchesAuthorFilter(entry, filters.authorFilter, filters.currentUserId, filters.partnerId)) return false;
     return matchesDateFilter(entry.date, filters.dateFilter);
   });
   return sortByLoveDate(filtered, filters.sort, (entry) => [entry.date, entry.createTime]);
+}
+
+function matchesAuthorFilter(entry: DiaryEntry, filter: DiaryAuthorFilter, currentUserId: string | null, partnerId: string | null) {
+  if (filter === "全部") return true;
+  const authorId = getDiaryAuthorId(entry);
+  if (filter === "历史记录") return !authorId;
+  if (filter === "我") return Boolean(authorId && currentUserId && authorId === currentUserId);
+  if (filter === "TA") return Boolean(authorId && partnerId && authorId === partnerId);
+  return true;
+}
+
+function getDiaryAuthorId(entry: DiaryEntry) {
+  return entry.authorId ?? entry.ownerUserId ?? entry.updatedBy ?? null;
 }
 
 function filterGifts(
@@ -1674,6 +1797,7 @@ type PhotoGroup = {
 
 type ChoiceOption = {
   label: string;
+  type?: "heading";
   value: string;
 };
 
@@ -1682,6 +1806,16 @@ type PickerRect = {
   left: number;
   top: number;
   width: number;
+};
+
+type ScrollLockSnapshot = {
+  left: string;
+  overflow: string;
+  position: string;
+  right: string;
+  scrollY: number;
+  top: string;
+  width: string;
 };
 
 type PickerPopoverState = {
@@ -1722,6 +1856,62 @@ function getDropdownPosition(rect: PickerRect, optionCount: number) {
 
 function shouldUsePortal() {
   return Platform.OS === "web" && typeof document !== "undefined" && Boolean(document.body) && (typeof process === "undefined" || process.env.NODE_ENV !== "test");
+}
+
+function formatDiaryTimestamp(entry: DiaryEntry) {
+  const [year, month, day] = entry.date.split("-");
+  const time = entry.createTime ? new Date(entry.createTime) : null;
+  const hour = time && !Number.isNaN(time.getTime()) ? String(time.getHours()).padStart(2, "0") : "";
+  const minute = time && !Number.isNaN(time.getTime()) ? String(time.getMinutes()).padStart(2, "0") : "";
+  if (!year || !month || !day) return entry.date;
+  return `${Number(month)}月${Number(day)}日${hour && minute ? `  ${hour}:${minute}` : ""}`;
+}
+
+function getAuthorFilterLabel(filter: DiaryAuthorFilter, _currentUserId: string | null, _partnerId: string | null) {
+  if (filter === "我") return "我";
+  if (filter === "TA") return "TA";
+  if (filter === "历史记录") return "历史记录";
+  return "全部";
+}
+
+function lockBodyScroll(): ScrollLockSnapshot | null {
+  if (Platform.OS !== "web" || typeof document === "undefined" || typeof window === "undefined") return null;
+  const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  const snapshot: ScrollLockSnapshot = {
+    left: document.body.style.left,
+    overflow: document.body.style.overflow,
+    position: document.body.style.position,
+    right: document.body.style.right,
+    scrollY,
+    top: document.body.style.top,
+    width: document.body.style.width
+  };
+  document.body.style.position = "fixed";
+  document.body.style.top = `-${scrollY}px`;
+  document.body.style.left = "0";
+  document.body.style.right = "0";
+  document.body.style.width = "100%";
+  document.body.style.overflow = "hidden";
+  return snapshot;
+}
+
+function unlockBodyScroll(snapshot: ScrollLockSnapshot | null) {
+  if (Platform.OS !== "web" || !snapshot || typeof document === "undefined" || typeof window === "undefined") return;
+  document.body.style.position = snapshot.position;
+  document.body.style.top = snapshot.top;
+  document.body.style.left = snapshot.left;
+  document.body.style.right = snapshot.right;
+  document.body.style.width = snapshot.width;
+  document.body.style.overflow = snapshot.overflow;
+  window.scrollTo(0, snapshot.scrollY);
+}
+
+function setVirtualKeyboardOverlay(enabled: boolean) {
+  if (typeof navigator === "undefined") return;
+  const keyboard = (navigator as unknown as { virtualKeyboard?: { overlaysContent?: boolean } }).virtualKeyboard;
+  if (keyboard && "overlaysContent" in keyboard) {
+    keyboard.overlaysContent = enabled;
+  }
 }
 
 export function buildPhotoGroups(diaries: DiaryEntry[], gifts: GiftEntry[], anniversaries: AnniversaryEntry[], folders: LoveFolder[] = []): PhotoGroup[] {
@@ -1949,8 +2139,10 @@ const styles = StyleSheet.create({
   composerBackdrop: {
     backgroundColor: "rgba(17,24,39,0.34)",
     bottom: 0,
-    justifyContent: "flex-end",
+    alignItems: "center",
+    justifyContent: "center",
     left: 0,
+    padding: 16,
     position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
     right: 0,
     top: 0,
@@ -1970,37 +2162,27 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     lineHeight: 22
   },
-  composerHandle: {
-    alignSelf: "center",
-    backgroundColor: "#f1cad4",
-    borderRadius: 999,
-    height: 4,
-    marginBottom: 4,
-    width: 38
-  },
   composerHeader: {
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between"
   },
-  composerSheet: {
-    alignSelf: "center",
+  composerModal: {
     backgroundColor: "#fffafd",
     borderColor: "#f3d6df",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderRadius: 22,
     borderWidth: 1,
     gap: 10,
-    maxHeight: Platform.OS === "web" ? ("85dvh" as unknown as number) : "85%",
+    maxHeight: Platform.OS === "web" ? ("78dvh" as unknown as number) : "78%",
     maxWidth: 560,
     overflow: "scroll",
     padding: 14,
-    paddingBottom: Platform.OS === "web" ? ("calc(24px + env(safe-area-inset-bottom, 0px))" as unknown as number) : 24,
+    paddingBottom: Platform.OS === "web" ? ("calc(14px + env(safe-area-inset-bottom, 0px))" as unknown as number) : 14,
     shadowColor: "#ef7f98",
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.14,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.18,
     shadowRadius: 22,
-    width: "100%"
+    width: Platform.OS === "web" ? ("min(520px, calc(100vw - 32px))" as unknown as number) : "92%"
   },
   composerSub: {
     color: "#8b7280",
@@ -2073,6 +2255,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     lineHeight: 19
+  },
+  diaryFeedSection: {
+    backgroundColor: "rgba(255,252,253,0.95)",
+    borderColor: "#f3d6df",
+    borderRadius: 22,
+    borderWidth: 1,
+    elevation: 2,
+    gap: 10,
+    padding: 12,
+    shadowColor: "#ef7f98",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14
   },
   diaryActions: {
     alignItems: "center",
@@ -2235,6 +2430,12 @@ const styles = StyleSheet.create({
     flexWrap: "nowrap",
     gap: 6
   },
+  filterScroll: {
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    gap: 6,
+    overflow: "visible"
+  },
   floatingTabs: {
     bottom: 10,
     elevation: 10,
@@ -2291,6 +2492,20 @@ const styles = StyleSheet.create({
     color: "#111827",
     fontSize: 13,
     fontWeight: "900"
+  },
+  folderIconButton: {
+    alignItems: "center",
+    backgroundColor: "#fff0f4",
+    borderColor: "#f3d6df",
+    borderRadius: 12,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: "center",
+    width: 46
+  },
+  folderIconText: {
+    fontSize: 18,
+    lineHeight: 22
   },
   folderDialogActions: {
     flexDirection: "row",
@@ -2529,6 +2744,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800"
   },
+  memoryDivider: {
+    color: "#d4aeb9",
+    fontSize: 11,
+    fontWeight: "900"
+  },
   memoryTag: {
     color: "#8b7280",
     fontSize: 11,
@@ -2717,6 +2937,7 @@ const styles = StyleSheet.create({
     gap: 3,
     justifyContent: "center",
     minHeight: 40,
+    minWidth: 0,
     paddingHorizontal: 6,
     paddingVertical: 8
   },
@@ -2734,9 +2955,11 @@ const styles = StyleSheet.create({
   },
   pickerText: {
     color: "#111827",
+    flexShrink: 1,
     fontSize: 12,
     fontWeight: "900",
     lineHeight: 17,
+    minWidth: 0,
     textAlign: "center"
   },
   dropdownBackdrop: {
@@ -2762,6 +2985,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.16,
     shadowRadius: 18,
     zIndex: 9999
+  },
+  dropdownHeading: {
+    color: "#b18a96",
+    fontSize: 11,
+    fontWeight: "900",
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 4
   },
   dropdownOption: {
     backgroundColor: "#ffffff",

@@ -72,6 +72,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const [financeTab, setFinanceTab] = useState<FinanceTab>("stats");
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [loveTab, setLoveTab] = useState<LoveTab>("diary");
+  const [loveCommentComposerOpen, setLoveCommentComposerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
   const [quickAccountingOpen, setQuickAccountingOpen] = useState(false);
@@ -439,6 +440,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
               onEntertainmentTabChange={setEntertainmentTab}
               onExamTabChange={setExamTab}
               onFinanceTabChange={setFinanceTab}
+              onLoveCommentComposerActiveChange={setLoveCommentComposerOpen}
               onLoveTabChange={setLoveTab}
               onOpenQuickAccounting={() => setQuickAccountingOpen(true)}
               onOpenPackages={() => openShortcut("packages")}
@@ -461,6 +463,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
             onEntertainmentTabChange={setEntertainmentTab}
             onExamTabChange={setExamTab}
             onFinanceTabChange={setFinanceTab}
+            onLoveCommentComposerActiveChange={setLoveCommentComposerOpen}
             onLoveTabChange={setLoveTab}
             onOpenQuickAccounting={() => setQuickAccountingOpen(true)}
             onOpenPackages={() => openShortcut("packages")}
@@ -473,7 +476,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
       )}
 
       {activeKey === "finance" ? <FixedBottomTabs activeValue={financeTab} hidden={keyboardOpen || quickCaptureOpen} items={financeTabs} onChange={setFinanceTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
-      {activeKey === "love" ? <FixedBottomTabs activeValue={loveTab} hidden={keyboardOpen || quickCaptureOpen} items={loveTabs} onChange={setLoveTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
+      {activeKey === "love" ? <FixedBottomTabs activeValue={loveTab} hidden={keyboardOpen || quickCaptureOpen || loveCommentComposerOpen} items={loveTabs} onChange={setLoveTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
       {activeKey === "exam" ? <FixedBottomTabs activeValue={examTab} hidden={keyboardOpen || quickCaptureOpen} items={examTabs} onChange={setExamTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
       {activeKey === "fun" ? <FixedBottomTabs activeValue={entertainmentTab} hidden={keyboardOpen || quickCaptureOpen} items={entertainmentTabs} onChange={setEntertainmentTab} style={styles.secondaryTabs} tokens={tokens} /> : null}
 
@@ -556,6 +559,7 @@ function PageContent({
   onEntertainmentTabChange,
   onExamTabChange,
   onFinanceTabChange,
+  onLoveCommentComposerActiveChange,
   onLoveTabChange,
   onOpenQuickAccounting,
   onOpenPackages,
@@ -573,6 +577,7 @@ function PageContent({
   onEntertainmentTabChange: (tab: EntTab) => void;
   onExamTabChange: (tab: ExamTab) => void;
   onFinanceTabChange: (tab: FinanceTab) => void;
+  onLoveCommentComposerActiveChange: (active: boolean) => void;
   onLoveTabChange: (tab: LoveTab) => void;
   onOpenQuickAccounting: () => void;
   onOpenPackages: () => void;
@@ -609,7 +614,7 @@ function PageContent({
           themeTokens={tokens}
         />
       ) : null}
-      {activeKey === "love" ? <LovePanel activeTab={loveTab} onTabChange={onLoveTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
+      {activeKey === "love" ? <LovePanel activeTab={loveTab} onCommentComposerActiveChange={onLoveCommentComposerActiveChange} onTabChange={onLoveTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
       {activeKey === "exam" ? <ExamPanel activeTab={examTab} onTabChange={onExamTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
       {activeKey === "fun" ? <EntertainmentPanel activeTab={entertainmentTab} onTabChange={onEntertainmentTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
       {activeKey !== "home" && activeKey !== "plan" && activeKey !== "workout" && activeKey !== "finance" && activeKey !== "love" && activeKey !== "exam" && activeKey !== "fun" ? <GenericModuleSkeleton themeEmptyState={themeEmptyState} styles={styles} /> : null}

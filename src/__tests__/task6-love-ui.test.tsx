@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react-native";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 
 import { AppShell } from "@/components/AppShell";
 import { ActionChip, ContentCard, EmptyState, FloatingQuickAction, InlineError, PageHeader, PrimaryButton, SecondaryButton, SegmentedTabs, StatCard } from "@/shared/ui/primitives";
@@ -47,7 +47,7 @@ describe("Task 6 love page and UI polish", () => {
     expect(screen.getAllByText("纪念日").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("照片墙").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("生理周期")).toBeNull();
-    expect(screen.getByText("日记档案")).toBeOnTheScreen();
+    expect(screen.getAllByText("日记本").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole("button", { name: "发布恋爱日记" })).toBeOnTheScreen();
     expect(screen.queryByText("写日记")).toBeNull();
     expect(screen.queryByPlaceholderText("标题，例如：一起吃饭")).toBeNull();
@@ -67,8 +67,8 @@ describe("Task 6 love page and UI polish", () => {
     expect(await screen.findByText(/✓ 已保存/)).toBeOnTheScreen();
     expect(screen.getByText("一起散步")).toBeOnTheScreen();
     expect(screen.getByText("今天一起散步，很开心")).toBeOnTheScreen();
-    expect(screen.getByText("日记档案")).toBeOnTheScreen();
-    expect(screen.getByPlaceholderText("搜索日记")).toBeOnTheScreen();
+    expect(screen.getAllByText("日记本").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByPlaceholderText("🔍 搜索日记")).toBeOnTheScreen();
     expect(screen.queryByText("共享")).toBeNull();
     expect(screen.queryByText(/最后由/)).toBeNull();
     expect(screen.queryByText("还没有日记")).toBeNull();
@@ -99,6 +99,25 @@ describe("Task 6 love page and UI polish", () => {
     expect(screen.getByPlaceholderText("今天发生了什么...")).toBeOnTheScreen();
   });
 
+  it("uses a centered diary modal and closes it when switching love tabs", async () => {
+    render(<AppShell initialRoute="/love" />);
+
+    fireEvent.press(await screen.findByRole("button", { name: "发布恋爱日记" }));
+
+    expect(screen.getByTestId("love-diary-composer-modal")).toBeOnTheScreen();
+    expect(screen.queryByTestId("love-diary-composer-sheet")).toBeNull();
+    expect(screen.queryByTestId("love-composer-handle")).toBeNull();
+
+    fireEvent.changeText(screen.getByTestId("love-diary-title-input"), "没写完的标题");
+    fireEvent.press(screen.getByTestId("secondary-tab-gifts"));
+
+    await waitFor(() => expect(screen.queryByTestId("love-diary-composer-modal")).toBeNull());
+    expect(screen.queryByRole("button", { name: "发布恋爱日记" })).toBeNull();
+
+    fireEvent.press(screen.getByTestId("secondary-tab-diary"));
+    expect(await screen.findByRole("button", { name: "发布恋爱日记" })).toBeOnTheScreen();
+  });
+
   it("keeps archive filters and diary history inside one compact archive area", async () => {
     render(<AppShell initialRoute="/love" />);
 
@@ -109,12 +128,14 @@ describe("Task 6 love page and UI polish", () => {
 
     expect(await screen.findByText(/✓ 已保存/)).toBeOnTheScreen();
     const archive = screen.getByTestId("love-diary-archive-card");
-    expect(within(archive).getByText("日记档案")).toBeOnTheScreen();
+    expect(within(archive).getByText("日记本")).toBeOnTheScreen();
     expect(within(archive).getAllByText("我").length).toBeGreaterThan(0);
-    expect(within(archive).getAllByText("评论 0").length).toBeGreaterThan(0);
-    for (const label of ["日期", "类型", "文件夹", "排序"]) {
+    expect(within(archive).getAllByRole("button", { name: /评论 0/ }).length).toBeGreaterThan(0);
+    for (const label of ["时间", "类型", "文件夹", "作者"]) {
       expect(within(archive).getByText(label)).toBeOnTheScreen();
     }
+    expect(within(archive).queryByText("日期")).toBeNull();
+    expect(within(archive).queryByText("排序")).toBeNull();
     expect(within(archive).getAllByText("一起散步").length).toBeGreaterThan(0);
     expect(screen.queryByTestId("love-diary-history-wrapper")).toBeNull();
   });
@@ -146,6 +167,8 @@ describe("Task 6 love page and UI polish", () => {
     fireEvent.press((await screen.findAllByRole("button", { name: /评论 0/ }))[0]);
 
     expect(screen.getByTestId("love-inline-comment-composer")).toBeOnTheScreen();
+    await waitFor(() => expect(screen.queryByTestId("secondary-floating-tabs")).toBeNull());
+    expect(screen.queryByRole("button", { name: "发布恋爱日记" })).toBeNull();
     expect(screen.getByPlaceholderText("说点什么吧…")).toBeOnTheScreen();
     expect(screen.queryByText("还没有评论，写下第一句回应。")).toBeNull();
     fireEvent.changeText(screen.getByPlaceholderText("说点什么吧…"), "下次还去");
