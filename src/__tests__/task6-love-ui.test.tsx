@@ -14,6 +14,17 @@ jest.mock("@/features/love/loveSharedCloud", () => ({
   saveLoveSharedValue: jest.fn(async () => undefined)
 }));
 
+jest.mock("@/features/love/loveDiaryComments", () => ({
+  deleteDiaryCommentFromCloud: jest.fn(async () => undefined),
+  loadDiaryCommentsFromCloud: jest.fn(async () => []),
+  saveDiaryCommentToCloud: jest.fn(async () => undefined)
+}));
+
+jest.mock("@/features/love/loveDiaryLikes", () => ({
+  loadDiaryLikesFromCloud: jest.fn(async () => ({})),
+  toggleDiaryLikeInCloud: jest.fn(async (_diaryId: string, liked: boolean) => !liked)
+}));
+
 const tokens = {
   accent: "#65465a",
   accentSoft: "#f0e2ea",
@@ -106,6 +117,42 @@ describe("Task 6 love page and UI polish", () => {
     }
     expect(within(archive).getAllByText("一起散步").length).toBeGreaterThan(0);
     expect(screen.queryByTestId("love-diary-history-wrapper")).toBeNull();
+  });
+
+  it("toggles diary likes directly from the story card", async () => {
+    render(<AppShell initialRoute="/love" />);
+
+    fireEvent.press(await screen.findByRole("button", { name: "发布恋爱日记" }));
+    fireEvent.changeText(screen.getByPlaceholderText("标题，例如：一起吃饭"), "一起看电影");
+    fireEvent.changeText(screen.getByPlaceholderText("今天发生了什么..."), "电影很好看");
+    fireEvent.press(screen.getByRole("button", { name: "保存日记" }));
+
+    const likeButton = (await screen.findAllByRole("button", { name: /喜欢 0/ }))[0];
+    fireEvent.press(likeButton);
+
+    expect(await screen.findByRole("button", { name: /已喜欢 1/ })).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("button", { name: /已喜欢 1/ }));
+    expect((await screen.findAllByRole("button", { name: /喜欢 0/ })).length).toBeGreaterThan(0);
+  });
+
+  it("opens an inline bottom comment composer instead of the old diary comment modal", async () => {
+    render(<AppShell initialRoute="/love" />);
+
+    fireEvent.press(await screen.findByRole("button", { name: "发布恋爱日记" }));
+    fireEvent.changeText(screen.getByPlaceholderText("标题，例如：一起吃饭"), "一起吃火锅");
+    fireEvent.changeText(screen.getByPlaceholderText("今天发生了什么..."), "辣锅很好吃");
+    fireEvent.press(screen.getByRole("button", { name: "保存日记" }));
+
+    fireEvent.press((await screen.findAllByRole("button", { name: /评论 0/ }))[0]);
+
+    expect(screen.getByTestId("love-inline-comment-composer")).toBeOnTheScreen();
+    expect(screen.getByPlaceholderText("说点什么吧…")).toBeOnTheScreen();
+    expect(screen.queryByText("还没有评论，写下第一句回应。")).toBeNull();
+    fireEvent.changeText(screen.getByPlaceholderText("说点什么吧…"), "下次还去");
+    fireEvent.press(screen.getByRole("button", { name: "发送评论" }));
+
+    expect(await screen.findByText("下次还去")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: /评论 1/ })).toBeOnTheScreen();
   });
 
   it("exports reusable polished UI primitives", () => {

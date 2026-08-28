@@ -8,11 +8,17 @@ import {
   loadDiaryCommentsFromCloud,
   saveDiaryCommentToCloud
 } from "@/features/love/loveDiaryComments";
+import {
+  loadDiaryLikesFromCloud,
+  toggleDiaryLikeInCloud
+} from "@/features/love/loveDiaryLikes";
 import type { DiaryEntry } from "@/features/love/LovePanel";
 
 function createDiaryClient(options?: { coupleId?: string | null; rows?: unknown[]; userId?: string }) {
   type QueryMock = {
+    delete: jest.Mock<QueryMock, []>;
     eq: jest.Mock<QueryMock, [string, unknown]>;
+    in: jest.Mock<Promise<{ data: unknown[]; error: null }>, [string, unknown[]]>;
     is: jest.Mock<QueryMock, unknown[]>;
     order: jest.Mock<QueryMock | Promise<{ data: unknown[]; error: null }>, unknown[]>;
   };
@@ -33,9 +39,16 @@ function createDiaryClient(options?: { coupleId?: string | null; rows?: unknown[
       calls.table.push(table);
       let orderCount = 0;
       const query: QueryMock = {
+        delete: jest.fn(() => query),
         eq: jest.fn((column, value) => {
           calls.eq.push({ column, value });
-          return query;
+          return table === "diary_likes" && calls.eq.filter((item) => item.column === "diary_id" || item.column === "user_id").length >= 2
+            ? Promise.resolve({ data: null, error: null }) as never
+            : query;
+        }),
+        in: jest.fn(async (column, value) => {
+          calls.eq.push({ column, value });
+          return { data: options?.rows ?? [], error: null };
         }),
         is: jest.fn(() => query),
         order: jest.fn(() => {
@@ -44,6 +57,7 @@ function createDiaryClient(options?: { coupleId?: string | null; rows?: unknown[
         })
       };
       return {
+        delete: jest.fn(() => query),
         select: jest.fn((columns: string) => {
           calls.select.push(columns);
           return query;
@@ -307,5 +321,46 @@ describe("love diary cloud sharing", () => {
         value: "comment-2"
       })
     ]);
+  });
+
+  it("loads persistent shared diary likes and marks the current user's like", async () => {
+    const { client } = createDiaryClient({
+      rows: [
+        { created_at: "2026-08-02T09:00:00.000Z", diary_id: "diary-a", id: "like-1", user_id: "user-a" },
+        { created_at: "2026-08-02T09:01:00.000Z", diary_id: "diary-a", id: "like-2", user_id: "user-b" }
+      ],
+      userId: "user-a"
+    });
+
+    const likes = await loadDiaryLikesFromCloud(["diary-a"], client as never);
+
+    expect(likes).toEqual({
+      "diary-a": {
+        count: 2,
+        likedByMe: true
+      }
+    });
+  });
+
+  it("toggles the current user's diary like through the diary_likes table", async () => {
+    const { calls, client } = createDiaryClient({ userId: "user-a" });
+
+    await toggleDiaryLikeInCloud("diary-a", false, client as never);
+    await toggleDiaryLikeInCloud("diary-a", true, client as never);
+
+    expect(calls.table).toContain("diary_likes");
+    expect(calls.upsert[0]).toEqual({
+      opts: { onConflict: "diary_id,user_id" },
+      rows: [
+        expect.objectContaining({
+          diary_id: "diary-a",
+          user_id: "user-a"
+        })
+      ]
+    });
+    expect(calls.eq).toEqual(expect.arrayContaining([
+      { column: "diary_id", value: "diary-a" },
+      { column: "user_id", value: "user-a" }
+    ]));
   });
 });

@@ -9,6 +9,7 @@ import type { UiTokens } from "@/shared/ui/primitives";
 import { getCurrentPartnerId } from "@/auth/partnership";
 import { getCurrentLoveUserId, hydrateLoveSharedValue, saveLoveSharedValue } from "./loveSharedCloud";
 import { deleteDiaryCommentFromCloud, loadDiaryCommentsFromCloud, saveDiaryCommentToCloud, type DiaryComment } from "./loveDiaryComments";
+import { loadDiaryLikesFromCloud, toggleDiaryLikeInCloud, type DiaryLikeSummary } from "./loveDiaryLikes";
 
 export type LoveTab = "diary" | "gifts" | "anniversary" | "photos";
 type DiaryVisibility = "private" | "couple_read" | "couple_edit";
@@ -184,8 +185,12 @@ export function LovePanel({
   const [editingGiftId, setEditingGiftId] = useState<string | null>(null);
   const [diaryComposerOpen, setDiaryComposerOpen] = useState(false);
   const [diaryComments, setDiaryComments] = useState<Record<string, DiaryComment[]>>({});
+  const [diaryLikes, setDiaryLikes] = useState<Record<string, DiaryLikeSummary>>({});
+  const [activeCommentDiaryId, setActiveCommentDiaryId] = useState<string | null>(null);
+  const [expandedCommentDiaryIds, setExpandedCommentDiaryIds] = useState<Set<string>>(() => new Set());
   const [commentDraft, setCommentDraft] = useState("");
   const localDirtyRef = useRef(false);
+  const commentInputRef = useRef<TextInput | null>(null);
   const diaryFileInputRef = useRef<HTMLInputElement | null>(null);
   const giftFileInputRef = useRef<HTMLInputElement | null>(null);
   const anniFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -237,7 +242,11 @@ export function LovePanel({
     void Promise.all(diaryIds.map(async (diaryId) => [diaryId, await loadDiaryCommentsFromCloud(diaryId)] as const))
       .then((pairs) => {
         if (cancelled) return;
-        setDiaryComments(Object.fromEntries(pairs));
+        const nextComments = Object.fromEntries(pairs);
+        setDiaryComments((current) => ({
+          ...nextComments,
+          ...Object.fromEntries(Object.entries(current).filter(([, comments]) => comments.length > 0))
+        }));
       })
       .catch(() => {
         if (!cancelled) setDiaryComments({});
@@ -246,6 +255,43 @@ export function LovePanel({
       cancelled = true;
     };
   }, [diaries]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const diaryIds = diaries.map((entry) => entry.id).filter(isUuid);
+    if (diaryIds.length === 0) {
+      setDiaryLikes({});
+      return () => {
+        cancelled = true;
+      };
+    }
+    void loadDiaryLikesFromCloud(diaryIds)
+      .then((summary) => {
+        if (!cancelled) {
+          setDiaryLikes((current) => ({
+            ...summary,
+            ...Object.fromEntries(
+              Object.entries(current).filter(([, value]) => value.count > 0 || value.likedByMe)
+            )
+          }));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setDiaryLikes({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [diaries]);
+
+  useEffect(() => {
+    if (!diaryComposerOpen || typeof document === "undefined") return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [diaryComposerOpen]);
 
   // 主动从云端重新拉取对方（及自己）的共享内容。PWA 没有浏览器地址栏刷新，
   // 对方写了新内容后必须手动触发才能看到最新的。
@@ -576,23 +622,70 @@ export function LovePanel({
     setDiaryHeight(44);
   };
   const getCommentsForDiary = (diaryId: string) => diaryComments[diaryId] ?? [];
-  const saveComment = async (entry: DiaryEntry) => {
+  const getLikeSummary = (diaryId: string): DiaryLikeSummary => diaryLikes[diaryId] ?? { count: 0, likedByMe: false };
+  const getCommentAuthor = (comment: DiaryComment) => {
+    if (comment.userId === currentUserId) return "我";
+    if (comment.userId === partnerId) return "TA";
+    return "TA";
+  };
+  const focusCommentInput = () => {
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => {
+        commentInputRef.current?.focus();
+        setTimeout(() => commentInputRef.current?.focus(), 50);
+      });
+      return;
+    }
+    setTimeout(() => commentInputRef.current?.focus(), 50);
+  };
+  const openCommentComposer = (diaryId: string) => {
+    setActiveCommentDiaryId(diaryId);
+    setCommentDraft("");
+    focusCommentInput();
+  };
+  const toggleExpandedComments = (diaryId: string) => {
+    setExpandedCommentDiaryIds((current) => {
+      const next = new Set(current);
+      if (next.has(diaryId)) next.delete(diaryId);
+      else next.add(diaryId);
+      return next;
+    });
+  };
+  const toggleLike = async (diaryId: string) => {
+    const current = getLikeSummary(diaryId);
+    const nextLiked = !current.likedByMe;
+    setDiaryLikes((state) => ({
+      ...state,
+      [diaryId]: {
+        count: Math.max(0, current.count + (nextLiked ? 1 : -1)),
+        likedByMe: nextLiked
+      }
+    }));
+    try {
+      await toggleDiaryLikeInCloud(diaryId, current.likedByMe);
+    } catch {
+      setDiaryLikes((state) => ({ ...state, [diaryId]: current }));
+      setFeedback("喜欢保存失败，请确认数据库迁移已上线后重试。");
+    }
+  };
+  const saveComment = async (diaryId = activeCommentDiaryId) => {
     const cleanContent = commentDraft.trim();
-    if (!cleanContent) return;
+    if (!cleanContent || !diaryId) return;
     const commentId = createLoveId("comment");
     try {
-      await saveDiaryCommentToCloud({ content: cleanContent, diaryId: entry.id, id: commentId });
+      await saveDiaryCommentToCloud({ content: cleanContent, diaryId, id: commentId });
       const userId = currentUserId ?? await getCurrentLoveUserId();
       const nextComment: DiaryComment = {
         content: cleanContent,
         createTime: new Date().toISOString(),
-        diaryId: entry.id,
+        diaryId,
         id: commentId,
         updatedAt: new Date().toISOString(),
         userId: userId ?? "unknown"
       };
-      setDiaryComments((current) => ({ ...current, [entry.id]: [...(current[entry.id] ?? []), nextComment] }));
+      setDiaryComments((current) => ({ ...current, [diaryId]: [...(current[diaryId] ?? []), nextComment] }));
       setCommentDraft("");
+      focusCommentInput();
       setFeedback("✓ 评论已发布");
     } catch {
       setFeedback("评论保存失败，请确认数据库迁移已上线后重试。");
@@ -676,7 +769,7 @@ export function LovePanel({
                   {diaryList.visibleItems.map((entry) => {
                 const author = getDiaryAuthor(entry);
                 return (
-                <Pressable key={entry.id} accessibilityRole="button" accessibilityLabel={`查看日记：${entry.title ?? "恋爱日记"}`} onPress={() => setDetailItem({ item: entry, type: "diary" })} style={styles.storyCard}>
+                <View key={entry.id} style={styles.storyCard}>
                   <View style={styles.storyAuthorRow}>
                     <View style={styles.storyAuthorLeft}>
                       <View style={styles.storyAvatar}>
@@ -708,9 +801,73 @@ export function LovePanel({
                     ) : null}
                   </View>
                   <View style={styles.storyActionRow}>
-                    <Text style={styles.storyActionText}>♡ 喜欢</Text>
-                    <Text style={styles.storyActionText}>评论 {getCommentsForDiary(entry.id).length}</Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={getLikeSummary(entry.id).likedByMe ? `已喜欢 ${getLikeSummary(entry.id).count}` : `喜欢 ${getLikeSummary(entry.id).count}`}
+                      onPress={(event) => {
+                        event?.stopPropagation?.();
+                        void toggleLike(entry.id);
+                      }}
+                      style={({ pressed }) => [styles.storyActionButton, getLikeSummary(entry.id).likedByMe ? styles.storyActionButtonActive : null, pressed ? styles.actionPressed : null]}
+                    >
+                      <Text style={[styles.storyActionText, getLikeSummary(entry.id).likedByMe ? styles.storyActionTextActive : null]}>
+                        {getLikeSummary(entry.id).likedByMe ? "♥ 已喜欢" : "♡ 喜欢"} {getLikeSummary(entry.id).count}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`评论 ${getCommentsForDiary(entry.id).length}`}
+                      onPress={(event) => {
+                        event?.stopPropagation?.();
+                        openCommentComposer(entry.id);
+                      }}
+                      style={({ pressed }) => [styles.storyActionButton, activeCommentDiaryId === entry.id ? styles.storyActionButtonActive : null, pressed ? styles.actionPressed : null]}
+                    >
+                      <Text style={[styles.storyActionText, activeCommentDiaryId === entry.id ? styles.storyActionTextActive : null]}>
+                        评论 {getCommentsForDiary(entry.id).length}
+                      </Text>
+                    </Pressable>
                   </View>
+                  {getCommentsForDiary(entry.id).length > 0 ? (
+                    <View style={styles.inlineCommentList}>
+                      {(expandedCommentDiaryIds.has(entry.id) ? getCommentsForDiary(entry.id) : getCommentsForDiary(entry.id).slice(-3)).map((comment) => (
+                        <View key={comment.id} style={styles.inlineCommentItem}>
+                          <View style={styles.inlineCommentBody}>
+                            <Text style={styles.inlineCommentAuthor}>{getCommentAuthor(comment)}：</Text>
+                            <Text style={styles.inlineCommentText}>{comment.content}</Text>
+                          </View>
+                          {comment.userId === currentUserId ? (
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel="删除评论"
+                              onPress={(event) => {
+                                event.stopPropagation?.();
+                                void deleteComment(comment);
+                              }}
+                              style={({ pressed }) => [styles.inlineCommentDelete, pressed ? styles.actionPressed : null]}
+                            >
+                              <Text style={styles.deleteText}>删除</Text>
+                            </Pressable>
+                          ) : null}
+                        </View>
+                      ))}
+                      {getCommentsForDiary(entry.id).length > 3 ? (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={expandedCommentDiaryIds.has(entry.id) ? `收起评论：${entry.title ?? "恋爱日记"}` : `查看全部评论：${entry.title ?? "恋爱日记"}`}
+                          onPress={(event) => {
+                            event.stopPropagation?.();
+                            toggleExpandedComments(entry.id);
+                          }}
+                          style={({ pressed }) => [styles.inlineCommentMore, pressed ? styles.actionPressed : null]}
+                        >
+                          <Text style={styles.inlineCommentMoreText}>
+                            {expandedCommentDiaryIds.has(entry.id) ? "收起评论" : `查看全部 ${getCommentsForDiary(entry.id).length} 条评论`}
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  ) : null}
                   {openDiaryMenuId === entry.id ? (
                     <View style={styles.menuRow}>
                       <Pressable accessibilityRole="button" accessibilityLabel={`编辑日记：${entry.title ?? "恋爱日记"}`} onPress={() => editDiary(entry)} style={styles.menuButton}><Text style={styles.menuText}>编辑</Text></Pressable>
@@ -718,7 +875,7 @@ export function LovePanel({
                       {isOwnEntry(entry) ? <Pressable accessibilityRole="button" accessibilityLabel={`删除日记：${entry.title ?? "恋爱日记"}`} onPress={() => deleteDiary(entry.id)} style={styles.menuDelete}><Text style={styles.deleteText}>删除</Text></Pressable> : null}
                     </View>
                   ) : null}
-                </Pressable>
+                </View>
                 );
               })}
               <CollapsibleSectionFooter
@@ -1165,6 +1322,31 @@ export function LovePanel({
         </Pressable>
       ) : null}
 
+      {activeCommentDiaryId ? (
+        <View style={styles.inlineCommentComposer} testID="love-inline-comment-composer">
+          <View style={styles.commentComposerAvatar}>
+            <Text style={styles.commentComposerAvatarText}>我</Text>
+          </View>
+          <TextInput
+            multiline
+            onChangeText={setCommentDraft}
+            placeholder="说点什么吧…"
+            ref={commentInputRef}
+            style={[styles.input, styles.bottomCommentInput]}
+            value={commentDraft}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="发送评论"
+            disabled={!commentDraft.trim()}
+            onPress={() => void saveComment()}
+            style={({ pressed }) => [styles.bottomCommentSendButton, !commentDraft.trim() ? styles.bottomCommentSendButtonDisabled : null, pressed ? styles.actionPressed : null]}
+          >
+            <Text style={styles.bottomCommentSendText}>发送</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       {detailItem ? (
         <Pressable onPress={() => setDetailItem(null)} style={styles.lightbox}>
           <View onStartShouldSetResponder={() => true} style={styles.detailCard}>
@@ -1175,34 +1357,6 @@ export function LovePanel({
                 : `${detailItem.item.date} · ${detailItem.item.tag} · ${detailItem.item.direction ?? "未设置"}`}
             </Text>
             <Text style={styles.diaryContent}>{detailItem.type === "diary" ? detailItem.item.content : detailItem.item.description || "没有描述"}</Text>
-            {detailItem.type === "diary" ? (
-              <View style={styles.commentBox}>
-                <Text style={styles.commentTitle}>评论</Text>
-                {getCommentsForDiary(detailItem.item.id).length === 0 ? (
-                  <Text style={styles.commentEmpty}>还没有评论，写下第一句回应。</Text>
-                ) : (
-                  getCommentsForDiary(detailItem.item.id).map((comment) => (
-                    <View key={comment.id} style={styles.commentItem}>
-                      <View style={styles.commentBubble}>
-                        <Text style={styles.commentAuthor}>{comment.userId === currentUserId ? "我" : "TA"}</Text>
-                        <Text style={styles.commentContent}>{comment.content}</Text>
-                      </View>
-                      {comment.userId === currentUserId ? (
-                        <Pressable accessibilityRole="button" accessibilityLabel="删除评论" onPress={() => void deleteComment(comment)} style={styles.commentDeleteButton}>
-                          <Text style={styles.folderDelete}>删除</Text>
-                        </Pressable>
-                      ) : null}
-                    </View>
-                  ))
-                )}
-                <View style={styles.commentInputRow}>
-                  <TextInput onChangeText={setCommentDraft} placeholder="写评论..." style={[styles.input, styles.commentInput]} value={commentDraft} />
-                  <Pressable accessibilityRole="button" accessibilityLabel="发布评论" onPress={() => void saveComment(detailItem.item)} style={styles.commentSendButton}>
-                    <Text style={styles.primaryText}>发送</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ) : null}
             <Pressable accessibilityRole="button" accessibilityLabel="关闭详情" onPress={() => setDetailItem(null)} style={styles.primaryButton}>
               <Text style={styles.primaryText}>关闭</Text>
             </Pressable>
@@ -1685,6 +1839,34 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "900"
   },
+  actionPressed: {
+    transform: [{ scale: 0.96 }]
+  },
+  bottomCommentInput: {
+    flex: 1,
+    maxHeight: 82,
+    minHeight: 38,
+    minWidth: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    textAlignVertical: "top"
+  },
+  bottomCommentSendButton: {
+    alignItems: "center",
+    backgroundColor: "#ff7f9d",
+    borderRadius: 999,
+    justifyContent: "center",
+    minHeight: 38,
+    paddingHorizontal: 14
+  },
+  bottomCommentSendButtonDisabled: {
+    backgroundColor: "#f4d7df"
+  },
+  bottomCommentSendText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "900"
+  },
   commentAuthor: {
     color: "#c75670",
     fontSize: 12,
@@ -1749,6 +1931,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900"
   },
+  commentComposerAvatar: {
+    alignItems: "center",
+    backgroundColor: "#fff0f4",
+    borderColor: "#ffd7e0",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: "center",
+    width: 34
+  },
+  commentComposerAvatarText: {
+    color: "#c75670",
+    fontSize: 13,
+    fontWeight: "900"
+  },
   composerBackdrop: {
     backgroundColor: "rgba(17,24,39,0.34)",
     bottom: 0,
@@ -1757,7 +1954,7 @@ const styles = StyleSheet.create({
     position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
     right: 0,
     top: 0,
-    zIndex: 10010
+    zIndex: 10040
   },
   composerCloseButton: {
     alignItems: "center",
@@ -1794,10 +1991,11 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     borderWidth: 1,
     gap: 10,
-    maxHeight: "86%",
+    maxHeight: Platform.OS === "web" ? ("85dvh" as unknown as number) : "85%",
     maxWidth: 560,
+    overflow: "scroll",
     padding: 14,
-    paddingBottom: 24,
+    paddingBottom: Platform.OS === "web" ? ("calc(24px + env(safe-area-inset-bottom, 0px))" as unknown as number) : 24,
     shadowColor: "#ef7f98",
     shadowOffset: { width: 0, height: -8 },
     shadowOpacity: 0.14,
@@ -1935,6 +2133,73 @@ const styles = StyleSheet.create({
     color: "#111827",
     fontSize: 15,
     fontWeight: "900"
+  },
+  inlineCommentAuthor: {
+    color: "#c75670",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  inlineCommentBody: {
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    minWidth: 0
+  },
+  inlineCommentComposer: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,250,253,0.98)",
+    borderColor: "#f3d6df",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderWidth: 1,
+    bottom: 0,
+    elevation: 24,
+    flexDirection: "row",
+    gap: 8,
+    left: 0,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: Platform.OS === "web" ? ("calc(8px + env(safe-area-inset-bottom, 0px))" as unknown as number) : 8,
+    position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
+    right: 0,
+    shadowColor: "#ef7f98",
+    shadowOffset: { width: 0, height: -5 },
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    zIndex: 10030
+  },
+  inlineCommentDelete: {
+    paddingHorizontal: 4,
+    paddingVertical: 2
+  },
+  inlineCommentItem: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6
+  },
+  inlineCommentList: {
+    backgroundColor: "#fff6fa",
+    borderRadius: 14,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  inlineCommentMore: {
+    alignSelf: "flex-start",
+    paddingVertical: 2
+  },
+  inlineCommentMoreText: {
+    color: "#c75670",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  inlineCommentText: {
+    color: "#4b5563",
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 18,
+    minWidth: 0
   },
   compactEmptyBox: {
     alignItems: "center",
@@ -2300,13 +2565,26 @@ const styles = StyleSheet.create({
     borderTopColor: "#f6e1e8",
     borderTopWidth: 1,
     flexDirection: "row",
-    gap: 18,
+    gap: 8,
     paddingTop: 7
+  },
+  storyActionButton: {
+    alignItems: "center",
+    borderRadius: 999,
+    justifyContent: "center",
+    minHeight: 32,
+    paddingHorizontal: 10
+  },
+  storyActionButtonActive: {
+    backgroundColor: "#fff0f4"
   },
   storyActionText: {
     color: "#9b7a86",
     fontSize: 12,
     fontWeight: "900"
+  },
+  storyActionTextActive: {
+    color: "#c75670"
   },
   storyAuthorLeft: {
     alignItems: "center",
