@@ -1307,7 +1307,8 @@ export function LovePanel({
 
       {diaryComposerOpen ? (
         <PortalLayer>
-        <Pressable accessibilityLabel="关闭写日记弹窗" onPress={closeDiaryComposer} style={styles.composerBackdrop}>
+        <View style={styles.composerLayer}>
+          <Pressable accessibilityLabel="关闭写日记弹窗" onPress={closeDiaryComposer} style={styles.composerBackdrop} />
           <View onStartShouldSetResponder={() => true} style={styles.composerModal} testID="love-diary-composer-modal">
             <View style={styles.composerHeader}>
               <View>
@@ -1330,15 +1331,29 @@ export function LovePanel({
                 <Text style={styles.dateValue}>{date.replaceAll("-", "/")}</Text>
               </Pressable>
             </View>
-            <TextInput
-              scrollEnabled
-              multiline
-              onChangeText={setContent}
-              onContentSizeChange={(event) => setDiaryHeight(event.nativeEvent.contentSize.height)}
-              placeholder="今天发生了什么..."
-              style={[styles.input, styles.diaryInput, { height: Math.min(Math.max(44, diaryHeight), 168) }]}
-              value={content}
-            />
+            <View style={styles.composerContentRow} testID="love-diary-content-image-row">
+              <TextInput
+                scrollEnabled
+                multiline
+                onChangeText={setContent}
+                onContentSizeChange={(event) => setDiaryHeight(event.nativeEvent.contentSize.height)}
+                placeholder="今天发生了什么..."
+                style={[styles.input, styles.diaryInput, styles.composerContentInput, { height: Math.min(Math.max(72, diaryHeight), 168) }]}
+                testID="love-diary-content-input"
+                value={content}
+              />
+              <Pressable accessibilityRole="button" accessibilityLabel="上传图片" onPress={() => diaryFileInputRef.current?.click()} style={[styles.secondaryButton, styles.composerImageButton]}>
+                <Text style={styles.secondaryText}>图片</Text>
+              </Pressable>
+              <input
+                accept="image/*"
+                multiple
+                onChange={handleDiaryImagePick}
+                ref={diaryFileInputRef}
+                style={{ display: "none" }}
+                type="file"
+              />
+            </View>
             <View style={styles.choiceGridThree}>
               <PickerButton
                 accessibilityLabel="选择日记类型"
@@ -1390,18 +1405,7 @@ export function LovePanel({
               </View>
             ) : null}
 
-            <View style={styles.saveRow}>
-              <Pressable accessibilityRole="button" accessibilityLabel="上传图片" onPress={() => diaryFileInputRef.current?.click()} style={styles.secondaryButton}>
-                <Text style={styles.secondaryText}>图片</Text>
-              </Pressable>
-              <input
-                accept="image/*"
-                multiple
-                onChange={handleDiaryImagePick}
-                ref={diaryFileInputRef}
-                style={{ display: "none" }}
-                type="file"
-              />
+            <View style={styles.composerSaveRow} testID="love-diary-save-row">
               <Pressable accessibilityRole="button" accessibilityLabel="保存日记" nativeID="love-save-diary-button" onPress={() => void saveDiary()} style={styles.primaryButton}>
                 <Text style={styles.primaryText}>{editingDiaryId ? "更新" : "保存"}</Text>
               </Pressable>
@@ -1414,13 +1418,13 @@ export function LovePanel({
               visible={diaryDatePickerOpen}
             />
           </View>
-        </Pressable>
+        </View>
         </PortalLayer>
       ) : null}
 
       {activeCommentDiaryId ? (
         <PortalLayer>
-        <View style={[styles.inlineCommentComposer, { bottom: commentKeyboardOffset }]} testID="love-inline-comment-composer">
+        <View nativeID="love-inline-comment-composer" style={[styles.inlineCommentComposer, { bottom: commentKeyboardOffset }]} testID="love-inline-comment-composer">
           <View style={styles.commentComposerAvatar}>
             <Text style={styles.commentComposerAvatarText}>我</Text>
           </View>
@@ -2033,12 +2037,14 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.96 }]
   },
   bottomCommentInput: {
+    backgroundColor: "#fffafd",
+    borderColor: "#f3d6df",
     flex: 1,
-    maxHeight: 82,
-    minHeight: 38,
+    maxHeight: 74,
+    minHeight: 36,
     minWidth: 0,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     textAlignVertical: "top"
   },
   bottomCommentSendButton: {
@@ -2046,7 +2052,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#ff7f9d",
     borderRadius: 999,
     justifyContent: "center",
-    minHeight: 38,
+    minHeight: 36,
     paddingHorizontal: 14
   },
   bottomCommentSendButtonDisabled: {
@@ -2139,7 +2145,14 @@ const styles = StyleSheet.create({
   composerBackdrop: {
     backgroundColor: "rgba(17,24,39,0.34)",
     bottom: 0,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0
+  },
+  composerLayer: {
     alignItems: "center",
+    bottom: 0,
     justifyContent: "center",
     left: 0,
     padding: 16,
@@ -2147,6 +2160,16 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     zIndex: 10040
+  },
+  composerContentInput: {
+    flex: 1,
+    minWidth: 0
+  },
+  composerContentRow: {
+    alignItems: "stretch",
+    flexDirection: "row",
+    gap: 8,
+    overflow: "visible"
   },
   composerCloseButton: {
     alignItems: "center",
@@ -2182,7 +2205,20 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.18,
     shadowRadius: 22,
+    zIndex: 10041,
     width: Platform.OS === "web" ? ("min(520px, calc(100vw - 32px))" as unknown as number) : "92%"
+  },
+  composerImageButton: {
+    alignSelf: "stretch",
+    justifyContent: "center",
+    minHeight: 72,
+    minWidth: 58,
+    paddingHorizontal: 12
+  },
+  composerSaveRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center"
   },
   composerSub: {
     color: "#8b7280",
@@ -2792,15 +2828,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 999,
     justifyContent: "center",
-    minHeight: 32,
-    paddingHorizontal: 10
+    minHeight: 28,
+    minWidth: 42,
+    paddingHorizontal: 8
   },
   storyActionButtonActive: {
-    backgroundColor: "#fff0f4"
+    backgroundColor: "#fff3f7",
+    borderColor: "#ffd7e0",
+    borderWidth: 1
   },
   storyActionText: {
     color: "#9b7a86",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "900"
   },
   storyActionTextActive: {
@@ -2864,14 +2903,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 999,
     justifyContent: "center",
-    minHeight: 28,
-    minWidth: 30,
+    minHeight: 36,
+    minWidth: 36,
     paddingHorizontal: 6
   },
   moreButtonText: {
     color: "#776878",
-    fontSize: 18,
-    fontWeight: "900"
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 0.4,
+    lineHeight: 14
   },
   moodChip: {
     alignItems: "center",

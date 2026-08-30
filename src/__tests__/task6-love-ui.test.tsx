@@ -118,6 +118,24 @@ describe("Task 6 love page and UI polish", () => {
     expect(await screen.findByRole("button", { name: "发布恋爱日记" })).toBeOnTheScreen();
   });
 
+  it("keeps the diary modal open while editing fields and uses the compact content-image layout", async () => {
+    render(<AppShell initialRoute="/love" />);
+
+    fireEvent.press(await screen.findByRole("button", { name: "发布恋爱日记" }));
+
+    fireEvent.press(screen.getByTestId("love-diary-composer-modal"));
+    fireEvent.press(screen.getByTestId("love-diary-title-input"));
+    fireEvent.changeText(screen.getByTestId("love-diary-title-input"), "不会误关闭");
+    fireEvent.press(screen.getByTestId("love-diary-content-input"));
+    fireEvent.changeText(screen.getByTestId("love-diary-content-input"), "正文可以输入");
+
+    expect(screen.getByTestId("love-diary-composer-modal")).toBeOnTheScreen();
+    expect(screen.getByTestId("love-diary-title-input").props.value).toBe("不会误关闭");
+    expect(screen.getByTestId("love-diary-content-input").props.value).toBe("正文可以输入");
+    expect(screen.getByTestId("love-diary-content-image-row")).toBeOnTheScreen();
+    expect(screen.getByTestId("love-diary-save-row")).toBeOnTheScreen();
+  });
+
   it("keeps archive filters and diary history inside one compact archive area", async () => {
     render(<AppShell initialRoute="/love" />);
 

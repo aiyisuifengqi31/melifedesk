@@ -183,6 +183,9 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
       if (!target || !["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) {
         return;
       }
+      if (target.closest("#love-inline-comment-composer")) {
+        return;
+      }
       window.setTimeout(() => {
         target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
       }, 80);
