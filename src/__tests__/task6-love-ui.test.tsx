@@ -82,6 +82,7 @@ describe("Task 6 love page and UI polish", () => {
     fireEvent.press(screen.getByRole("button", { name: "选择日记心情" }));
 
     expect(screen.getByTestId("love-dropdown-popover")).toBeOnTheScreen();
+    expect(screen.getByTestId("love-dropdown-popover")).toHaveStyle({ zIndex: 10070 });
     expect(screen.getByRole("button", { name: "选择选择心情：🥰 甜蜜" })).toBeOnTheScreen();
     expect(screen.queryByTestId("love-choice-bottom-sheet")).toBeNull();
   });
@@ -133,7 +134,48 @@ describe("Task 6 love page and UI polish", () => {
     expect(screen.getByTestId("love-diary-title-input").props.value).toBe("不会误关闭");
     expect(screen.getByTestId("love-diary-content-input").props.value).toBe("正文可以输入");
     expect(screen.getByTestId("love-diary-content-image-row")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "上传图片" })).toHaveStyle({ alignSelf: "flex-start", height: 52 });
     expect(screen.getByTestId("love-diary-save-row")).toBeOnTheScreen();
+  });
+
+  it("closes the diary composer only after a successful save", async () => {
+    render(<AppShell initialRoute="/love" />);
+
+    fireEvent.press(await screen.findByRole("button", { name: "发布恋爱日记" }));
+    fireEvent.changeText(screen.getByTestId("love-diary-title-input"), "保存后关闭");
+    fireEvent.changeText(screen.getByTestId("love-diary-content-input"), "真正保存成功以后再关闭弹窗");
+    fireEvent.press(screen.getByRole("button", { name: "保存日记" }));
+
+    expect(await screen.findByText(/✓ 已保存/)).toBeOnTheScreen();
+    await waitFor(() => expect(screen.queryByTestId("love-diary-composer-modal")).toBeNull());
+    expect(screen.getByText("保存后关闭")).toBeOnTheScreen();
+  });
+
+  it("keeps the diary publish fab fixed to the viewport", async () => {
+    render(<AppShell initialRoute="/love" />);
+
+    expect(await screen.findByRole("button", { name: "发布恋爱日记" })).toHaveStyle({
+      bottom: "calc(94px + env(safe-area-inset-bottom, 0px))",
+      position: "fixed"
+    } as never);
+  });
+
+  it("opens a compact diary action dropdown without closing immediately", async () => {
+    render(<AppShell initialRoute="/love" />);
+
+    fireEvent.press(await screen.findByRole("button", { name: "发布恋爱日记" }));
+    fireEvent.changeText(screen.getByTestId("love-diary-title-input"), "菜单不会闪退");
+    fireEvent.changeText(screen.getByTestId("love-diary-content-input"), "右上角菜单可以稳定点击");
+    fireEvent.press(screen.getByRole("button", { name: "保存日记" }));
+
+    expect(await screen.findByText(/✓ 已保存/)).toBeOnTheScreen();
+    await waitFor(() => expect(screen.queryByTestId("love-diary-composer-modal")).toBeNull());
+    fireEvent.press(screen.getByRole("button", { name: "打开日记菜单：菜单不会闪退" }));
+
+    expect(screen.getByTestId("love-diary-action-menu")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "编辑日记：菜单不会闪退" })).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "移动日记：菜单不会闪退" })).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "删除日记：菜单不会闪退" })).toBeOnTheScreen();
   });
 
   it("keeps archive filters and diary history inside one compact archive area", async () => {

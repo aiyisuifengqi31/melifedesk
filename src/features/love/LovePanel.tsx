@@ -185,6 +185,7 @@ export function LovePanel({
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [openDiaryMenuId, setOpenDiaryMenuId] = useState<string | null>(null);
   const [openGiftMenuId, setOpenGiftMenuId] = useState<string | null>(null);
+  const [diaryMenuPopover, setDiaryMenuPopover] = useState<DiaryMenuPopoverState | null>(null);
   const [detailItem, setDetailItem] = useState<DetailState | null>(null);
   const [editingDiaryId, setEditingDiaryId] = useState<string | null>(null);
   const [editingGiftId, setEditingGiftId] = useState<string | null>(null);
@@ -301,6 +302,7 @@ export function LovePanel({
     setOpenDiaryMenuId(null);
     setOpenGiftMenuId(null);
     setPickerPopover(null);
+    setDiaryMenuPopover(null);
   }, [tab]);
 
   useEffect(() => {
@@ -478,6 +480,8 @@ export function LovePanel({
     setDiaries(nextEntries);
     localDirtyRef.current = true;
     saveDiaries(nextEntries, loveStorage);
+    setOpenDiaryMenuId(null);
+    setDiaryMenuPopover(null);
     setFeedback("✓ 已删除");
   };
 
@@ -585,6 +589,7 @@ export function LovePanel({
     setOpenDiaryMenuId(null);
     setOpenGiftMenuId(null);
     setPickerPopover(null);
+    setDiaryMenuPopover(null);
   };
   const showDiaryFab = tab === "diary" && !diaryComposerOpen && !activeCommentDiaryId;
   const showLoveTabs = showInlineTabs && !activeCommentDiaryId;
@@ -663,6 +668,7 @@ export function LovePanel({
     setDiaryFolderId(entry.folderId ?? null);
     setDiaryImages(entry.images ?? []);
     setOpenDiaryMenuId(null);
+    setDiaryMenuPopover(null);
     setDiaryComposerOpen(true);
   };
   const moveDiary = (entry: DiaryEntry, folderId: string) => {
@@ -670,6 +676,7 @@ export function LovePanel({
     setDiaries(nextEntries);
     saveDiaries(nextEntries, loveStorage);
     setOpenDiaryMenuId(null);
+    setDiaryMenuPopover(null);
     setFeedback("✓ 已移动");
   };
   const editGift = (entry: GiftEntry) => {
@@ -874,7 +881,22 @@ export function LovePanel({
                         <Text style={styles.diaryDate}>{formatDiaryTimestamp(entry)}</Text>
                       </View>
                     </View>
-                    <Pressable accessibilityRole="button" accessibilityLabel={`打开日记菜单：${entry.title ?? "恋爱日记"}`} onPress={() => setOpenDiaryMenuId(openDiaryMenuId === entry.id ? null : entry.id)} style={styles.moreButton}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`打开日记菜单：${entry.title ?? "恋爱日记"}`}
+                      onPress={(event) => {
+                        event?.stopPropagation?.();
+                        setPickerPopover(null);
+                        if (openDiaryMenuId === entry.id) {
+                          setOpenDiaryMenuId(null);
+                          setDiaryMenuPopover(null);
+                          return;
+                        }
+                        setOpenDiaryMenuId(entry.id);
+                        setDiaryMenuPopover({ entry, rect: getPickerRect(event) });
+                      }}
+                      style={styles.moreButton}
+                    >
                       <Text style={styles.moreButtonText}>•••</Text>
                     </Pressable>
                   </View>
@@ -963,13 +985,6 @@ export function LovePanel({
                       ) : null}
                     </View>
                   ) : null}
-                  {openDiaryMenuId === entry.id ? (
-                    <View style={styles.menuRow}>
-                      <Pressable accessibilityRole="button" accessibilityLabel={`编辑日记：${entry.title ?? "恋爱日记"}`} onPress={() => editDiary(entry)} style={styles.menuButton}><Text style={styles.menuText}>编辑</Text></Pressable>
-                      <PickerButton accessibilityLabel={`移动日记：${entry.title ?? "恋爱日记"}`} id={`diary-move-${entry.id}`} label="移动" onSelect={(value) => moveDiary(entry, value)} onToggle={togglePicker} open={openPickerId === `diary-move-${entry.id}`} options={folderOptions} selectedValue={entry.folderId ?? ""} />
-                      {isOwnEntry(entry) ? <Pressable accessibilityRole="button" accessibilityLabel={`删除日记：${entry.title ?? "恋爱日记"}`} onPress={() => deleteDiary(entry.id)} style={styles.menuDelete}><Text style={styles.deleteText}>删除</Text></Pressable> : null}
-                    </View>
-                  ) : null}
                 </View>
                 );
               })}
@@ -985,15 +1000,19 @@ export function LovePanel({
               </View>
             )}
           </View>
-          {showDiaryFab ? <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="发布恋爱日记"
-            onPress={openDiaryComposer}
-            style={styles.diaryFab}
-            testID="love-diary-publish-fab"
-          >
-            <Text style={styles.diaryFabText}>+</Text>
-          </Pressable> : null}
+          {showDiaryFab ? (
+            <PortalLayer>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="发布恋爱日记"
+                onPress={openDiaryComposer}
+                style={styles.diaryFab}
+                testID="love-diary-publish-fab"
+              >
+                <Text style={styles.diaryFabText}>+</Text>
+              </Pressable>
+            </PortalLayer>
+          ) : null}
         </>
       ) : null}
 
@@ -1280,6 +1299,22 @@ export function LovePanel({
         </View>
       ) : null}
 
+      {diaryMenuPopover ? (
+        <DiaryActionMenu
+          canDelete={isOwnEntry(diaryMenuPopover.entry)}
+          folderOptions={folderOptions}
+          menu={diaryMenuPopover}
+          onClose={() => {
+            setDiaryMenuPopover(null);
+            setOpenDiaryMenuId(null);
+          }}
+          onDelete={() => deleteDiary(diaryMenuPopover.entry.id)}
+          onEdit={() => editDiary(diaryMenuPopover.entry)}
+          onMove={(folderId) => moveDiary(diaryMenuPopover.entry, folderId)}
+          onMoveToggle={togglePicker}
+        />
+      ) : null}
+
       {pickerPopover ? <AnchoredDropdown onClose={() => setPickerPopover(null)} picker={pickerPopover} /> : null}
 
       {folderDialogOpen ? (
@@ -1517,7 +1552,10 @@ function PickerButton({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
-        onPress={(event) => onToggle({ accessibilityLabel, id, onSelect, options, rect: getPickerRect(event), selectedValue })}
+        onPress={(event) => {
+          event?.stopPropagation?.();
+          onToggle({ accessibilityLabel, id, onSelect, options, rect: getPickerRect(event), selectedValue });
+        }}
         style={[styles.pickerButton, compact ? styles.pickerButtonCompact : null, open || active ? styles.pickerButtonOpen : null]}
       >
         <Text style={styles.pickerText}>{label}</Text>
@@ -1558,6 +1596,66 @@ function AnchoredDropdown({ onClose, picker }: { onClose: () => void; picker: Pi
     return createPortal(menu, document.body);
   }
   return menu;
+}
+
+function DiaryActionMenu({
+  canDelete,
+  folderOptions,
+  menu,
+  onClose,
+  onDelete,
+  onEdit,
+  onMove,
+  onMoveToggle
+}: {
+  canDelete: boolean;
+  folderOptions: ChoiceOption[];
+  menu: DiaryMenuPopoverState;
+  onClose: () => void;
+  onDelete: () => void;
+  onEdit: () => void;
+  onMove: (folderId: string) => void;
+  onMoveToggle: (picker: PickerPopoverState) => void;
+}) {
+  const entryTitle = menu.entry.title ?? "恋爱日记";
+  const style = getDiaryActionMenuPosition(menu.rect);
+  const menuNode = (
+    <Pressable accessibilityLabel="关闭日记菜单" onPress={onClose} style={styles.diaryActionBackdrop}>
+      <View onStartShouldSetResponder={() => true} style={[styles.diaryActionMenu, style]} testID="love-diary-action-menu">
+        <Pressable accessibilityRole="button" accessibilityLabel={`编辑日记：${entryTitle}`} onPress={onEdit} style={styles.diaryActionItem}>
+          <Text style={styles.diaryActionText}>编辑</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`移动日记：${entryTitle}`}
+          onPress={(event) => {
+            event?.stopPropagation?.();
+            onMoveToggle({
+              accessibilityLabel: `移动日记：${entryTitle}`,
+              id: `diary-move-${menu.entry.id}`,
+              onSelect: onMove,
+              options: folderOptions,
+              rect: getPickerRect(event),
+              selectedValue: menu.entry.folderId ?? ""
+            });
+          }}
+          style={styles.diaryActionItem}
+        >
+          <Text style={styles.diaryActionText}>移动</Text>
+        </Pressable>
+        {canDelete ? (
+          <Pressable accessibilityRole="button" accessibilityLabel={`删除日记：${entryTitle}`} onPress={onDelete} style={styles.diaryActionItem}>
+            <Text style={styles.diaryActionDeleteText}>删除</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+
+  if (shouldUsePortal()) {
+    return createPortal(menuNode, document.body);
+  }
+  return menuNode;
 }
 
 function AnniversaryCard({ entry, onDelete, onImagePress }: { entry: AnniversaryEntry; onDelete: () => void; onImagePress: () => void }) {
@@ -1831,6 +1929,11 @@ type PickerPopoverState = {
   selectedValue: string;
 };
 
+type DiaryMenuPopoverState = {
+  entry: DiaryEntry;
+  rect: PickerRect;
+};
+
 type DetailState =
   | { item: DiaryEntry; type: "diary" }
   | { item: GiftEntry; type: "gift" };
@@ -1856,6 +1959,17 @@ function getDropdownPosition(rect: PickerRect, optionCount: number) {
   const maxLeft = Math.max(padding, viewportWidth - minWidth - padding);
   const left = Math.min(Math.max(padding, rect.left), maxLeft);
   return { left, maxHeight: 280, minWidth, top };
+}
+
+function getDiaryActionMenuPosition(rect: PickerRect) {
+  const padding = 12;
+  const width = 136;
+  const viewportHeight = typeof window === "undefined" ? 760 : window.innerHeight;
+  const viewportWidth = typeof window === "undefined" ? 390 : window.innerWidth;
+  const maxLeft = Math.max(padding, viewportWidth - width - padding);
+  const left = Math.min(Math.max(padding, rect.left + rect.width - width), maxLeft);
+  const top = Math.min(Math.max(padding, rect.top + rect.height + 6), viewportHeight - 180);
+  return { left, top, width };
 }
 
 function shouldUsePortal() {
@@ -2166,7 +2280,7 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   composerContentRow: {
-    alignItems: "stretch",
+    alignItems: "flex-start",
     flexDirection: "row",
     gap: 8,
     overflow: "visible"
@@ -2209,10 +2323,11 @@ const styles = StyleSheet.create({
     width: Platform.OS === "web" ? ("min(520px, calc(100vw - 32px))" as unknown as number) : "92%"
   },
   composerImageButton: {
-    alignSelf: "stretch",
+    alignSelf: "flex-start",
+    height: 52,
     justifyContent: "center",
-    minHeight: 72,
-    minWidth: 58,
+    minHeight: 0,
+    minWidth: 70,
     paddingHorizontal: 12
   },
   composerSaveRow: {
@@ -2331,18 +2446,18 @@ const styles = StyleSheet.create({
     borderColor: "#ffd7e0",
     borderRadius: 999,
     borderWidth: 3,
-    bottom: 86,
+    bottom: "calc(94px + env(safe-area-inset-bottom, 0px))" as unknown as number,
     elevation: 12,
     height: 58,
     justifyContent: "center",
-    position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
+    position: "fixed" as "absolute",
     right: 18,
     shadowColor: "#ef7f98",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.24,
     shadowRadius: 18,
     width: 58,
-    zIndex: 90
+    zIndex: 1000
   },
   diaryFabText: {
     color: "#ffffff",
@@ -2744,6 +2859,47 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8
   },
+  diaryActionBackdrop: {
+    bottom: 0,
+    left: 0,
+    position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
+    right: 0,
+    top: 0,
+    zIndex: 10050
+  },
+  diaryActionMenu: {
+    backgroundColor: "#fffafd",
+    borderColor: "#f1cad4",
+    borderRadius: 16,
+    borderWidth: 1,
+    elevation: 18,
+    overflow: "hidden",
+    padding: 6,
+    position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
+    shadowColor: "#ef7f98",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    zIndex: 10051
+  },
+  diaryActionItem: {
+    alignItems: "center",
+    borderRadius: 12,
+    minHeight: 40,
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 9
+  },
+  diaryActionText: {
+    color: "#776878",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  diaryActionDeleteText: {
+    color: "#ef4444",
+    fontSize: 13,
+    fontWeight: "900"
+  },
   menuButton: {
     backgroundColor: "#fff0f4",
     borderRadius: 999,
@@ -3009,7 +3165,7 @@ const styles = StyleSheet.create({
     position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
     right: 0,
     top: 0,
-    zIndex: 9998
+    zIndex: 10060
   },
   dropdownPopover: {
     backgroundColor: "#fffafd",
@@ -3025,7 +3181,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.16,
     shadowRadius: 18,
-    zIndex: 9999
+    zIndex: 10070
   },
   dropdownHeading: {
     color: "#b18a96",
