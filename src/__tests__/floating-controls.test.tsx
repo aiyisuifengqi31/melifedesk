@@ -12,6 +12,7 @@ describe("floating page controls", () => {
       position: "absolute",
       right: 16
     });
+    expect(screen.getByTestId("secondary-tab-slot-stats")).toHaveStyle({ flex: 1, minWidth: 0 });
     expect(screen.getByTestId("secondary-tab-stats")).toHaveStyle({ flex: 1 });
   });
 
@@ -34,6 +35,7 @@ describe("floating page controls", () => {
 
     expect(screen.queryByTestId("exam-inline-tabs")).toBeNull();
     expect(screen.getByTestId("secondary-floating-tabs")).toBeOnTheScreen();
+    expect(screen.getByTestId("secondary-tab-slot-essay")).toHaveStyle({ flex: 1, minWidth: 0 });
     expect(screen.getByTestId("secondary-tab-essay")).toHaveStyle({ flex: 1 });
     expect(screen.getByTestId("secondary-tab-record")).toHaveStyle({ flex: 1 });
 
@@ -41,6 +43,7 @@ describe("floating page controls", () => {
 
     expect(screen.queryByTestId("entertainment-floating-tabs")).toBeNull();
     expect(screen.getByTestId("secondary-floating-tabs")).toBeOnTheScreen();
+    expect(screen.getByTestId("secondary-tab-slot-hot")).toHaveStyle({ flex: 1, minWidth: 0 });
     expect(screen.getByTestId("secondary-tab-hot")).toHaveStyle({ flex: 1 });
     expect(screen.getByTestId("secondary-tab-useful")).toHaveStyle({ flex: 1 });
   });

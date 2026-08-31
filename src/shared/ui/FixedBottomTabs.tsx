@@ -36,6 +36,8 @@ export function FixedBottomTabs<T extends string>({ activeValue, hidden = false,
             onPress={() => onChange(item.value)}
             style={[styles.tab, active ? styles.tabActive : null]}
             testID={`secondary-tab-${item.value}`}
+            wrapperStyle={styles.tabSlot}
+            wrapperTestID={`secondary-tab-slot-${item.value}`}
           >
             <Text numberOfLines={1} style={[styles.tabText, active ? styles.tabTextActive : null]}>
               {item.label}
@@ -60,6 +62,10 @@ function createStyles(tokens: UiTokens) {
       padding: 4,
       zIndex: 80,
       ...SHADOW.overlay
+    },
+    tabSlot: {
+      flex: 1,
+      minWidth: 0
     },
     tab: {
       alignItems: "center",

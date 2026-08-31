@@ -6,6 +6,7 @@ import { MOTION, prefersReducedMotion } from "./tokens";
 type Props = Omit<PressableProps, "style"> & {
   style?: PressableProps["style"];
   wrapperStyle?: StyleProp<ViewStyle>;
+  wrapperTestID?: string;
   children?: React.ReactNode;
   /** 按压时轻微振动毫秒数（仅 Android 支持，不支持时自动忽略）。0 表示不振动。 */
   vibrate?: number;
@@ -16,7 +17,7 @@ type Props = Omit<PressableProps, "style"> & {
  * 不改变布局语义，仅作为视觉微交互复用，避免每个按钮各写一套动画。
  */
 export const PressableScale = forwardRef<View, Props>(function PressableScale(
-  { style, wrapperStyle, children, vibrate = 0, onPressIn, onPressOut, onPress, ...rest },
+  { style, wrapperStyle, wrapperTestID, children, vibrate = 0, onPressIn, onPressOut, onPress, ...rest },
   ref
 ) {
   const scale = useRef(new Animated.Value(1)).current;
@@ -30,7 +31,7 @@ export const PressableScale = forwardRef<View, Props>(function PressableScale(
   };
 
   return (
-    <Animated.View style={[{ transform: [{ scale }] }, wrapperStyle]}>
+    <Animated.View style={[{ transform: [{ scale }] }, wrapperStyle]} testID={wrapperTestID}>
       <Pressable
         {...rest}
         ref={ref as never}
