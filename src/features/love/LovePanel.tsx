@@ -121,7 +121,7 @@ export function LovePanel({
   activeTab,
   onCommentComposerActiveChange,
   onTabChange,
-  routeActive = true,
+  routeActive = false,
   showInlineTabs = true,
   storage,
   themeTokens
@@ -605,7 +605,7 @@ export function LovePanel({
     setPickerPopover(null);
     setDiaryMenuPopover(null);
   };
-  const showDiaryFab = routeActive && tab === "diary" && !diaryComposerOpen && !activeCommentDiaryId;
+  const showDiaryFab = routeActive === true && tab === "diary" && !diaryComposerOpen && !activeCommentDiaryId;
   const showLoveTabs = showInlineTabs && !activeCommentDiaryId;
 
   const navigateToPhotoSource = () => {

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 
 import { AppShell } from "@/components/AppShell";
+import { LovePanel } from "@/features/love/LovePanel";
 
 describe("floating page controls", () => {
   it("renders finance secondary tabs as a fixed app-shell layer aligned to mobile content", () => {
@@ -80,6 +81,45 @@ describe("floating page controls", () => {
     expect(await screen.findByRole("button", { name: "发布恋爱日记" })).toBeOnTheScreen();
 
     rerender(<AppShell route="/home" viewport="mobile" />);
+
+    expect(screen.queryByRole("button", { name: "发布恋爱日记" })).toBeNull();
+  });
+
+  it("unmounts the love diary publish button when navigating with the sidebar", async () => {
+    render(<AppShell initialRoute="/love" viewport="mobile" />);
+
+    expect(await screen.findByRole("button", { name: "发布恋爱日记" })).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole("button", { name: "首页" }));
+    expect(screen.queryByRole("button", { name: "发布恋爱日记" })).toBeNull();
+
+    fireEvent.press(screen.getByRole("button", { name: /恋爱\s*故事/ }));
+    expect(await screen.findByRole("button", { name: "发布恋爱日记" })).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole("button", { name: /收支\s*记账/ }));
+    expect(screen.queryByRole("button", { name: "发布恋爱日记" })).toBeNull();
+  });
+
+  it("only shows the love diary publish button on the diary tab", async () => {
+    render(<AppShell initialRoute="/love" viewport="mobile" />);
+
+    expect(await screen.findByRole("button", { name: "发布恋爱日记" })).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole("button", { name: "礼物" }));
+    expect(screen.queryByRole("button", { name: "发布恋爱日记" })).toBeNull();
+
+    fireEvent.press(screen.getByRole("button", { name: "日记本" }));
+    expect(await screen.findByRole("button", { name: "发布恋爱日记" })).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole("button", { name: "纪念日" }));
+    expect(screen.queryByRole("button", { name: "发布恋爱日记" })).toBeNull();
+
+    fireEvent.press(screen.getByRole("button", { name: "照片墙" }));
+    expect(screen.queryByRole("button", { name: "发布恋爱日记" })).toBeNull();
+  });
+
+  it("does not show the diary publish portal without an explicit love route guard", () => {
+    render(<LovePanel showInlineTabs={false} />);
 
     expect(screen.queryByRole("button", { name: "发布恋爱日记" })).toBeNull();
   });
