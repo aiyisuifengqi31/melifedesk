@@ -82,6 +82,7 @@ describe("Task 6 love page and UI polish", () => {
     fireEvent.press(screen.getByRole("button", { name: "选择日记心情" }));
 
     expect(screen.getByTestId("love-dropdown-popover")).toBeOnTheScreen();
+    expect(screen.getByTestId("love-dropdown-motion")).toBeOnTheScreen();
     expect(screen.getByTestId("love-dropdown-popover")).toHaveStyle({ zIndex: 10070 });
     expect(screen.getByRole("button", { name: "选择选择心情：🥰 甜蜜" })).toBeOnTheScreen();
     expect(screen.queryByTestId("love-choice-bottom-sheet")).toBeNull();
@@ -106,6 +107,7 @@ describe("Task 6 love page and UI polish", () => {
     fireEvent.press(await screen.findByRole("button", { name: "发布恋爱日记" }));
 
     expect(screen.getByTestId("love-diary-composer-modal")).toBeOnTheScreen();
+    expect(screen.getByTestId("love-diary-composer-motion")).toBeOnTheScreen();
     expect(screen.queryByTestId("love-diary-composer-sheet")).toBeNull();
     expect(screen.queryByTestId("love-composer-handle")).toBeNull();
 
@@ -227,6 +229,7 @@ describe("Task 6 love page and UI polish", () => {
     fireEvent.press((await screen.findAllByRole("button", { name: /评论 0/ }))[0]);
 
     expect(screen.getByTestId("love-inline-comment-composer")).toBeOnTheScreen();
+    expect(screen.getByTestId("love-inline-comment-motion")).toBeOnTheScreen();
     await waitFor(() => expect(screen.queryByTestId("secondary-floating-tabs")).toBeNull());
     expect(screen.queryByRole("button", { name: "发布恋爱日记" })).toBeNull();
     expect(screen.getByPlaceholderText("说点什么吧…")).toBeOnTheScreen();

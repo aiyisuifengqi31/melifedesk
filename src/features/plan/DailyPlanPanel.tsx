@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 
 import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
 import { IconCalendarDays } from "@/shared/ui/lineIcons";
+import { PressableScale } from "@/shared/ui/PressableScale";
 import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
 import { consumePlanFocus } from "@/features/plan/planFocus";
 import type { UiTokens } from "@/shared/ui/primitives";
@@ -322,7 +323,7 @@ function ScheduleRow({ highlight, item, onToggleTodo }: { highlight?: boolean; i
   return (
     <View style={[styles.scheduleRow, done ? styles.scheduleRowDone : null, highlight ? styles.scheduleRowFocus : null]}>
       {item.kind === "todo" ? (
-        <Pressable
+        <PressableScale
           accessibilityRole="checkbox"
           accessibilityState={{ checked: item.todo.completed }}
           onPress={() => onToggleTodo(item.id)}
@@ -330,7 +331,7 @@ function ScheduleRow({ highlight, item, onToggleTodo }: { highlight?: boolean; i
           testID={`schedule-todo-toggle-${item.id}`}
         >
           {item.todo.completed ? <Text style={styles.scheduleCheckText}>✓</Text> : null}
-        </Pressable>
+        </PressableScale>
       ) : (
         <View style={[styles.scheduleKind, item.kind === "package" ? styles.scheduleKindPackage : styles.scheduleKindReminder]} />
       )}

@@ -72,6 +72,14 @@ export function prefersReducedMotion(): boolean {
   }
 }
 
+export function motionDuration(duration: number): number {
+  return prefersReducedMotion() ? 0 : duration;
+}
+
+export function motionDurationMs(duration: number): string {
+  return `${motionDuration(duration)}ms`;
+}
+
 /**
  * 在现有主题 token 上补全语义色与圆角/材质所需的派生字段，
  * 不新建第二套主题系统，只做「按需回填默认值」。

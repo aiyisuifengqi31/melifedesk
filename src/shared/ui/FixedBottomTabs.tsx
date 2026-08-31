@@ -1,7 +1,8 @@
-import { Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { StyleSheet, Text, View, type ViewStyle } from "react-native";
 
 import type { UiTokens } from "@/shared/ui/primitives";
-import { RADIUS, SHADOW } from "@/shared/ui/tokens";
+import { motionDurationMs, MOTION, RADIUS, SHADOW } from "@/shared/ui/tokens";
+import { PressableScale } from "@/shared/ui/PressableScale";
 
 export type FixedBottomTabItem<T extends string> = {
   label: string;
@@ -28,7 +29,7 @@ export function FixedBottomTabs<T extends string>({ activeValue, hidden = false,
       {items.map((item) => {
         const active = item.value === activeValue;
         return (
-          <Pressable
+          <PressableScale
             key={item.value}
             accessibilityRole="button"
             accessibilityLabel={item.label}
@@ -39,7 +40,7 @@ export function FixedBottomTabs<T extends string>({ activeValue, hidden = false,
             <Text numberOfLines={1} style={[styles.tabText, active ? styles.tabTextActive : null]}>
               {item.label}
             </Text>
-          </Pressable>
+          </PressableScale>
         );
       })}
     </View>
@@ -70,8 +71,11 @@ function createStyles(tokens: UiTokens) {
       paddingVertical: 10
     },
     tabActive: {
-      backgroundColor: tokens.surface
-    },
+      backgroundColor: tokens.surface,
+      transitionDuration: motionDurationMs(MOTION.toggle),
+      transitionProperty: "background-color",
+      transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)"
+    } as never,
     tabText: {
       color: tokens.textMuted,
       fontSize: 14,

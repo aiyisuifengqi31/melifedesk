@@ -375,9 +375,9 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
                   const tagTone = tag === "逾期" ? "#e0533d" : tag === "今天" ? themeTokens.accent : tag === "明天" ? "#3d7be0" : themeTokens.textMuted;
                   return (
                     <View key={todo.id} style={styles.todoRow}>
-                      <Pressable accessibilityRole="checkbox" accessibilityLabel={`${todo.completed ? "恢复" : "完成"}首页待办：${todo.title}`} accessibilityState={{ checked: todo.completed }} onPress={() => toggleHomeTodo(todo.id)} style={styles.todoCheckWrap}>
+                      <PressableScale accessibilityRole="checkbox" accessibilityLabel={`${todo.completed ? "恢复" : "完成"}首页待办：${todo.title}`} accessibilityState={{ checked: todo.completed }} onPress={() => toggleHomeTodo(todo.id)} style={styles.todoCheckWrap}>
                         <View style={[styles.todoCheck, todo.completed ? styles.todoCheckActive : null]}>{todo.completed ? <Text style={styles.todoCheckMark}>✓</Text> : null}</View>
-                      </Pressable>
+                      </PressableScale>
                       <View style={styles.todoTextButton}>
                         <Text style={[styles.todoTitle, todo.completed ? styles.todoTitleDone : null]} numberOfLines={1}>{todo.title}</Text>
                       </View>
@@ -432,16 +432,16 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
               </Pressable>
             }
           >
-            <Pressable
-              accessibilityLabel="打开今天吃什么转盘"
-              accessibilityRole="button"
-              onPress={() => router.push("/meal")}
-              style={styles.mealCardBody}
-              testID="meal-spinner-compact-entry"
-            >
-              <Text numberOfLines={1} style={styles.mealCount}>{`${MEAL_PRESET_COUNT} 个候选`}</Text>
-              <Text numberOfLines={1} style={styles.mealCta} testID="meal-spinner-compact-cta">去转盘 →</Text>
-            </Pressable>
+              <PressableScale
+                accessibilityLabel="打开今天吃什么转盘"
+                accessibilityRole="button"
+                onPress={() => router.push("/meal")}
+                style={styles.mealCardBody}
+                testID="meal-spinner-compact-entry"
+              >
+                <Text numberOfLines={1} style={styles.mealCount}>{`${MEAL_PRESET_COUNT} 个候选`}</Text>
+                <Text numberOfLines={1} style={styles.mealCta} testID="meal-spinner-compact-cta">去转盘 →</Text>
+            </PressableScale>
           </HomeCard>
         );
       default:

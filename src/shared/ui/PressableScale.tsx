@@ -1,10 +1,10 @@
-import { useRef } from "react";
-import { Animated, Pressable, type GestureResponderEvent, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
+import { forwardRef, useRef } from "react";
+import { Animated, Pressable, View, type GestureResponderEvent, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
 
 import { MOTION, prefersReducedMotion } from "./tokens";
 
 type Props = Omit<PressableProps, "style"> & {
-  style?: StyleProp<ViewStyle>;
+  style?: PressableProps["style"];
   wrapperStyle?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
   /** 按压时轻微振动毫秒数（仅 Android 支持，不支持时自动忽略）。0 表示不振动。 */
@@ -15,7 +15,10 @@ type Props = Omit<PressableProps, "style"> & {
  * 统一的轻量按压反馈：按下时 scale 0.97，松开恢复。
  * 不改变布局语义，仅作为视觉微交互复用，避免每个按钮各写一套动画。
  */
-export function PressableScale({ style, wrapperStyle, children, vibrate = 0, onPressIn, onPressOut, onPress, ...rest }: Props) {
+export const PressableScale = forwardRef<View, Props>(function PressableScale(
+  { style, wrapperStyle, children, vibrate = 0, onPressIn, onPressOut, onPress, ...rest },
+  ref
+) {
   const scale = useRef(new Animated.Value(1)).current;
 
   const animateTo = (to: number) => {
@@ -30,6 +33,7 @@ export function PressableScale({ style, wrapperStyle, children, vibrate = 0, onP
     <Animated.View style={[{ transform: [{ scale }] }, wrapperStyle]}>
       <Pressable
         {...rest}
+        ref={ref as never}
         style={style}
         onPressIn={(e: GestureResponderEvent) => {
           animateTo(0.97);
@@ -54,4 +58,4 @@ export function PressableScale({ style, wrapperStyle, children, vibrate = 0, onP
       </Pressable>
     </Animated.View>
   );
-}
+});

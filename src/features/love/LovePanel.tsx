@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Animated, Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { createPortal } from "react-dom";
 import { CollapsibleSectionFooter, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import { DatePickerPopup } from "@/shared/ui/DatePickerPopup";
 import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
 import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
+import { PressableScale } from "@/shared/ui/PressableScale";
+import { MOTION, motionDurationMs } from "@/shared/ui/tokens";
 import { getCurrentPartnerId } from "@/auth/partnership";
 import { getCurrentLoveUserId, hydrateLoveSharedValue, saveLoveSharedValue } from "./loveSharedCloud";
 import { deleteDiaryCommentFromCloud, loadDiaryCommentsFromCloud, saveDiaryCommentToCloud, type DiaryComment } from "./loveDiaryComments";
@@ -119,6 +121,7 @@ export function LovePanel({
   activeTab,
   onCommentComposerActiveChange,
   onTabChange,
+  routeActive = true,
   showInlineTabs = true,
   storage,
   themeTokens
@@ -126,6 +129,7 @@ export function LovePanel({
   activeTab?: LoveTab;
   onCommentComposerActiveChange?: (active: boolean) => void;
   onTabChange?: (tab: LoveTab) => void;
+  routeActive?: boolean;
   showInlineTabs?: boolean;
   storage?: LoveStorage;
   themeTokens?: UiTokens;
@@ -309,6 +313,16 @@ export function LovePanel({
     onCommentComposerActiveChange?.(Boolean(activeCommentDiaryId));
     return () => onCommentComposerActiveChange?.(false);
   }, [activeCommentDiaryId, onCommentComposerActiveChange]);
+
+  useEffect(() => {
+    if (routeActive) return;
+    setDiaryComposerOpen(false);
+    setActiveCommentDiaryId(null);
+    setOpenDiaryMenuId(null);
+    setOpenGiftMenuId(null);
+    setPickerPopover(null);
+    setDiaryMenuPopover(null);
+  }, [routeActive]);
 
   useEffect(() => {
     if (!diaryComposerOpen || typeof document === "undefined") return undefined;
@@ -591,7 +605,7 @@ export function LovePanel({
     setPickerPopover(null);
     setDiaryMenuPopover(null);
   };
-  const showDiaryFab = tab === "diary" && !diaryComposerOpen && !activeCommentDiaryId;
+  const showDiaryFab = routeActive && tab === "diary" && !diaryComposerOpen && !activeCommentDiaryId;
   const showLoveTabs = showInlineTabs && !activeCommentDiaryId;
 
   const navigateToPhotoSource = () => {
@@ -918,7 +932,7 @@ export function LovePanel({
                     ) : null}
                   </View>
                   <View style={styles.storyActionRow}>
-                    <Pressable
+                    <PressableScale
                       accessibilityRole="button"
                       accessibilityLabel={getLikeSummary(entry.id).likedByMe ? `已喜欢 ${getLikeSummary(entry.id).count}` : `喜欢 ${getLikeSummary(entry.id).count}`}
                       onPress={(event) => {
@@ -930,8 +944,8 @@ export function LovePanel({
                       <Text style={[styles.storyActionText, getLikeSummary(entry.id).likedByMe ? styles.storyActionTextActive : null]}>
                         {getLikeSummary(entry.id).likedByMe ? "♥" : "♡"} {getLikeSummary(entry.id).count}
                       </Text>
-                    </Pressable>
-                    <Pressable
+                    </PressableScale>
+                    <PressableScale
                       accessibilityRole="button"
                       accessibilityLabel={`评论 ${getCommentsForDiary(entry.id).length}`}
                       onPress={(event) => {
@@ -943,7 +957,7 @@ export function LovePanel({
                       <Text style={[styles.storyActionText, activeCommentDiaryId === entry.id ? styles.storyActionTextActive : null]}>
                         💬 {getCommentsForDiary(entry.id).length}
                       </Text>
-                    </Pressable>
+                    </PressableScale>
                   </View>
                   {getCommentsForDiary(entry.id).length > 0 ? (
                     <View style={styles.inlineCommentList}>
@@ -1001,17 +1015,15 @@ export function LovePanel({
             )}
           </View>
           {showDiaryFab ? (
-            <PortalLayer>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="发布恋爱日记"
-                onPress={openDiaryComposer}
-                style={styles.diaryFab}
-                testID="love-diary-publish-fab"
-              >
-                <Text style={styles.diaryFabText}>+</Text>
-              </Pressable>
-            </PortalLayer>
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel="发布恋爱日记"
+              onPress={openDiaryComposer}
+              style={styles.diaryFab}
+              testID="love-diary-publish-fab"
+            >
+              <Text style={styles.diaryFabText}>+</Text>
+            </PressableScale>
           ) : null}
         </>
       ) : null}
@@ -1344,7 +1356,8 @@ export function LovePanel({
         <PortalLayer>
         <View style={styles.composerLayer}>
           <Pressable accessibilityLabel="关闭写日记弹窗" onPress={closeDiaryComposer} style={styles.composerBackdrop} />
-          <View onStartShouldSetResponder={() => true} style={styles.composerModal} testID="love-diary-composer-modal">
+          <Animated.View onStartShouldSetResponder={() => true} style={styles.composerModalMotion} testID="love-diary-composer-motion">
+          <View style={styles.composerModal} testID="love-diary-composer-modal">
             <View style={styles.composerHeader}>
               <View>
                 <Text style={styles.cardTitle}>{editingDiaryId ? "编辑日记" : "写日记"}</Text>
@@ -1453,13 +1466,15 @@ export function LovePanel({
               visible={diaryDatePickerOpen}
             />
           </View>
+          </Animated.View>
         </View>
         </PortalLayer>
       ) : null}
 
       {activeCommentDiaryId ? (
         <PortalLayer>
-        <View nativeID="love-inline-comment-composer" style={[styles.inlineCommentComposer, { bottom: commentKeyboardOffset }]} testID="love-inline-comment-composer">
+        <Animated.View nativeID="love-inline-comment-composer" style={[styles.inlineCommentComposer, styles.inlineCommentComposerMotion, { bottom: commentKeyboardOffset }]} testID="love-inline-comment-motion">
+        <View testID="love-inline-comment-composer" style={styles.inlineCommentComposerInner}>
           <View style={styles.commentComposerAvatar}>
             <Text style={styles.commentComposerAvatarText}>我</Text>
           </View>
@@ -1481,6 +1496,7 @@ export function LovePanel({
             <Text style={styles.bottomCommentSendText}>发送</Text>
           </Pressable>
         </View>
+        </Animated.View>
         </PortalLayer>
       ) : null}
 
@@ -1569,7 +1585,8 @@ function AnchoredDropdown({ onClose, picker }: { onClose: () => void; picker: Pi
   const style = getDropdownPosition(picker.rect, picker.options.length);
   const menu = (
     <Pressable accessibilityLabel="关闭选择菜单" onPress={onClose} style={styles.dropdownBackdrop} testID="love-dropdown-dismiss">
-      <View onStartShouldSetResponder={() => true} style={[styles.dropdownPopover, style]} testID="love-dropdown-popover">
+      <Animated.View onStartShouldSetResponder={() => true} style={[styles.dropdownPopover, styles.dropdownPopoverMotion, style]} testID="love-dropdown-popover">
+      <View testID="love-dropdown-motion">
         {picker.options.map((option) => (
           option.type === "heading" ? (
             <Text key={option.value} style={styles.dropdownHeading}>{option.label}</Text>
@@ -1589,6 +1606,7 @@ function AnchoredDropdown({ onClose, picker }: { onClose: () => void; picker: Pi
           )
         ))}
       </View>
+      </Animated.View>
     </Pressable>
   );
 
@@ -1621,7 +1639,7 @@ function DiaryActionMenu({
   const style = getDiaryActionMenuPosition(menu.rect);
   const menuNode = (
     <Pressable accessibilityLabel="关闭日记菜单" onPress={onClose} style={styles.diaryActionBackdrop}>
-      <View onStartShouldSetResponder={() => true} style={[styles.diaryActionMenu, style]} testID="love-diary-action-menu">
+      <Animated.View onStartShouldSetResponder={() => true} style={[styles.diaryActionMenu, styles.diaryActionMenuMotion, style]} testID="love-diary-action-menu">
         <Pressable accessibilityRole="button" accessibilityLabel={`编辑日记：${entryTitle}`} onPress={onEdit} style={styles.diaryActionItem}>
           <Text style={styles.diaryActionText}>编辑</Text>
         </Pressable>
@@ -1648,7 +1666,7 @@ function DiaryActionMenu({
             <Text style={styles.diaryActionDeleteText}>删除</Text>
           </Pressable>
         ) : null}
-      </View>
+      </Animated.View>
     </Pressable>
   );
 
@@ -2322,6 +2340,18 @@ const styles = StyleSheet.create({
     zIndex: 10041,
     width: Platform.OS === "web" ? ("min(520px, calc(100vw - 32px))" as unknown as number) : "92%"
   },
+  composerModalMotion: {
+    animationDuration: motionDurationMs(MOTION.sheet),
+    animationFillMode: "both",
+    animationName: "md-rise-in",
+    animationTimingFunction: "cubic-bezier(0.2, 0, 0, 1)",
+    opacity: 1,
+    transform: [{ translateY: 0 }, { scale: 1 }],
+    transitionDuration: motionDurationMs(MOTION.sheet),
+    transitionProperty: "opacity, transform",
+    transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)",
+    width: Platform.OS === "web" ? ("min(520px, calc(100vw - 32px))" as unknown as number) : "92%"
+  } as never,
   composerImageButton: {
     alignSelf: "flex-start",
     height: 52,
@@ -2514,6 +2544,24 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     zIndex: 10030
   },
+  inlineCommentComposerInner: {
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    gap: 8,
+    width: "100%"
+  },
+  inlineCommentComposerMotion: {
+    animationDuration: motionDurationMs(MOTION.sheet),
+    animationFillMode: "both",
+    animationName: "md-rise-in",
+    animationTimingFunction: "cubic-bezier(0.2, 0, 0, 1)",
+    opacity: 1,
+    transform: [{ translateY: 0 }],
+    transitionDuration: motionDurationMs(MOTION.sheet),
+    transitionProperty: "opacity, transform",
+    transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)"
+  } as never,
   inlineCommentDelete: {
     paddingHorizontal: 4,
     paddingVertical: 2
@@ -2882,6 +2930,17 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     zIndex: 10051
   },
+  diaryActionMenuMotion: {
+    animationDuration: motionDurationMs(MOTION.toggle),
+    animationFillMode: "both",
+    animationName: "md-pop-in",
+    animationTimingFunction: "cubic-bezier(0.2, 0, 0, 1)",
+    opacity: 1,
+    transform: [{ translateY: 0 }, { scale: 1 }],
+    transitionDuration: motionDurationMs(MOTION.toggle),
+    transitionProperty: "opacity, transform",
+    transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)"
+  } as never,
   diaryActionItem: {
     alignItems: "center",
     borderRadius: 12,
@@ -3183,6 +3242,17 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     zIndex: 10070
   },
+  dropdownPopoverMotion: {
+    animationDuration: motionDurationMs(MOTION.toggle),
+    animationFillMode: "both",
+    animationName: "md-pop-in",
+    animationTimingFunction: "cubic-bezier(0.2, 0, 0, 1)",
+    opacity: 1,
+    transform: [{ translateY: 0 }, { scale: 1 }],
+    transitionDuration: motionDurationMs(MOTION.toggle),
+    transitionProperty: "opacity, transform",
+    transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)"
+  } as never,
   dropdownHeading: {
     color: "#b18a96",
     fontSize: 11,

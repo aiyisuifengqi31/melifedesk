@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { CollapsibleSectionFooter, sortByNewest, useCollapsibleList } from "@/shared/ui/CollapsibleList";
+import { PressableScale } from "@/shared/ui/PressableScale";
 import type { UiTokens } from "@/shared/ui/primitives";
 import {
   createTodoId,
@@ -291,7 +292,7 @@ function TaskRow({
 }) {
   return (
     <View style={[styles.taskRow, task.completed ? styles.taskRowDone : null]}>
-      <Pressable
+      <PressableScale
         accessibilityLabel={`${task.completed ? "恢复" : "完成"}任务：${task.title}`}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: task.completed }}
@@ -299,7 +300,7 @@ function TaskRow({
         style={[styles.checkbox, task.completed ? styles.checkboxChecked : null]}
       >
         {task.completed ? <Text style={styles.checkboxText}>✓</Text> : null}
-      </Pressable>
+      </PressableScale>
 
       <View style={styles.taskBody}>
         {editing ? (

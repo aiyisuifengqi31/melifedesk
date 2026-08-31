@@ -74,10 +74,76 @@ export default function RootLayout() {
 
   return (
     <>
+      {Platform.OS === "web" ? <ReducedMotionStyle /> : null}
       <AuthGate>
         <Stack screenOptions={{ headerShown: false, title: app.webTitle }} />
       </AuthGate>
       <StatusBar style="auto" />
     </>
+  );
+}
+
+function ReducedMotionStyle() {
+  return (
+    <style>
+      {`
+        @keyframes md-rise-in {
+          from {
+            opacity: 0;
+            transform: translateY(10px) scale(0.98);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @keyframes md-pop-in {
+          from {
+            opacity: 0;
+            transform: translateY(6px) scale(0.96);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @keyframes md-menu-in {
+          from {
+            opacity: 0;
+            filter: blur(4px);
+            transform: translateY(12px) scale(0.94);
+          }
+          to {
+            opacity: 1;
+            filter: blur(0);
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @keyframes md-menu-item-in {
+          from {
+            opacity: 0;
+            transform: translateY(4px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          *,
+          *::before,
+          *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            scroll-behavior: auto !important;
+            transition-duration: 0.01ms !important;
+          }
+        }
+      `}
+    </style>
   );
 }

@@ -45,11 +45,23 @@ describe("floating page controls", () => {
     expect(screen.getByTestId("secondary-tab-useful")).toHaveStyle({ flex: 1 });
   });
 
+  it("removes the love diary publish button when leaving the love route", async () => {
+    const { rerender } = render(<AppShell route="/love" viewport="mobile" />);
+
+    expect(await screen.findByRole("button", { name: "发布恋爱日记" })).toBeOnTheScreen();
+
+    rerender(<AppShell route="/home" viewport="mobile" />);
+
+    expect(screen.queryByRole("button", { name: "发布恋爱日记" })).toBeNull();
+  });
+
   it("opens the sidebar quick shortcut panel above settings", () => {
     render(<AppShell initialRoute="/home" viewport="mobile" />);
 
     fireEvent.press(screen.getByRole("button", { name: "打开快捷入口" }));
 
+    expect(screen.getByTestId("quick-fab")).toHaveProp("accessibilityState", { expanded: true });
+    expect(screen.getByTestId("quick-shortcut-menu-motion")).toBeOnTheScreen();
     expect(screen.getByTestId("quick-shortcut-menu")).toBeOnTheScreen();
     expect(screen.getByTestId("quick-shortcut-voice")).toBeOnTheScreen();
     expect(screen.getByTestId("quick-shortcut-finance")).toBeOnTheScreen();
@@ -57,63 +69,74 @@ describe("floating page controls", () => {
     expect(screen.getByTestId("quick-shortcut-workout")).toBeOnTheScreen();
   });
 
-  it("dismisses the shortcut arc when tapping outside it", () => {
+  it("dismisses the shortcut arc when tapping outside it", async () => {
     render(<AppShell initialRoute="/home" viewport="mobile" />);
 
     fireEvent.press(screen.getByRole("button", { name: "打开快捷入口" }));
     expect(screen.getByTestId("quick-shortcut-menu")).toBeOnTheScreen();
 
     fireEvent.press(screen.getByRole("button", { name: "关闭快捷入口背景" }));
-    expect(screen.queryByTestId("quick-shortcut-menu")).toBeNull();
+    expect(screen.getByTestId("quick-fab")).toHaveProp("accessibilityState", { expanded: false });
+    expect(screen.getByTestId("quick-shortcut-menu-motion")).toHaveProp("pointerEvents", "none");
+    expect(screen.getByTestId("quick-shortcut-menu-motion")).toHaveStyle({ opacity: 0 });
   });
-  it("opens the notes shortcut directly in note creation state", () => {
+
+  it("marks the expanded more navigation panel as an animated layer", () => {
+    render(<AppShell initialRoute="/home" viewport="mobile" />);
+
+    fireEvent.press(screen.getByTestId("sidebar-more-button"));
+
+    expect(screen.getByTestId("sidebar-more-panel-motion")).toBeOnTheScreen();
+    expect(screen.getByTestId("sidebar-more-panel")).toBeOnTheScreen();
+  });
+  it("opens the notes shortcut directly in note creation state", async () => {
     render(<AppShell initialRoute="/home" viewport="mobile" />);
 
     fireEvent.press(screen.getByTestId("quick-fab"));
     fireEvent.press(screen.getByTestId("quick-shortcut-notes"));
 
-    expect(screen.queryByTestId("quick-shortcut-menu")).toBeNull();
+    expect(screen.getByTestId("quick-shortcut-menu-motion")).toHaveProp("pointerEvents", "none");
     expect(screen.getByTestId("notes-content-input").props.autoFocus).toBe(true);
   });
 
-  it("opens the todo shortcut directly in todo creation state", () => {
+  it("opens the todo shortcut directly in todo creation state", async () => {
     render(<AppShell initialRoute="/home" viewport="mobile" />);
 
     fireEvent.press(screen.getByTestId("quick-fab"));
     fireEvent.press(screen.getByTestId("quick-shortcut-todos"));
 
-    expect(screen.queryByTestId("quick-shortcut-menu")).toBeNull();
+    expect(screen.getByTestId("quick-shortcut-menu-motion")).toHaveProp("pointerEvents", "none");
     expect(screen.getByTestId("todo-title-input").props.autoFocus).toBe(true);
   });
 
-  it("opens the package screenshot shortcut in the express capture area", () => {
+  it("opens the package screenshot shortcut in the express capture area", async () => {
     render(<AppShell initialRoute="/home" viewport="mobile" />);
 
     fireEvent.press(screen.getByTestId("quick-fab"));
     fireEvent.press(screen.getByTestId("quick-shortcut-package-scan"));
 
-    expect(screen.queryByTestId("quick-shortcut-menu")).toBeNull();
-    expect(screen.getByRole("button", { name: "上传快递截图" })).toBeOnTheScreen();
+    expect(screen.getByTestId("quick-shortcut-menu-motion")).toHaveProp("pointerEvents", "none");
+    expect(screen.getAllByRole("button", { name: "上传快递截图" }).length).toBeGreaterThan(0);
   });
 
-  it("opens the finance shortcut on expense quick entry", () => {
+  it("opens the finance shortcut on expense quick entry", async () => {
     render(<AppShell initialRoute="/home" viewport="mobile" />);
 
     fireEvent.press(screen.getByTestId("quick-fab"));
     fireEvent.press(screen.getByTestId("quick-shortcut-finance"));
 
-    expect(screen.queryByTestId("quick-shortcut-menu")).toBeNull();
+    expect(screen.getByTestId("quick-shortcut-menu-motion")).toHaveProp("pointerEvents", "none");
     expect(screen.getByTestId("quick-accounting-sheet")).toBeOnTheScreen();
     expect(screen.queryByTestId("finance-amount-input")).toBeNull();
   });
 
-  it("opens global voice capture from the first quick action", () => {
+  it("opens global voice capture from the first quick action", async () => {
     render(<AppShell initialRoute="/home" viewport="mobile" />);
 
     fireEvent.press(screen.getByTestId("quick-fab"));
     fireEvent.press(screen.getByTestId("quick-shortcut-voice"));
 
-    expect(screen.queryByTestId("quick-shortcut-menu")).toBeNull();
+    expect(screen.getByTestId("quick-shortcut-menu-motion")).toHaveProp("pointerEvents", "none");
     expect(screen.getByTestId("global-quick-capture")).toBeOnTheScreen();
     expect(screen.getByTestId("quick-capture-text-input").props.autoFocus).toBe(true);
   });

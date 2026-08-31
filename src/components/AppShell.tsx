@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Image, ImageBackground, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ImageStyle } from "react-native";
+import { Animated, Image, ImageBackground, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ImageStyle } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 
 import { saveUserSettings } from "@/auth/authRepository";
@@ -31,10 +31,11 @@ import {
 import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
 import { NAV_ITEMS, type NavItem, type RouteKey, routeToKey } from "@/navigation/items";
 import { getTheme } from "@/theme/registry";
-import { withSemanticTokens } from "@/shared/ui/tokens";
+import { MOTION, motionDuration, motionDurationMs, withSemanticTokens } from "@/shared/ui/tokens";
 import type { ColorMode, ThemeId } from "@/theme/types";
 import { hydrateBackgroundFromCloud, loadBackground, saveBackground, type BackgroundSource, getImageSource } from "@/theme/background";
 import { FixedBottomTabs } from "@/shared/ui/FixedBottomTabs";
+import { PressableScale } from "@/shared/ui/PressableScale";
 import { UndoToastHost, showUndoToast } from "@/shared/ui/UndoToast";
 import { useDisableTouchCallout } from "@/shared/ui/useDisableTouchCallout";
 import { StartupPerf } from "@/lib/startupPerf";
@@ -75,6 +76,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const [loveCommentComposerOpen, setLoveCommentComposerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
+  const [quickMenuMounted, setQuickMenuMounted] = useState(false);
   const [quickAccountingOpen, setQuickAccountingOpen] = useState(false);
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const [shortcutRequest, setShortcutRequest] = useState<ShortcutRequest | null>(null);
@@ -160,6 +162,16 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
       setManualMoreOpen(null);
     }
   }, [moreRouteActive, route]);
+
+  useEffect(() => {
+    if (quickMenuOpen) {
+      setQuickMenuMounted(true);
+      return undefined;
+    }
+    if (!quickMenuMounted) return undefined;
+    const id = globalThis.setTimeout(() => setQuickMenuMounted(false), motionDuration(MOTION.sheet));
+    return () => globalThis.clearTimeout(id);
+  }, [quickMenuMounted, quickMenuOpen]);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -365,6 +377,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
           </Pressable>
 
           {moreNavOpen ? (
+            <Animated.View testID="sidebar-more-panel-motion" style={styles.morePanelMotion}>
             <View testID="sidebar-more-panel" style={styles.morePanel}>
               <View style={styles.moreConnector} />
               {MORE_NAV_ITEMS.map((item) => {
@@ -385,31 +398,41 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
                 );
               })}
             </View>
+            </Animated.View>
           ) : null}
         </ScrollView>
 
         <View testID="sidebar-footer" style={styles.sidebarFooter}>
           <View style={styles.quickDock}>
-            {quickMenuOpen ? (
+            {quickMenuMounted ? (
+              <Animated.View
+                pointerEvents={quickMenuOpen ? "auto" : "none"}
+                testID="quick-shortcut-menu-motion"
+                style={[styles.quickMenuMotion, quickMenuOpen ? styles.quickMenuMotionOpening : styles.quickMenuMotionClosing]}
+              >
               <View testID="quick-shortcut-menu" style={styles.quickMenu}>
-                <ShortcutButton icon="🎙" label="语音记录" testID="quick-shortcut-voice" onPress={openQuickCapture} />
-                <ShortcutButton icon="¥" label="记一笔支出" testID="quick-shortcut-finance" onPress={() => openShortcut("finance")} />
-                <ShortcutButton icon="▣" label="上传快递截图" testID="quick-shortcut-package-scan" onPress={() => openShortcut("packageScan")} />
-                <ShortcutButton icon="□" label="添加待办" testID="quick-shortcut-todos" onPress={() => openShortcut("todos")} />
-                <ShortcutButton icon="✎" label="写备忘录" testID="quick-shortcut-notes" onPress={() => openShortcut("notes")} />
-                <ShortcutButton icon="↗" label="记录运动" testID="quick-shortcut-workout" onPress={() => openShortcut("workout")} />
-                <ShortcutButton icon="📷" label="智能相机" testID="quick-shortcut-camera" onPress={() => handleNavigate("/smart-camera" as unknown as NavItem["href"])} />
+                <ShortcutButton delayIndex={0} icon="🎙" label="语音记录" testID="quick-shortcut-voice" onPress={openQuickCapture} />
+                <ShortcutButton delayIndex={1} icon="¥" label="记一笔支出" testID="quick-shortcut-finance" onPress={() => openShortcut("finance")} />
+                <ShortcutButton delayIndex={2} icon="▣" label="上传快递截图" testID="quick-shortcut-package-scan" onPress={() => openShortcut("packageScan")} />
+                <ShortcutButton delayIndex={3} icon="□" label="添加待办" testID="quick-shortcut-todos" onPress={() => openShortcut("todos")} />
+                <ShortcutButton delayIndex={4} icon="✎" label="写备忘录" testID="quick-shortcut-notes" onPress={() => openShortcut("notes")} />
+                <ShortcutButton delayIndex={5} icon="↗" label="记录运动" testID="quick-shortcut-workout" onPress={() => openShortcut("workout")} />
+                <ShortcutButton delayIndex={6} icon="📷" label="智能相机" testID="quick-shortcut-camera" onPress={() => handleNavigate("/smart-camera" as unknown as NavItem["href"])} />
               </View>
+              </Animated.View>
             ) : null}
-            <Pressable
+            <PressableScale
               accessibilityRole="button"
               accessibilityLabel={quickMenuOpen ? "关闭快捷入口" : "打开快捷入口"}
+              accessibilityState={{ expanded: quickMenuOpen }}
               onPress={() => setQuickMenuOpen((value) => !value)}
               style={styles.quickFab}
               testID="quick-fab"
             >
-              <PlusIcon color="#ffffff" />
-            </Pressable>
+              <View style={[styles.quickFabIconMotion, quickMenuOpen ? styles.quickFabIconMotionOpen : null]}>
+                <PlusIcon color="#ffffff" />
+              </View>
+            </PressableScale>
           </View>
           <Pressable
             accessibilityRole="button"
@@ -617,7 +640,16 @@ function PageContent({
           themeTokens={tokens}
         />
       ) : null}
-      {activeKey === "love" ? <LovePanel activeTab={loveTab} onCommentComposerActiveChange={onLoveCommentComposerActiveChange} onTabChange={onLoveTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
+      {activeKey === "love" ? (
+        <LovePanel
+          activeTab={loveTab}
+          onCommentComposerActiveChange={onLoveCommentComposerActiveChange}
+          onTabChange={onLoveTabChange}
+          routeActive={activeKey === "love"}
+          showInlineTabs={false}
+          themeTokens={tokens}
+        />
+      ) : null}
       {activeKey === "exam" ? <ExamPanel activeTab={examTab} onTabChange={onExamTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
       {activeKey === "fun" ? <EntertainmentPanel activeTab={entertainmentTab} onTabChange={onEntertainmentTabChange} showInlineTabs={false} themeTokens={tokens} /> : null}
       {activeKey !== "home" && activeKey !== "plan" && activeKey !== "workout" && activeKey !== "finance" && activeKey !== "love" && activeKey !== "exam" && activeKey !== "fun" ? <GenericModuleSkeleton themeEmptyState={themeEmptyState} styles={styles} /> : null}
@@ -625,19 +657,30 @@ function PageContent({
   );
 }
 
-function ShortcutButton({ icon, label, onPress, testID }: { icon: string; label: string; onPress: () => void; testID?: string }) {
+function ShortcutButton({ delayIndex = 0, icon, label, onPress, testID }: { delayIndex?: number; icon: string; label: string; onPress: () => void; testID?: string }) {
   const shortcutRef = useRef<unknown>(null);
   useDisableTouchCallout(shortcutRef);
   return (
-    <Pressable ref={shortcutRef as never} accessibilityRole="button" accessibilityLabel={`${label}快捷入口`} onPress={onPress} style={shortcutButtonBase} testID={testID}>
+    <PressableScale
+      ref={shortcutRef as never}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}快捷入口`}
+      onPress={onPress}
+      style={[shortcutButtonBase, { animationDelay: `${Math.min(delayIndex * 25, 75)}ms` }] as never}
+      testID={testID}
+    >
       <Text style={shortcutButtonIcon}>{icon}</Text>
       <Text style={shortcutButtonText}>{label}</Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
 const shortcutButtonBase = {
   alignItems: "center" as const,
+  animationDuration: motionDurationMs(MOTION.toggle),
+  animationFillMode: "both",
+  animationName: "md-menu-item-in",
+  animationTimingFunction: "cubic-bezier(0.2, 0, 0, 1)",
   backgroundColor: "rgba(255, 255, 255, 0.96)",
   borderColor: "#dce8dc",
   borderRadius: 14,
@@ -659,6 +702,7 @@ const shortcutButtonBase = {
 
 const shortcutButtonIcon = {
   color: "#1f8f55",
+  flexShrink: 0,
   fontSize: 15,
   fontWeight: "900" as const,
   textAlign: "center" as const,
@@ -668,7 +712,11 @@ const shortcutButtonIcon = {
 const shortcutButtonText = {
   color: "#1f2937",
   fontSize: 13,
-  fontWeight: "900" as const
+  fontWeight: "900" as const,
+  minWidth: 0,
+  overflow: "hidden" as const,
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap"
 };
 
 function GenericModuleSkeleton({ themeEmptyState, styles }: { themeEmptyState: string; styles: ReturnType<typeof createStyles> }) {
@@ -862,6 +910,18 @@ function createStyles(
       position: "relative",
       width: "100%"
     },
+    morePanelMotion: {
+      animationDuration: motionDurationMs(MOTION.collapse),
+      animationFillMode: "both",
+      animationName: "md-menu-item-in",
+      animationTimingFunction: "cubic-bezier(0.2, 0, 0, 1)",
+      opacity: 1,
+      transform: [{ translateY: 0 }],
+      transitionDuration: motionDurationMs(MOTION.collapse),
+      transitionProperty: "opacity, transform",
+      transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)",
+      width: "100%"
+    } as never,
     moreConnector: {
       backgroundColor: tokens.border,
       bottom: 6,
@@ -943,6 +1003,15 @@ function createStyles(
       shadowRadius: 10,
       width: 44
     },
+    quickFabIconMotion: {
+      transform: [{ rotate: "0deg" }],
+      transitionDuration: motionDurationMs(MOTION.toggle),
+      transitionProperty: "transform",
+      transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)"
+    } as never,
+    quickFabIconMotionOpen: {
+      transform: [{ rotate: "45deg" }]
+    },
     quickFabText: {
       color: "#ffffff",
       fontSize: 28,
@@ -954,18 +1023,37 @@ function createStyles(
       borderColor: tokens.border,
       borderRadius: 18,
       borderWidth: 1,
-      bottom: 52,
       gap: 8,
-      left: compactSidebar ? 4 : 0,
       padding: 8,
-      position: "absolute",
       shadowColor: "#000000",
       shadowOffset: { width: 0, height: 12 },
       shadowOpacity: 0.14,
-      shadowRadius: 18,
+      shadowRadius: 18
+    },
+    quickMenuMotion: {
+      bottom: 52,
+      filter: "blur(0px)",
+      left: compactSidebar ? 4 : 0,
+      opacity: 1,
+      position: "absolute",
+      transform: [{ translateY: 0 }, { scale: 1 }],
+      transformOrigin: "bottom center",
+      transitionDuration: motionDurationMs(MOTION.sheet),
+      transitionProperty: "opacity, transform, filter",
       width: compactSidebar ? 178 : 196,
       zIndex: 90
-    },
+    } as never,
+    quickMenuMotionOpening: {
+      animationDuration: motionDurationMs(MOTION.sheet),
+      animationFillMode: "both",
+      animationName: "md-menu-in",
+      animationTimingFunction: "cubic-bezier(0.2, 0, 0, 1)"
+    } as never,
+    quickMenuMotionClosing: {
+      filter: "blur(4px)",
+      opacity: 0,
+      transform: [{ translateY: 12 }, { scale: 0.94 }]
+    } as never,
     quickAccountingToast: {
       alignItems: "center",
       backgroundColor: "rgba(255, 255, 255, 0.96)",
