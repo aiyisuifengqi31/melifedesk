@@ -60,14 +60,39 @@ const PRIMARY_ROUTE_KEYS: RouteKey[] = ["home", "plan", "finance", "love"];
 const MORE_ROUTE_KEYS: RouteKey[] = ["exam", "workout", "fun"];
 const PAGE_BOTTOM_GAP = 32;
 const SECONDARY_TAB_CONTENT_BOTTOM_PADDING = 96;
+const ROUTE_CHANGE_EVENT = "melifedesk-routechange";
 const navItemByKey = (key: RouteKey) => NAV_ITEMS.find((item) => item.key === key);
 const PRIMARY_NAV_ITEMS = PRIMARY_ROUTE_KEYS.map(navItemByKey).filter((item): item is NavItem => Boolean(item));
 const MORE_NAV_ITEMS = MORE_ROUTE_KEYS.map(navItemByKey).filter((item): item is NavItem => Boolean(item));
+
+function routeFromBrowserPath(pathname?: string): NavItem["href"] | null {
+  if (!pathname) return null;
+  const segments = pathname.replace(/\/+$/, "").split("/").filter(Boolean);
+  const lastSegment = segments[segments.length - 1];
+  const item = NAV_ITEMS.find((navItem) => navItem.key === lastSegment);
+  return item?.href ?? null;
+}
+
+function routeFromBrowserLocation(): NavItem["href"] | null {
+  if (typeof window === "undefined" || !window.location) return null;
+  const hash = window.location.hash ?? "";
+  const hashRoute = hash.startsWith("#/") ? routeFromBrowserPath(hash.slice(1).split("?")[0]) : null;
+  return hashRoute ?? routeFromBrowserPath(window.location.pathname);
+}
+
+function routeFromRouteChangeEvent(event: Event): NavItem["href"] | null {
+  const detail = "detail" in event ? (event as CustomEvent<{ href?: string }>).detail : undefined;
+  const href = detail?.href;
+  if (!href) return null;
+  const item = NAV_ITEMS.find((navItem) => navItem.href === href);
+  return item?.href ?? null;
+}
 
 export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }: AppShellProps) {
   const dimensions = useWindowDimensions();
   const inferredViewport = viewport ?? (dimensions.width < 720 ? "mobile" : "desktop");
   const [currentRoute, setCurrentRoute] = useState(route ?? initialRoute);
+  const [browserRoute, setBrowserRoute] = useState<NavItem["href"] | null>(() => routeFromBrowserLocation());
   const [collapsed, setCollapsed] = useState(false);
   const [manualMoreOpen, setManualMoreOpen] = useState<boolean | null>(null);
   const [entertainmentTab, setEntertainmentTab] = useState<EntTab>("hot");
@@ -130,6 +155,8 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
 
   const activeRoute = route ?? currentRoute;
   const activeKey = routeToKey(activeRoute);
+  const browserActiveKey = browserRoute ? routeToKey(browserRoute) : null;
+  const routeVisibleKey = browserActiveKey ?? activeKey;
   const moreRouteActive = MORE_ROUTE_KEYS.includes(activeKey);
   const moreNavOpen = manualMoreOpen ?? moreRouteActive;
   const theme = getTheme(themeId);
@@ -152,6 +179,14 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   }, []);
   const styles = useMemo(() => createStyles(tokens, sidebarWidth, isMobile, viewportHeight, hasSecondaryTabs, navOffset), [tokens, sidebarWidth, isMobile, viewportHeight, hasSecondaryTabs, navOffset]);
 
+  const notifyRouteChange = (href: NavItem["href"]) => {
+    setBrowserRoute(href);
+    if (typeof window === "undefined" || typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") {
+      return;
+    }
+    window.dispatchEvent(new CustomEvent(ROUTE_CHANGE_EVENT, { detail: { href } }));
+  };
+
   // 无背景图（关闭背景 / 未设置）时，首屏背景即时就绪，打点收尾。
   useEffect(() => {
     if (disableBackground || !imageSource) {
@@ -164,6 +199,22 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
       setManualMoreOpen(null);
     }
   }, [moreRouteActive, route]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.addEventListener !== "function") {
+      return;
+    }
+    const updateFromLocation = () => setBrowserRoute(routeFromBrowserLocation());
+    const updateFromRouteEvent = (event: Event) => setBrowserRoute(routeFromRouteChangeEvent(event) ?? routeFromBrowserLocation());
+
+    window.addEventListener("popstate", updateFromLocation);
+    window.addEventListener(ROUTE_CHANGE_EVENT, updateFromRouteEvent);
+
+    return () => {
+      window.removeEventListener("popstate", updateFromLocation);
+      window.removeEventListener(ROUTE_CHANGE_EVENT, updateFromRouteEvent);
+    };
+  }, []);
 
   useEffect(() => {
     if (quickMenuOpen) {
@@ -221,8 +272,8 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
   const handleNavigate = (href: NavItem["href"]) => {
     setQuickMenuOpen(false);
     setShortcutRequest(null);
-    const nextKey = routeToKey(href);
     setManualMoreOpen(null);
+    notifyRouteChange(href);
     if (onNavigate) {
       onNavigate(href);
       return;
@@ -240,6 +291,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
       return;
     }
     setShortcutRequest((previous) => ({ kind, nonce: (previous?.nonce ?? 0) + 1 }));
+    notifyRouteChange(href);
     if (onNavigate) {
       onNavigate(href);
       return;
@@ -460,6 +512,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
           <ScrollView testID="page-content" nativeID="page-content" style={styles.contentScroll} contentContainerStyle={styles.contentInner}>
             <PageContent
               activeKey={activeKey}
+              routeVisibleKey={routeVisibleKey}
               entertainmentTab={entertainmentTab}
               examTab={examTab}
               financeTab={financeTab}
@@ -483,6 +536,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
         <ScrollView testID="page-content" nativeID="page-content" style={styles.content} contentContainerStyle={styles.contentInner}>
           <PageContent
             activeKey={activeKey}
+            routeVisibleKey={routeVisibleKey}
             entertainmentTab={entertainmentTab}
             examTab={examTab}
             financeTab={financeTab}
@@ -579,6 +633,7 @@ function SettingsIcon({ color }: { color: string }) {
 
 function PageContent({
   activeKey,
+  routeVisibleKey,
   entertainmentTab,
   examTab,
   financeTab,
@@ -597,6 +652,7 @@ function PageContent({
   tokens
 }: {
   activeKey: string;
+  routeVisibleKey: RouteKey;
   entertainmentTab: EntTab;
   examTab: ExamTab;
   financeTab: FinanceTab;
@@ -647,7 +703,7 @@ function PageContent({
           activeTab={loveTab}
           onCommentComposerActiveChange={onLoveCommentComposerActiveChange}
           onTabChange={onLoveTabChange}
-          routeActive={activeKey === "love"}
+          routeActive={routeVisibleKey === "love"}
           showInlineTabs={false}
           themeTokens={tokens}
         />

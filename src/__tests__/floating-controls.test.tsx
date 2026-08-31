@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 
 import { AppShell } from "@/components/AppShell";
 import { LovePanel } from "@/features/love/LovePanel";
@@ -122,6 +122,45 @@ describe("floating page controls", () => {
     render(<LovePanel showInlineTabs={false} />);
 
     expect(screen.queryByRole("button", { name: "发布恋爱日记" })).toBeNull();
+  });
+
+  it("hides the love diary publish portal when the browser route changes while the love shell is still mounted", async () => {
+    const listeners = new Map<string, Set<EventListener>>();
+    const originalAddEventListener = window.addEventListener;
+    const originalRemoveEventListener = window.removeEventListener;
+    const originalDispatchEvent = window.dispatchEvent;
+
+    window.addEventListener = jest.fn((type: string, listener: EventListenerOrEventListenerObject) => {
+      const callback = typeof listener === "function" ? listener : listener.handleEvent.bind(listener);
+      const bucket = listeners.get(type) ?? new Set<EventListener>();
+      bucket.add(callback);
+      listeners.set(type, bucket);
+    }) as never;
+    window.removeEventListener = jest.fn((type: string, listener: EventListenerOrEventListenerObject) => {
+      const callback = typeof listener === "function" ? listener : listener.handleEvent.bind(listener);
+      listeners.get(type)?.delete(callback);
+    }) as never;
+    window.dispatchEvent = jest.fn((event: Event) => {
+      listeners.get(event.type)?.forEach((listener) => listener(event));
+      return true;
+    }) as never;
+
+    const { unmount } = render(<AppShell route="/love" viewport="mobile" />);
+
+    try {
+      expect(await screen.findByRole("button", { name: "发布恋爱日记" })).toBeOnTheScreen();
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent("melifedesk-routechange", { detail: { href: "/home" } }));
+      });
+
+      expect(screen.queryByRole("button", { name: "发布恋爱日记" })).toBeNull();
+    } finally {
+      unmount();
+      window.addEventListener = originalAddEventListener;
+      window.removeEventListener = originalRemoveEventListener;
+      window.dispatchEvent = originalDispatchEvent;
+    }
   });
 
   it("opens the sidebar quick shortcut panel above settings", () => {
