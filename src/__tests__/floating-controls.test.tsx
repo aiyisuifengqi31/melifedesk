@@ -14,6 +14,18 @@ describe("floating page controls", () => {
     });
     expect(screen.getByTestId("secondary-tab-slot-stats")).toHaveStyle({ flex: 1, minWidth: 0 });
     expect(screen.getByTestId("secondary-tab-stats")).toHaveStyle({ flex: 1 });
+    expect(screen.getByTestId("secondary-tab-indicator")).toHaveStyle({
+      bottom: 0,
+      top: 0,
+      width: "25%"
+    });
+    expect(screen.getByTestId("secondary-tab-indicator-pill")).toHaveStyle({
+      backgroundColor: "rgba(93, 178, 235, 0.14)",
+      borderRadius: 9999,
+      left: 6,
+      right: 6
+    });
+    expect(screen.getByTestId("secondary-tab-stats")).not.toHaveStyle({ backgroundColor: expect.any(String) });
   });
 
   it("aligns secondary tabs to the desktop content area instead of covering the sidebar", () => {
