@@ -37,11 +37,25 @@ describe("floating page controls", () => {
     });
   });
 
+  it("uses one compact app-shell bottom inset instead of stacking page spacers", () => {
+    render(<AppShell initialRoute="/finance" viewport="mobile" />);
+
+    expect(screen.getByTestId("page-content").props.contentContainerStyle).toEqual(
+      expect.objectContaining({
+        paddingBottom: 96
+      })
+    );
+  });
+
   it("shares the same fixed secondary tab bar across love diary, exam, and entertainment", () => {
     const { rerender } = render(<AppShell route="/love" viewport="mobile" />);
 
     expect(screen.queryByTestId("love-floating-tabs")).toBeNull();
     expect(screen.getByTestId("secondary-floating-tabs")).toBeOnTheScreen();
+    expect(screen.getByTestId("love-diary-publish-fab-shell")).toHaveStyle({
+      position: "fixed" as "absolute",
+      right: 18
+    });
 
     rerender(<AppShell route="/exam" viewport="mobile" />);
 

@@ -58,6 +58,8 @@ type ShortcutRequest = {
 const app = getPublicAppConfig();
 const PRIMARY_ROUTE_KEYS: RouteKey[] = ["home", "plan", "finance", "love"];
 const MORE_ROUTE_KEYS: RouteKey[] = ["exam", "workout", "fun"];
+const PAGE_BOTTOM_GAP = 32;
+const SECONDARY_TAB_CONTENT_BOTTOM_PADDING = 96;
 const navItemByKey = (key: RouteKey) => NAV_ITEMS.find((item) => item.key === key);
 const PRIMARY_NAV_ITEMS = PRIMARY_ROUTE_KEYS.map(navItemByKey).filter((item): item is NavItem => Boolean(item));
 const MORE_NAV_ITEMS = MORE_ROUTE_KEYS.map(navItemByKey).filter((item): item is NavItem => Boolean(item));
@@ -1124,7 +1126,7 @@ function createStyles(
     contentInner: {
       gap: 16,
       padding: contentPadding,
-      paddingBottom: hasSecondaryTabs ? 132 : 42
+      paddingBottom: hasSecondaryTabs ? SECONDARY_TAB_CONTENT_BOTTOM_PADDING : PAGE_BOTTOM_GAP
     },
     secondaryTabs: {
       bottom: Platform.OS === "web" ? ("calc(12px + env(safe-area-inset-bottom))" as unknown as number) : 12,

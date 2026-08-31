@@ -533,7 +533,7 @@ function createStyles(tokens: UiTokens) {
     sourceChipText: { color: tokens.textMuted, fontSize: 13, fontWeight: "800", textAlign: "center" },
     sourceChipTextActive: { color: "#ffffff" },
     sourceRow: { flexDirection: "row", gap: 8 },
-    stack: { gap: 16, paddingBottom: 108 },
+    stack: { gap: 16 },
     summary: { color: tokens.textMuted, fontSize: 12, lineHeight: 18 },
     tab: { alignItems: "center", borderRadius: 12, flex: 1, justifyContent: "center", minWidth: 0, paddingHorizontal: 4, paddingVertical: 10 },
     tabActive: { backgroundColor: tokens.surface },

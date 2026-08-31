@@ -1015,15 +1015,19 @@ export function LovePanel({
             )}
           </View>
           {showDiaryFab ? (
-            <PressableScale
-              accessibilityRole="button"
-              accessibilityLabel="发布恋爱日记"
-              onPress={openDiaryComposer}
-              style={styles.diaryFab}
-              testID="love-diary-publish-fab"
-            >
-              <Text style={styles.diaryFabText}>+</Text>
-            </PressableScale>
+            <PortalLayer>
+              <PressableScale
+                accessibilityRole="button"
+                accessibilityLabel="发布恋爱日记"
+                onPress={openDiaryComposer}
+                style={styles.diaryFab}
+                testID="love-diary-publish-fab"
+                wrapperStyle={styles.diaryFabShell}
+                wrapperTestID="love-diary-publish-fab-shell"
+              >
+                <Text style={styles.diaryFabText}>+</Text>
+              </PressableScale>
+            </PortalLayer>
           ) : null}
         </>
       ) : null}
@@ -2476,17 +2480,19 @@ const styles = StyleSheet.create({
     borderColor: "#ffd7e0",
     borderRadius: 999,
     borderWidth: 3,
-    bottom: "calc(94px + env(safe-area-inset-bottom, 0px))" as unknown as number,
     elevation: 12,
     height: 58,
     justifyContent: "center",
-    position: "fixed" as "absolute",
-    right: 18,
     shadowColor: "#ef7f98",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.24,
     shadowRadius: 18,
-    width: 58,
+    width: 58
+  },
+  diaryFabShell: {
+    bottom: "calc(80px + env(safe-area-inset-bottom, 0px))" as unknown as number,
+    position: "fixed" as "absolute",
+    right: 18,
     zIndex: 1000
   },
   diaryFabText: {
@@ -3373,7 +3379,6 @@ const styles = StyleSheet.create({
   },
   stack: {
     gap: 12,
-    paddingBottom: 108,
     position: "relative"
   },
   switchThumb: {

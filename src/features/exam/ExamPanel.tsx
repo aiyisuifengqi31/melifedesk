@@ -637,7 +637,7 @@ function createStyles(tokens: UiTokens) {
     softButtonActive: { backgroundColor: tokens.accent, borderColor: tokens.accent },
     softButtonText: { color: tokens.accent, fontSize: 12, fontWeight: "900" },
     softButtonTextActive: { color: "#ffffff" },
-    stack: { gap: 16, paddingBottom: 108 },
+    stack: { gap: 16 },
     statBox: { backgroundColor: tokens.surfaceMuted, borderRadius: 14, flex: 1, minWidth: 120, padding: 12 },
     statLabel: { color: tokens.textMuted, fontSize: 12, fontWeight: "800" },
     statValue: { color: tokens.text, fontSize: 18, fontWeight: "900", marginTop: 4 },

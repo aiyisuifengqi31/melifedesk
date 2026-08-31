@@ -3364,7 +3364,6 @@ const styles = StyleSheet.create({
   },
   stack: {
     gap: 18,
-    paddingBottom: 108,
     position: "relative"
   },
   tab: {
