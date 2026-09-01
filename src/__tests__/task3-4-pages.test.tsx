@@ -4,6 +4,13 @@ import { TextInput } from "react-native";
 import { AppShell } from "@/components/AppShell";
 import { isPackageDraftAddable, PackagePanel } from "@/features/plan/PackagePanel";
 
+function mockBrowserRoute(pathname: string) {
+  Object.defineProperty(window, "location", {
+    configurable: true,
+    value: { hash: "", pathname }
+  });
+}
+
 const testTokens = {
   accent: "#7cb87c",
   accentSoft: "#e2f2e2",
@@ -16,6 +23,10 @@ const testTokens = {
 };
 
 describe("Task 3 and Task 4 pages", () => {
+  beforeEach(() => {
+    mockBrowserRoute("/");
+  });
+
   it("renders the daily plan workspace controls without the duplicate home todo module", () => {
     render(<AppShell initialRoute="/plan" />);
 
@@ -30,6 +41,14 @@ describe("Task 3 and Task 4 pages", () => {
     expect(screen.getByText("训练时间")).toBeOnTheScreen();
     expect(screen.getByText("训练部位")).toBeOnTheScreen();
     expect(screen.getByText("本周训练统计")).toBeOnTheScreen();
+  });
+
+  it("shows the workout add button immediately when entering workout before the browser route catches up", () => {
+    mockBrowserRoute("/home");
+
+    render(<AppShell initialRoute="/workout" />);
+
+    expect(screen.getByRole("button", { name: "添加运动记录" })).toBeOnTheScreen();
   });
 
   it("keeps manual package entry compact and collapsed behind the screenshot-first flow", () => {

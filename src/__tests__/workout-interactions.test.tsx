@@ -173,6 +173,8 @@ describe("WorkoutPanel interactions", () => {
     fireEvent.press(screen.getByRole("button", { name: "保存记录" }));
 
     expect(await screen.findAllByText("40分钟")).toHaveLength(1);
+    expect(screen.getByText("背 ×1")).toBeOnTheScreen();
+    expect(screen.getByText("1条")).toBeOnTheScreen();
     expect(screen.getByText("✓ 已记录：背 · 40分钟")).toBeOnTheScreen();
 
     rerender(<WorkoutPanel storage={storage} />);
