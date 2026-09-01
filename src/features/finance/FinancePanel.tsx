@@ -54,8 +54,7 @@ export type FinanceTab = "record" | "stats" | "gifts" | "saving" | "category";
 export const financeTabs: FixedBottomTabItem<FinanceTab>[] = [
   { label: "统计", value: "stats" },
   { label: "份子", value: "gifts" },
-  { label: "储蓄", value: "saving" },
-  { label: "分类", value: "category" }
+  { label: "储蓄", value: "saving" }
 ];
 
 const financeTokens: UiTokens = {

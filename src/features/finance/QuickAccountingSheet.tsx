@@ -6,14 +6,17 @@ import type { TransactionType } from "@/features/finance/financeService";
 import {
   createFinanceId,
   getDefaultFinanceStorage,
+  loadCustomCategories,
   loadFinanceTransactions,
   loadGiftRecords,
   loadSavingEntries,
+  saveCustomCategories,
   saveFinanceTransactions,
   saveGiftRecords,
   saveSavingEntries,
   sortGiftRecords,
   sortTransactions,
+  type CustomCategory,
   type FinanceStorage,
   type FinanceTransaction,
   type GiftRecord,
@@ -48,6 +51,9 @@ export function QuickAccountingSheet({ initialType = "expense", onClose, onSaved
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [note, setNote] = useState("");
   const [giftName, setGiftName] = useState("");
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [customCategories, setCustomCategories] = useState<CustomCategory[]>(() => loadCustomCategories(financeStorage));
   const styles = useMemo(() => createStyles(tokens), [tokens]);
 
   useEffect(() => {
@@ -60,9 +66,18 @@ export function QuickAccountingSheet({ initialType = "expense", onClose, onSaved
     setDatePickerOpen(false);
     setNote("");
     setGiftName("");
-  }, [initialType, visible]);
+    setCategoryManagerOpen(false);
+    setNewCategoryName("");
+    setCustomCategories(loadCustomCategories(financeStorage));
+  }, [financeStorage, initialType, visible]);
 
-  const categories = transactionType === "expense" ? expenseCategories : incomeCategories;
+  const categories = useMemo(() => {
+    const base = transactionType === "expense" ? expenseCategories : incomeCategories;
+    const custom = customCategories
+      .filter((category) => category.transactionType === transactionType && !base.includes(category.name))
+      .map((category) => category.name);
+    return [...base, ...custom];
+  }, [customCategories, transactionType]);
 
   if (!visible) return null;
 
@@ -86,6 +101,27 @@ export function QuickAccountingSheet({ initialType = "expense", onClose, onSaved
   const canSave = Boolean(cleanAmount);
   const isGiftExpense = transactionType === "expense" && selectedCategory === "随份子";
   const isSavingExpense = transactionType === "expense" && selectedCategory === "储蓄";
+
+  const addCustomCategory = () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    if (categories.includes(name)) {
+      setNewCategoryName("");
+      return;
+    }
+    const next = [
+      ...customCategories,
+      {
+        createTime: new Date().toISOString(),
+        id: createFinanceId("category"),
+        name,
+        transactionType
+      }
+    ];
+    setCustomCategories(next);
+    saveCustomCategories(next, financeStorage);
+    setNewCategoryName("");
+  };
 
   const save = () => {
     if (!cleanAmount || !selectedCategory) return;
@@ -182,6 +218,44 @@ export function QuickAccountingSheet({ initialType = "expense", onClose, onSaved
                 </Pressable>
               ))}
             </View>
+            <View style={styles.categoryToolRow}>
+              <Pressable accessibilityRole="button" accessibilityLabel="新建分类" onPress={() => setCategoryManagerOpen((open) => !open)} style={styles.categoryToolButton}>
+                <Text style={styles.categoryToolText}>+ 新建分类</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="管理分类" onPress={() => setCategoryManagerOpen((open) => !open)} style={styles.categoryToolButton}>
+                <Text style={styles.categoryToolText}>管理分类</Text>
+              </Pressable>
+            </View>
+            {categoryManagerOpen ? (
+              <View style={styles.categoryManager}>
+                <Text style={styles.categoryManagerTitle}>自定义分类</Text>
+                <View style={styles.categoryCreateRow}>
+                  <TextInput
+                    accessibilityLabel="新分类名称"
+                    onChangeText={setNewCategoryName}
+                    placeholder="分类名称"
+                    style={styles.categoryCreateInput}
+                    value={newCategoryName}
+                  />
+                  <Pressable accessibilityRole="button" accessibilityLabel="创建分类" onPress={addCustomCategory} style={styles.categoryCreateButton}>
+                    <Text style={styles.categoryCreateText}>创建</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.categoryMiniList}>
+                  {customCategories.filter((category) => category.transactionType === transactionType).length === 0 ? (
+                    <Text style={styles.categoryEmptyText}>暂无自定义分类</Text>
+                  ) : (
+                    customCategories
+                      .filter((category) => category.transactionType === transactionType)
+                      .map((category) => (
+                        <Pressable key={category.id} accessibilityRole="button" accessibilityLabel={`选择分类：${category.name}`} onPress={() => chooseCategory(category.name)} style={styles.categoryMiniChip}>
+                          <Text style={styles.categoryMiniText}>{category.name}</Text>
+                        </Pressable>
+                      ))
+                  )}
+                </View>
+              </View>
+            ) : null}
           </ScrollView>
         ) : (
           <View style={styles.sheetContent}>
@@ -354,6 +428,40 @@ function createStyles(tokens: UiTokens) {
       gap: 6,
       minWidth: 0
     },
+    categoryCreateButton: {
+      alignItems: "center",
+      backgroundColor: tokens.accent,
+      borderRadius: 12,
+      justifyContent: "center",
+      minHeight: 42,
+      paddingHorizontal: 14
+    },
+    categoryCreateInput: {
+      backgroundColor: "#ffffff",
+      borderColor: tokens.border,
+      borderRadius: 12,
+      borderWidth: 1,
+      color: tokens.text,
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "800",
+      minHeight: 42,
+      paddingHorizontal: 12
+    },
+    categoryCreateRow: {
+      flexDirection: "row",
+      gap: 8
+    },
+    categoryCreateText: {
+      color: "#ffffff",
+      fontSize: 13,
+      fontWeight: "900"
+    },
+    categoryEmptyText: {
+      color: tokens.textMuted,
+      fontSize: 12,
+      fontWeight: "800"
+    },
     categoryGrid: {
       flexDirection: "row",
       flexWrap: "wrap",
@@ -376,6 +484,59 @@ function createStyles(tokens: UiTokens) {
       maxWidth: "100%",
       minHeight: 30,
       textAlign: "center"
+    },
+    categoryManager: {
+      backgroundColor: tokens.surfaceMuted,
+      borderColor: tokens.border,
+      borderRadius: 16,
+      borderWidth: 1,
+      gap: 10,
+      marginTop: 12,
+      padding: 12
+    },
+    categoryManagerTitle: {
+      color: tokens.text,
+      fontSize: 14,
+      fontWeight: "900"
+    },
+    categoryMiniChip: {
+      backgroundColor: "#ffffff",
+      borderColor: tokens.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      paddingHorizontal: 10,
+      paddingVertical: 6
+    },
+    categoryMiniList: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6
+    },
+    categoryMiniText: {
+      color: tokens.text,
+      fontSize: 12,
+      fontWeight: "800"
+    },
+    categoryToolButton: {
+      alignItems: "center",
+      backgroundColor: tokens.surfaceMuted,
+      borderColor: tokens.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      flex: 1,
+      justifyContent: "center",
+      minHeight: 40,
+      paddingHorizontal: 10
+    },
+    categoryToolRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 14
+    },
+    categoryToolText: {
+      color: tokens.textMuted,
+      fontSize: 12,
+      fontWeight: "900"
     },
     closeButton: {
       paddingHorizontal: 8,

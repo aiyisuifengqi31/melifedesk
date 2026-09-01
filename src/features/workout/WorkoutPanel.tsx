@@ -1,12 +1,14 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useCallback } from "react";
+import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { getSupabaseClient } from "@/auth/supabaseClient";
 import { getCurrentCoupleId, getCurrentPartnerId } from "@/auth/partnership";
 import { loadLoveSharedValue, saveLoveSharedValue } from "@/features/love/loveSharedCloud";
 import { PuppyIllustration } from "@/shared/ui/PuppyIllustration";
+import { PressableScale } from "@/shared/ui/PressableScale";
 import { CollapsibleSectionFooter, sortByNewest, useCollapsibleList } from "@/shared/ui/CollapsibleList";
 import {
   addWorkoutPart,
@@ -33,6 +35,7 @@ import {
 } from "@/features/workout/workoutStorage";
 
 type WorkoutPanelProps = {
+  routeActive?: boolean;
   storage?: WorkoutStorage;
 };
 
@@ -41,6 +44,7 @@ type LogFilter = "all" | "currentMonth" | "lastMonth";
 type AnchorRect = { height: number; left: number; top: number; width: number };
 type DataTrendType = "training" | "weight" | "fat";
 type WorkoutOwnerView = "mine" | "partner";
+type WorkoutRecordMode = "training" | "body";
 
 const WORKOUT_PARTS: Array<{ icon: string; name: string }> = [
   { icon: "❤️", name: "胸" },
@@ -80,7 +84,18 @@ const toLocalIso = (date: Date) => {
 };
 const todayIso = () => toLocalIso(new Date());
 
-export function WorkoutPanel({ storage }: WorkoutPanelProps) {
+function parseIsoDate(dateText: string) {
+  const [year, month, day] = dateText.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function shiftIsoDate(dateText: string, days: number) {
+  const date = parseIsoDate(dateText);
+  date.setDate(date.getDate() + days);
+  return toLocalIso(date);
+}
+
+export function WorkoutPanel({ routeActive = true, storage }: WorkoutPanelProps) {
   const workoutStorage = useMemo(() => storage ?? getDefaultWorkoutStorage(), [storage]);
   const cachedPartnerUserId = useMemo(() => loadCachedPartnerUserId(workoutStorage), [workoutStorage]);
   const [logs, setLogs] = useState<WorkoutLog[]>(() => sortWorkoutLogs(loadLocalWorkouts(workoutStorage)));
@@ -90,6 +105,9 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
   const [bodyFatInput, setBodyFatInput] = useState("");
   const [selectedPart, setSelectedPart] = useState<string | null>(null);
   const [durationMinutes, setDurationMinutes] = useState(40);
+  const [recordModalOpen, setRecordModalOpen] = useState(false);
+  const [recordMode, setRecordMode] = useState<WorkoutRecordMode>("training");
+  const [selectedDate, setSelectedDate] = useState(todayIso());
   const [feedback, setFeedback] = useState("");
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("week");
   const [dataTrend, setDataTrend] = useState<DataTrendType>("training");
@@ -299,15 +317,36 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
 
   const closePopover = () => setPopover(null);
 
-  const changeBodyDate = () => {
-    if (typeof window === "undefined" || typeof window.prompt !== "function") return;
-    const nextDate = window.prompt("记录日期（YYYY-MM-DD）", bodyDate);
-    if (!nextDate) return;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) {
-      setFeedback("请输入正确日期，例如 2026-08-11");
-      return;
+  const openRecordModal = (mode: WorkoutRecordMode = "training") => {
+    const today = todayIso();
+    setRecordMode(mode);
+    setSelectedDate(today);
+    setBodyDate(today);
+    setSelectedPart(null);
+    setDurationMinutes(40);
+    setEditingLogId(null);
+    closePopover();
+    setRecordModalOpen(true);
+  };
+
+  const closeRecordModal = () => {
+    setRecordModalOpen(false);
+    setEditingLogId(null);
+    closePopover();
+  };
+
+  const selectRecordMode = (mode: WorkoutRecordMode) => {
+    setRecordMode(mode);
+    if (mode === "body") {
+      setBodyDate(selectedDate);
     }
-    setBodyDate(nextDate);
+  };
+
+  const selectRecordDate = (dateText: string) => {
+    setSelectedDate(dateText);
+    if (recordMode === "body") {
+      setBodyDate(dateText);
+    }
   };
 
   const saveBodyMetric = () => {
@@ -324,27 +363,32 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       return;
     }
 
+    const metricDate = selectedDate;
     const now = new Date().toISOString();
-    const existing = bodyMetrics.find((metric) => metric.recordDate === bodyDate);
+    const existing = bodyMetrics.find((metric) => metric.recordDate === metricDate);
     const nextMetric: BodyMetricLog = {
       bodyFatPercent,
       createTime: existing?.createTime ?? now,
       id: existing?.id ?? createBodyMetricId(),
-      recordDate: bodyDate,
+      recordDate: metricDate,
       updateTime: now,
       weightKg: normalizeBodyNumber(weightKg)
     };
-    persistBodyMetrics([nextMetric, ...bodyMetrics.filter((metric) => metric.recordDate !== bodyDate)]);
+    persistBodyMetrics([nextMetric, ...bodyMetrics.filter((metric) => metric.recordDate !== metricDate)]);
     setWeightInput(formatDecimalInput(nextMetric.weightKg));
     setBodyFatInput(nextMetric.bodyFatPercent ? formatDecimalInput(nextMetric.bodyFatPercent) : "");
     setSelectedMetricPoint(nextMetric);
+    closeRecordModal();
     setFeedback("✓ 身体数据已记录");
   };
 
   const editWorkout = (log: WorkoutLog) => {
     setSelectedPart(log.parts[0] ?? null);
     setDurationMinutes(log.durationMinutes || 40);
+    setSelectedDate(log.sessionDate);
+    setRecordMode("training");
     setEditingLogId(log.id);
+    setRecordModalOpen(true);
     closePopover();
     setFeedback("正在编辑这条训练记录。");
   };
@@ -368,18 +412,19 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       kcal: 0,
       kcalSource: "manual",
       parts: [selectedPart],
-      sessionDate: todayIso(),
+      sessionDate: selectedDate,
       status: "trained",
       title: selectedPart
     };
 
     const nextLogs = editingLogId
-      ? logs.map((item) => (item.id === editingLogId ? { ...item, durationMinutes, parts: [selectedPart], title: selectedPart } : item))
+      ? logs.map((item) => (item.id === editingLogId ? { ...item, durationMinutes, parts: [selectedPart], sessionDate: selectedDate, title: selectedPart } : item))
       : [log, ...logs];
     if (!editingLogId && currentUserId && activeCoupleId) {
       workoutSyncingRef.current.add(log.id);
     }
     persistLogs(nextLogs);
+    closeRecordModal();
     setFeedback(`✓ 已记录：${selectedPart} · ${durationMinutes}分钟`);
     if (editingLogId) {
       setEditingLogId(null);
@@ -449,60 +494,24 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
         <Text style={styles.todayStatusText}>{formatTodayStatus(todayLogs)}</Text>
       </View>
 
-      <View style={styles.bodyRecordCard}>
+      <View style={styles.todayDataCard}>
         <View style={styles.cardHeaderRow}>
-          <Text style={styles.chartTitle}>身体记录</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="修改身体记录日期" onPress={changeBodyDate} style={styles.bodyDateButton}>
-            <Text style={styles.bodyDateText}>{formatMonthDay(bodyDate)}</Text>
-          </Pressable>
+          <Text style={styles.cardTitle}>今日运动</Text>
+          <Text style={styles.weekRange}>{formatMonthDay(todayKey)}</Text>
         </View>
-        <View style={styles.bodyRecordRow}>
-          <View style={styles.bodyInputWrap}>
-            <TextInput
-              accessibilityLabel="体重"
-              inputMode="decimal"
-              keyboardType="decimal-pad"
-              onChangeText={setWeightInput}
-              placeholder="体重"
-              style={styles.bodyInput}
-              value={weightInput}
-            />
-            <Text style={styles.bodyUnit}>kg</Text>
+        <View style={styles.todayDataRow}>
+          <View style={styles.todayDataCell}>
+            <Text style={styles.todayDataValue}>{todayLogs.length}</Text>
+            <Text style={styles.todayDataLabel}>训练次数</Text>
           </View>
-          <View style={styles.bodyInputWrap}>
-            <TextInput
-              accessibilityLabel="体脂率"
-              inputMode="decimal"
-              keyboardType="decimal-pad"
-              onChangeText={setBodyFatInput}
-              placeholder="体脂率"
-              style={styles.bodyInput}
-              value={bodyFatInput}
-            />
-            <Text style={styles.bodyUnit}>%</Text>
+          <View style={styles.todayDataCell}>
+            <Text style={styles.todayDataValue}>{todayLogs.reduce((sum, log) => sum + log.durationMinutes, 0)}</Text>
+            <Text style={styles.todayDataLabel}>分钟</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="保存身体数据" onPress={saveBodyMetric} style={styles.bodySaveButton}>
-            <Text style={styles.bodySaveText}>保存</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.card}>
-        <View style={styles.todayStatusRow}>
-          <Text style={styles.cardTitle}>记录训练</Text>
-        </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="选择训练部位" onPress={(event) => openPopover("part", event)} style={styles.selectButton}>
-          <Text style={styles.selectButtonText}>{selectedPart ? `${getWorkoutPartIcon(selectedPart)} ${selectedPart}` : "选择训练部位"}</Text>
-          <Text style={styles.selectChevron}>▼</Text>
-        </Pressable>
-        <View style={styles.recordActionRow}>
-          <Pressable accessibilityRole="button" accessibilityLabel="选择训练时长" onPress={(event) => openPopover("duration", event)} style={styles.durationSelect}>
-            <Text style={styles.selectButtonText}>{durationMinutes}分钟</Text>
-            <Text style={styles.selectChevron}>▼</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="保存记录" nativeID="workout-save-button" onPress={saveWorkout} style={styles.saveButton}>
-            <Text style={styles.saveText}>{editingLogId ? "更新记录" : "保存记录"}</Text>
-          </Pressable>
+          <View style={styles.todayDataCell}>
+            <Text style={styles.todayDataValue}>{latestBodyMetric ? formatDecimalInput(latestBodyMetric.weightKg) : "--"}</Text>
+            <Text style={styles.todayDataLabel}>最新体重</Text>
+          </View>
         </View>
         {feedback ? <Text nativeID="workout-feedback" style={styles.feedback}>{feedback}</Text> : null}
       </View>
@@ -640,6 +649,88 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
         )}
       </View>
 
+      {recordModalOpen ? (
+        <WorkoutPortal>
+          <View style={styles.recordModalOverlay}>
+            <Pressable accessibilityRole="button" accessibilityLabel="关闭运动记录弹窗遮罩" onPress={closeRecordModal} style={styles.recordModalBackdrop} />
+            <View style={styles.recordModalCard}>
+              <View style={styles.recordModalHeader}>
+                <Text style={styles.recordModalTitle}>{editingLogId ? "编辑运动记录" : "添加运动记录"}</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="关闭运动记录弹窗" onPress={closeRecordModal} style={styles.recordModalClose}>
+                  <Text style={styles.recordModalCloseText}>×</Text>
+                </Pressable>
+              </View>
+              <View style={styles.recordModeRow}>
+                <Pressable accessibilityRole="button" accessibilityLabel="训练" onPress={() => selectRecordMode("training")} style={[styles.recordModeButton, recordMode === "training" ? styles.recordModeButtonActive : null]}>
+                  <Text style={[styles.recordModeText, recordMode === "training" ? styles.recordModeTextActive : null]}>训练</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel="身体" onPress={() => selectRecordMode("body")} style={[styles.recordModeButton, recordMode === "body" ? styles.recordModeButtonActive : null]}>
+                  <Text style={[styles.recordModeText, recordMode === "body" ? styles.recordModeTextActive : null]}>身体</Text>
+                </Pressable>
+              </View>
+              <WorkoutDateWheel onChange={selectRecordDate} selectedDate={selectedDate} />
+              {recordMode === "training" ? (
+                <>
+                  <Pressable accessibilityRole="button" accessibilityLabel="选择训练部位" onPress={(event) => openPopover("part", event)} style={styles.selectButton}>
+                    <Text style={styles.selectButtonText}>{selectedPart ? `${getWorkoutPartIcon(selectedPart)} ${selectedPart}` : "选择训练部位"}</Text>
+                    <Text style={styles.selectChevron}>▼</Text>
+                  </Pressable>
+                  <View style={styles.recordActionRow}>
+                    <Pressable accessibilityRole="button" accessibilityLabel="选择训练时长" onPress={(event) => openPopover("duration", event)} style={styles.durationSelect}>
+                      <Text style={styles.selectButtonText}>{durationMinutes}分钟</Text>
+                      <Text style={styles.selectChevron}>▼</Text>
+                    </Pressable>
+                    <Pressable accessibilityRole="button" accessibilityLabel="保存记录" nativeID="workout-save-button" onPress={saveWorkout} style={styles.saveButton}>
+                      <Text style={styles.saveText}>{editingLogId ? "更新记录" : "保存记录"}</Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.bodyRecordRow}>
+                  <View style={styles.bodyInputWrap}>
+                    <TextInput
+                      accessibilityLabel="体重"
+                      inputMode="decimal"
+                      keyboardType="decimal-pad"
+                      onChangeText={setWeightInput}
+                      placeholder="体重"
+                      style={styles.bodyInput}
+                      value={weightInput}
+                    />
+                    <Text style={styles.bodyUnit}>kg</Text>
+                  </View>
+                  <View style={styles.bodyInputWrap}>
+                    <TextInput
+                      accessibilityLabel="体脂率"
+                      inputMode="decimal"
+                      keyboardType="decimal-pad"
+                      onChangeText={setBodyFatInput}
+                      placeholder="体脂率"
+                      style={styles.bodyInput}
+                      value={bodyFatInput}
+                    />
+                    <Text style={styles.bodyUnit}>%</Text>
+                  </View>
+                  <Pressable accessibilityRole="button" accessibilityLabel="保存身体数据" onPress={saveBodyMetric} style={styles.bodySaveButton}>
+                    <Text style={styles.bodySaveText}>保存</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          </View>
+        </WorkoutPortal>
+      ) : null}
+
+      {routeActive && ownerView === "mine" && !recordModalOpen ? (
+        <WorkoutPortal>
+          <View style={styles.workoutFabShell}>
+            <PressableScale accessibilityRole="button" accessibilityLabel="添加运动记录" onPress={() => openRecordModal("training")} style={styles.workoutFab}>
+              <Text style={styles.workoutFabText}>+</Text>
+            </PressableScale>
+          </View>
+        </WorkoutPortal>
+      ) : null}
+
       {popover ? (
         <WorkoutPopover
           durationMinutes={durationMinutes}
@@ -658,6 +749,42 @@ export function WorkoutPanel({ storage }: WorkoutPanelProps) {
       ) : null}
         </>
       )}
+    </View>
+  );
+}
+
+function WorkoutPortal({ children }: { children: ReactNode }) {
+  if (shouldUsePortal()) {
+    return createPortal(children, document.body);
+  }
+  return <>{children}</>;
+}
+
+function WorkoutDateWheel({ onChange, selectedDate }: { onChange: (date: string) => void; selectedDate: string }) {
+  const days = [-2, -1, 0, 1, 2].map((offset) => {
+    const dateText = shiftIsoDate(selectedDate, offset);
+    return {
+      dateText,
+      day: parseIsoDate(dateText).getDate(),
+      selected: offset === 0
+    };
+  });
+
+  return (
+    <View accessibilityValue={{ text: selectedDate }} style={styles.dateWheelWrap} testID="workout-date-wheel">
+      <Pressable accessibilityRole="button" accessibilityLabel="选择前一天" onPress={() => onChange(shiftIsoDate(selectedDate, -1))} style={styles.dateWheelArrow}>
+        <Text style={styles.dateWheelArrowText}>‹</Text>
+      </Pressable>
+      <View style={styles.dateWheelDays}>
+        {days.map((item) => (
+          <Pressable key={item.dateText} accessibilityRole="button" accessibilityLabel={`选择${item.dateText}`} onPress={() => onChange(item.dateText)} style={[styles.dateWheelDay, item.selected ? styles.dateWheelDayActive : null]}>
+            <Text style={[styles.dateWheelDayText, item.selected ? styles.dateWheelDayTextActive : null]}>{item.day}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel="选择后一天" onPress={() => onChange(shiftIsoDate(selectedDate, 1))} style={styles.dateWheelArrow}>
+        <Text style={styles.dateWheelArrowText}>›</Text>
+      </Pressable>
     </View>
   );
 }
@@ -2169,6 +2296,58 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800"
   },
+  todayDataCard: {
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderColor: "#e3e8ef",
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 10,
+    padding: 12
+  },
+  todayDataCell: {
+    alignItems: "center",
+    flex: 1
+  },
+  todayDataLabel: {
+    color: "#697386",
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 2
+  },
+  todayDataRow: {
+    flexDirection: "row",
+    gap: 6
+  },
+  todayDataValue: {
+    color: "#5a8a5a",
+    fontSize: 22,
+    fontWeight: "900"
+  },
+  workoutFab: {
+    alignItems: "center",
+    backgroundColor: "#7cb87c",
+    borderRadius: 999,
+    elevation: 16,
+    height: 64,
+    justifyContent: "center",
+    shadowColor: "#7cb87c",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    width: 64
+  },
+  workoutFabShell: {
+    bottom: 108,
+    position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
+    right: 18,
+    zIndex: 9700
+  },
+  workoutFabText: {
+    color: "#ffffff",
+    fontSize: 42,
+    fontWeight: "700",
+    lineHeight: 48
+  },
   durationRow: {
     alignItems: "center",
     flexDirection: "row",
@@ -2187,6 +2366,135 @@ const styles = StyleSheet.create({
     color: "#697386",
     fontSize: 14,
     fontWeight: "800"
+  },
+  dateWheelArrow: {
+    alignItems: "center",
+    borderRadius: 999,
+    height: 36,
+    justifyContent: "center",
+    width: 28
+  },
+  dateWheelArrowText: {
+    color: "#5a8a5a",
+    fontSize: 28,
+    fontWeight: "900",
+    lineHeight: 30
+  },
+  dateWheelDay: {
+    alignItems: "center",
+    borderRadius: 14,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 42
+  },
+  dateWheelDayActive: {
+    backgroundColor: "#7cb87c"
+  },
+  dateWheelDays: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 6
+  },
+  dateWheelDayText: {
+    color: "#697386",
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  dateWheelDayTextActive: {
+    color: "#ffffff"
+  },
+  dateWheelWrap: {
+    alignItems: "center",
+    backgroundColor: "#f7faf7",
+    borderColor: "#e3ebe3",
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    padding: 6
+  },
+  recordModalBackdrop: {
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0
+  },
+  recordModalCard: {
+    backgroundColor: "#ffffff",
+    borderColor: "#d8e8d8",
+    borderRadius: 22,
+    borderWidth: 1,
+    elevation: 24,
+    gap: 12,
+    left: 88,
+    maxWidth: 430,
+    padding: 14,
+    position: "absolute",
+    right: 14,
+    shadowColor: "#7cb87c",
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.2,
+    shadowRadius: 26,
+    top: "18%"
+  },
+  recordModalClose: {
+    alignItems: "center",
+    borderRadius: 999,
+    height: 32,
+    justifyContent: "center",
+    width: 32
+  },
+  recordModalCloseText: {
+    color: "#697386",
+    fontSize: 24,
+    fontWeight: "900",
+    lineHeight: 26
+  },
+  recordModalHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  recordModalOverlay: {
+    bottom: 0,
+    left: 0,
+    position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
+    right: 0,
+    top: 0,
+    zIndex: 9800
+  },
+  recordModalTitle: {
+    color: "#111827",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  recordModeButton: {
+    alignItems: "center",
+    borderRadius: 12,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 38
+  },
+  recordModeButtonActive: {
+    backgroundColor: "#e2f2e2"
+  },
+  recordModeRow: {
+    backgroundColor: "#f8fafc",
+    borderColor: "#e3e8ef",
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 4,
+    padding: 4
+  },
+  recordModeText: {
+    color: "#697386",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  recordModeTextActive: {
+    color: "#5a8a5a"
   },
   statLine: {
     color: "#111827",

@@ -154,10 +154,10 @@ describe("WorkoutPanel interactions", () => {
     render(<WorkoutPanel storage={makeStorage()} />);
 
     expect(screen.queryByPlaceholderText("自我感受")).toBeNull();
-    expect(screen.queryByPlaceholderText("备注")).toBeNull();
-    expect(screen.getByRole("button", { name: "选择训练部位" })).toHaveStyle({
-      flexDirection: "row"
-    });
+    expect(screen.queryByRole("button", { name: "选择训练部位" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "保存身体数据" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "保存记录" })).toBeNull();
+    expect(screen.getByRole("button", { name: "添加运动记录" })).toBeOnTheScreen();
     expect(screen.queryByText("最近30天")).toBeNull();
     expect(screen.queryByText("连续训练")).toBeNull();
     expect(screen.queryByText("高频部位")).toBeNull();
@@ -167,19 +167,20 @@ describe("WorkoutPanel interactions", () => {
     const storage = makeStorage();
     const { rerender } = render(<WorkoutPanel storage={storage} />);
 
+    fireEvent.press(screen.getByRole("button", { name: "添加运动记录" }));
     fireEvent.press(screen.getByRole("button", { name: "选择训练部位" }));
     fireEvent.press(screen.getByRole("button", { name: "选择训练部位：背" }));
     fireEvent.press(screen.getByRole("button", { name: "保存记录" }));
 
-    expect(await screen.findAllByText("40分钟")).toHaveLength(2);
+    expect(await screen.findAllByText("40分钟")).toHaveLength(1);
     expect(screen.getByText("✓ 已记录：背 · 40分钟")).toBeOnTheScreen();
 
     rerender(<WorkoutPanel storage={storage} />);
-    expect(await screen.findAllByText("40分钟")).toHaveLength(2);
+    expect(await screen.findAllByText("40分钟")).toHaveLength(1);
 
     fireEvent.press(screen.getByRole("button", { name: "打开训练记录菜单：背" }));
     fireEvent.press(screen.getByRole("button", { name: "删除训练记录：背" }));
-    await waitFor(() => expect(screen.queryAllByText("40分钟")).toHaveLength(1));
+    await waitFor(() => expect(screen.queryAllByText("40分钟")).toHaveLength(0));
     expect(screen.getByText("训练记录已删除。")).toBeOnTheScreen();
   });
 
@@ -187,6 +188,8 @@ describe("WorkoutPanel interactions", () => {
     const storage = makeStorage();
     const { rerender } = render(<WorkoutPanel storage={storage} />);
 
+    fireEvent.press(screen.getByRole("button", { name: "添加运动记录" }));
+    fireEvent.press(screen.getByRole("button", { name: "身体" }));
     fireEvent.changeText(screen.getByPlaceholderText("体重"), "72.4");
     fireEvent.changeText(screen.getByPlaceholderText("体脂率"), "18.6");
     fireEvent.press(screen.getByRole("button", { name: "保存身体数据" }));
@@ -203,6 +206,30 @@ describe("WorkoutPanel interactions", () => {
 
     fireEvent.press(screen.getByRole("button", { name: "查看体脂趋势" }));
     expect(screen.getByText("最新 18.6%")).toBeOnTheScreen();
+  });
+
+  it("saves workout and body entries to the selected wheel date instead of today", async () => {
+    const storage = makeStorage();
+    render(<WorkoutPanel storage={storage} />);
+
+    fireEvent.press(screen.getByRole("button", { name: "添加运动记录" }));
+    fireEvent.press(screen.getByRole("button", { name: "选择前一天" }));
+    const selectedDate = screen.getByTestId("workout-date-wheel").props.accessibilityValue.text;
+
+    fireEvent.press(screen.getByRole("button", { name: "选择训练部位" }));
+    fireEvent.press(screen.getByRole("button", { name: "选择训练部位：腿" }));
+    fireEvent.press(screen.getByRole("button", { name: "保存记录" }));
+
+    expect(loadLocalWorkouts(storage)[0]).toEqual(expect.objectContaining({ sessionDate: selectedDate, title: "腿" }));
+
+    fireEvent.press(screen.getByRole("button", { name: "添加运动记录" }));
+    fireEvent.press(screen.getByRole("button", { name: "身体" }));
+    fireEvent.press(screen.getByRole("button", { name: "选择前一天" }));
+    const bodySelectedDate = screen.getByTestId("workout-date-wheel").props.accessibilityValue.text;
+    fireEvent.changeText(screen.getByPlaceholderText("体重"), "75.3");
+    fireEvent.press(screen.getByRole("button", { name: "保存身体数据" }));
+
+    expect(loadLocalBodyMetrics(storage)[0]).toEqual(expect.objectContaining({ recordDate: bodySelectedDate, weightKg: 75.3 }));
   });
 
   it("shows partner workout stats as read-only without body data or write actions", async () => {

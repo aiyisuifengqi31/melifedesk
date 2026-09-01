@@ -687,7 +687,7 @@ function PageContent({
         />
       ) : null}
       {activeKey === "plan" ? <DailyPlanPanel shortcutNonce={shortcutRequest?.nonce} shortcutTarget={shortcutRequest?.kind === "packages" ? "packages" : shortcutRequest?.kind === "packageScan" ? "packageScan" : undefined} themeTokens={tokens} /> : null}
-      {activeKey === "workout" ? <WorkoutPanel /> : null}
+      {activeKey === "workout" ? <WorkoutPanel routeActive={routeVisibleKey === "workout"} /> : null}
       {activeKey === "finance" ? (
         <FinancePanel
           activeTab={financeTab}
