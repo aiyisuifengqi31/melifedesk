@@ -42,6 +42,15 @@ type WorkoutPanelProps = {
 type WorkoutPopoverKind = "duration" | "log-filter" | "log-menu" | "part";
 type LogFilter = "all" | "currentMonth" | "lastMonth";
 type AnchorRect = { height: number; left: number; top: number; width: number };
+type ScrollLockSnapshot = {
+  left: string;
+  overflow: string;
+  position: string;
+  right: string;
+  scrollY: number;
+  top: string;
+  width: string;
+};
 type DataTrendType = "training" | "weight" | "fat";
 type WorkoutOwnerView = "mine" | "partner";
 type WorkoutRecordMode = "training" | "body";
@@ -106,6 +115,7 @@ export function WorkoutPanel({ routeActive = true, storage }: WorkoutPanelProps)
   const [selectedPart, setSelectedPart] = useState<string | null>(null);
   const [durationMinutes, setDurationMinutes] = useState(40);
   const [recordModalOpen, setRecordModalOpen] = useState(false);
+  const [recordModalClosing, setRecordModalClosing] = useState(false);
   const [recordMode, setRecordMode] = useState<WorkoutRecordMode>("training");
   const [selectedDate, setSelectedDate] = useState(todayIso());
   const [feedback, setFeedback] = useState("");
@@ -130,6 +140,8 @@ export function WorkoutPanel({ routeActive = true, storage }: WorkoutPanelProps)
   const bodyMetricsSnapshotRef = useRef(JSON.stringify(bodyMetrics));
   const sharedLogsSnapshotRef = useRef("");
   const workoutSyncingRef = useRef(new Set<string>());
+  const recordModalCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recordModalScrollLockRef = useRef<ScrollLockSnapshot | null>(null);
 
   const stats = useMemo(() => buildWorkoutStats(logs), [logs]);
   const latestBodyMetric = useMemo(() => findLatestBodyMetric(bodyMetrics, todayIso()), [bodyMetrics]);
@@ -294,6 +306,36 @@ export function WorkoutPanel({ routeActive = true, storage }: WorkoutPanelProps)
     return () => globalThis.clearTimeout(timer);
   }, [feedback]);
 
+  useEffect(() => {
+    return () => {
+      if (recordModalCloseTimerRef.current) {
+        clearTimeout(recordModalCloseTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (routeActive) return;
+    if (recordModalCloseTimerRef.current) {
+      clearTimeout(recordModalCloseTimerRef.current);
+      recordModalCloseTimerRef.current = null;
+    }
+    setRecordModalOpen(false);
+    setRecordModalClosing(false);
+    setEditingLogId(null);
+    setPopover(null);
+  }, [routeActive]);
+
+  useEffect(() => {
+    const shouldLock = routeActive && ownerView === "mine" && recordModalOpen;
+    if (!shouldLock || typeof document === "undefined") return undefined;
+    recordModalScrollLockRef.current = lockBodyScroll();
+    return () => {
+      unlockBodyScroll(recordModalScrollLockRef.current);
+      recordModalScrollLockRef.current = null;
+    };
+  }, [ownerView, recordModalOpen, routeActive]);
+
   const persistLogs = (nextLogs: WorkoutLog[]) => {
     localDirtyRef.current = true;
     const sorted = sortWorkoutLogs(nextLogs);
@@ -318,7 +360,12 @@ export function WorkoutPanel({ routeActive = true, storage }: WorkoutPanelProps)
   const closePopover = () => setPopover(null);
 
   const openRecordModal = (mode: WorkoutRecordMode = "training") => {
+    if (recordModalCloseTimerRef.current) {
+      clearTimeout(recordModalCloseTimerRef.current);
+      recordModalCloseTimerRef.current = null;
+    }
     const today = todayIso();
+    setRecordModalClosing(false);
     setRecordMode(mode);
     setSelectedDate(today);
     setBodyDate(today);
@@ -330,9 +377,25 @@ export function WorkoutPanel({ routeActive = true, storage }: WorkoutPanelProps)
   };
 
   const closeRecordModal = () => {
-    setRecordModalOpen(false);
+    if (!recordModalOpen) return;
+    if (Platform.OS !== "web") {
+      setRecordModalOpen(false);
+      setRecordModalClosing(false);
+      setEditingLogId(null);
+      closePopover();
+      return;
+    }
+    setRecordModalClosing(true);
     setEditingLogId(null);
     closePopover();
+    if (recordModalCloseTimerRef.current) {
+      clearTimeout(recordModalCloseTimerRef.current);
+    }
+    recordModalCloseTimerRef.current = setTimeout(() => {
+      setRecordModalOpen(false);
+      setRecordModalClosing(false);
+      recordModalCloseTimerRef.current = null;
+    }, 200);
   };
 
   const selectRecordMode = (mode: WorkoutRecordMode) => {
@@ -450,6 +513,16 @@ export function WorkoutPanel({ routeActive = true, storage }: WorkoutPanelProps)
     if (client && log.remoteId) {
       await softDeleteWorkoutSession(client, log.remoteId);
     }
+  };
+
+  const showWorkoutActions = routeActive && ownerView === "mine";
+  const workoutFabLabel = recordModalOpen ? "关闭运动记录浮动按钮" : "添加运动记录";
+  const handleWorkoutFabPress = () => {
+    if (recordModalOpen) {
+      closeRecordModal();
+      return;
+    }
+    openRecordModal("training");
   };
 
   return (
@@ -649,11 +722,17 @@ export function WorkoutPanel({ routeActive = true, storage }: WorkoutPanelProps)
         )}
       </View>
 
-      {recordModalOpen ? (
+      {showWorkoutActions && recordModalOpen ? (
         <WorkoutPortal>
           <View style={styles.recordModalOverlay}>
-            <Pressable accessibilityRole="button" accessibilityLabel="关闭运动记录弹窗遮罩" onPress={closeRecordModal} style={styles.recordModalBackdrop} />
-            <View style={styles.recordModalCard}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="关闭运动记录弹窗遮罩"
+              onPress={closeRecordModal}
+              style={[styles.recordModalBackdrop, recordModalClosing ? styles.recordModalBackdropClosing : null]}
+              testID="workout-modal-backdrop"
+            />
+            <View style={[styles.recordModalCard, recordModalClosing ? styles.recordModalCardClosing : null]}>
               <View style={styles.recordModalHeader}>
                 <Text style={styles.recordModalTitle}>{editingLogId ? "编辑运动记录" : "添加运动记录"}</Text>
                 <Pressable accessibilityRole="button" accessibilityLabel="关闭运动记录弹窗" onPress={closeRecordModal} style={styles.recordModalClose}>
@@ -721,11 +800,11 @@ export function WorkoutPanel({ routeActive = true, storage }: WorkoutPanelProps)
         </WorkoutPortal>
       ) : null}
 
-      {routeActive && ownerView === "mine" && !recordModalOpen ? (
+      {showWorkoutActions ? (
         <WorkoutPortal>
           <View style={styles.workoutFabShell}>
-            <PressableScale accessibilityRole="button" accessibilityLabel="添加运动记录" onPress={() => openRecordModal("training")} style={styles.workoutFab}>
-              <Text style={styles.workoutFabText}>+</Text>
+            <PressableScale accessibilityRole="button" accessibilityLabel={workoutFabLabel} onPress={handleWorkoutFabPress} style={[styles.workoutFab, recordModalOpen ? styles.workoutFabActive : null]}>
+              <Text style={[styles.workoutFabText, recordModalOpen ? styles.workoutFabTextActive : null]}>+</Text>
             </PressableScale>
           </View>
         </WorkoutPortal>
@@ -1379,6 +1458,38 @@ function getPopoverStyle(rect: AnchorRect, estimatedHeight = 220) {
 
 function shouldUsePortal() {
   return Platform.OS === "web" && typeof document !== "undefined" && Boolean(document.body) && (typeof process === "undefined" || process.env.NODE_ENV !== "test");
+}
+
+function lockBodyScroll(): ScrollLockSnapshot | null {
+  if (Platform.OS !== "web" || typeof document === "undefined" || typeof window === "undefined") return null;
+  const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  const snapshot: ScrollLockSnapshot = {
+    left: document.body.style.left,
+    overflow: document.body.style.overflow,
+    position: document.body.style.position,
+    right: document.body.style.right,
+    scrollY,
+    top: document.body.style.top,
+    width: document.body.style.width
+  };
+  document.body.style.position = "fixed";
+  document.body.style.top = `-${scrollY}px`;
+  document.body.style.left = "0";
+  document.body.style.right = "0";
+  document.body.style.width = "100%";
+  document.body.style.overflow = "hidden";
+  return snapshot;
+}
+
+function unlockBodyScroll(snapshot: ScrollLockSnapshot | null) {
+  if (Platform.OS !== "web" || !snapshot || typeof document === "undefined" || typeof window === "undefined") return;
+  document.body.style.position = snapshot.position;
+  document.body.style.top = snapshot.top;
+  document.body.style.left = snapshot.left;
+  document.body.style.right = snapshot.right;
+  document.body.style.width = snapshot.width;
+  document.body.style.overflow = snapshot.overflow;
+  window.scrollTo(0, snapshot.scrollY);
 }
 
 function WorkoutPopover({
@@ -2336,17 +2447,27 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     width: 64
   },
+  workoutFabActive: {
+    backgroundColor: "#6cab6c"
+  },
   workoutFabShell: {
     bottom: 108,
     position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
     right: 18,
-    zIndex: 9700
+    zIndex: 9900
   },
   workoutFabText: {
     color: "#ffffff",
     fontSize: 42,
     fontWeight: "700",
-    lineHeight: 48
+    lineHeight: 48,
+    transform: [{ rotate: "0deg" }],
+    transitionDuration: "200ms",
+    transitionProperty: "transform",
+    transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)"
+  } as never,
+  workoutFabTextActive: {
+    transform: [{ rotate: "45deg" }]
   },
   durationRow: {
     alignItems: "center",
@@ -2414,36 +2535,55 @@ const styles = StyleSheet.create({
     padding: 6
   },
   recordModalBackdrop: {
+    backgroundColor: "rgba(15, 23, 42, 0.16)",
     bottom: 0,
     left: 0,
     position: "absolute",
     right: 0,
-    top: 0
+    top: 0,
+    transitionDuration: "200ms",
+    transitionProperty: "opacity",
+    transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)"
+  } as never,
+  recordModalBackdropClosing: {
+    opacity: 0
   },
   recordModalCard: {
+    animationDuration: "220ms",
+    animationFillMode: "both",
+    animationName: "md-rise-in",
+    animationTimingFunction: "cubic-bezier(0.2, 0, 0, 1)",
     backgroundColor: "#ffffff",
     borderColor: "#d8e8d8",
     borderRadius: 22,
     borderWidth: 1,
     elevation: 24,
-    gap: 12,
+    gap: 9,
     left: 88,
     maxWidth: 430,
-    padding: 14,
+    padding: 12,
     position: "absolute",
     right: 14,
     shadowColor: "#7cb87c",
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.2,
     shadowRadius: 26,
-    top: "18%"
+    top: "24%",
+    transform: [{ translateY: 0 }, { scale: 1 }],
+    transitionDuration: "200ms",
+    transitionProperty: "opacity, transform",
+    transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)"
+  } as never,
+  recordModalCardClosing: {
+    opacity: 0,
+    transform: [{ translateY: 8 }, { scale: 0.96 }]
   },
   recordModalClose: {
     alignItems: "center",
     borderRadius: 999,
-    height: 32,
+    height: 30,
     justifyContent: "center",
-    width: 32
+    width: 30
   },
   recordModalCloseText: {
     color: "#697386",
@@ -2454,7 +2594,8 @@ const styles = StyleSheet.create({
   recordModalHeader: {
     alignItems: "center",
     flexDirection: "row",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    minHeight: 30
   },
   recordModalOverlay: {
     bottom: 0,
@@ -2474,7 +2615,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     flex: 1,
     justifyContent: "center",
-    minHeight: 38
+    minHeight: 34
   },
   recordModeButtonActive: {
     backgroundColor: "#e2f2e2"

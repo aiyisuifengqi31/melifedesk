@@ -163,6 +163,35 @@ describe("WorkoutPanel interactions", () => {
     expect(screen.queryByText("高频部位")).toBeNull();
   });
 
+  it("unmounts workout overlays when the route becomes inactive", () => {
+    const storage = makeStorage();
+    const { rerender } = render(<WorkoutPanel routeActive storage={storage} />);
+
+    fireEvent.press(screen.getByRole("button", { name: "添加运动记录" }));
+    expect(screen.getByText("添加运动记录")).toBeOnTheScreen();
+
+    rerender(<WorkoutPanel routeActive={false} storage={storage} />);
+
+    expect(screen.queryByRole("button", { name: "添加运动记录" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "关闭运动记录弹窗" })).toBeNull();
+    expect(screen.queryByText("添加运动记录")).toBeNull();
+  });
+
+  it("keeps the workout fab active as a close button while the record modal is open", async () => {
+    render(<WorkoutPanel storage={makeStorage()} />);
+
+    fireEvent.press(screen.getByRole("button", { name: "添加运动记录" }));
+
+    expect(screen.getByRole("button", { name: "关闭运动记录浮动按钮" })).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "关闭运动记录弹窗" })).toBeOnTheScreen();
+    expect(screen.getByTestId("workout-modal-backdrop")).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole("button", { name: "关闭运动记录浮动按钮" }));
+
+    await waitFor(() => expect(screen.queryByTestId("workout-modal-backdrop")).toBeNull());
+    expect(screen.getByRole("button", { name: "添加运动记录" })).toBeOnTheScreen();
+  });
+
   it("creates, persists, and deletes a real workout log", async () => {
     const storage = makeStorage();
     const { rerender } = render(<WorkoutPanel storage={storage} />);
