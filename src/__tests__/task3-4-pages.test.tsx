@@ -51,6 +51,13 @@ describe("Task 3 and Task 4 pages", () => {
     expect(screen.getByRole("button", { name: "添加运动记录" })).toBeOnTheScreen();
   });
 
+  it("hides the workout add button when the browser route has left workout before the shell route catches up", () => {
+    mockBrowserRoute("/home");
+    render(<AppShell route="/workout" />);
+
+    expect(screen.queryByRole("button", { name: "添加运动记录" })).toBeNull();
+  });
+
   it("keeps manual package entry compact and collapsed behind the screenshot-first flow", () => {
     render(<PackagePanel themeTokens={testTokens} />);
 

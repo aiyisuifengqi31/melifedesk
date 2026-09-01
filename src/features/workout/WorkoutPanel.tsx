@@ -115,7 +115,6 @@ export function WorkoutPanel({ routeActive = true, storage }: WorkoutPanelProps)
   const [selectedPart, setSelectedPart] = useState<string | null>(null);
   const [durationMinutes, setDurationMinutes] = useState(40);
   const [recordModalOpen, setRecordModalOpen] = useState(false);
-  const [recordModalClosing, setRecordModalClosing] = useState(false);
   const [recordMode, setRecordMode] = useState<WorkoutRecordMode>("training");
   const [selectedDate, setSelectedDate] = useState(todayIso());
   const [feedback, setFeedback] = useState("");
@@ -140,7 +139,6 @@ export function WorkoutPanel({ routeActive = true, storage }: WorkoutPanelProps)
   const bodyMetricsSnapshotRef = useRef(JSON.stringify(bodyMetrics));
   const sharedLogsSnapshotRef = useRef("");
   const workoutSyncingRef = useRef(new Set<string>());
-  const recordModalCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recordModalScrollLockRef = useRef<ScrollLockSnapshot | null>(null);
 
   const stats = useMemo(() => buildWorkoutStats(logs), [logs]);
@@ -307,21 +305,8 @@ export function WorkoutPanel({ routeActive = true, storage }: WorkoutPanelProps)
   }, [feedback]);
 
   useEffect(() => {
-    return () => {
-      if (recordModalCloseTimerRef.current) {
-        clearTimeout(recordModalCloseTimerRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     if (routeActive) return;
-    if (recordModalCloseTimerRef.current) {
-      clearTimeout(recordModalCloseTimerRef.current);
-      recordModalCloseTimerRef.current = null;
-    }
     setRecordModalOpen(false);
-    setRecordModalClosing(false);
     setEditingLogId(null);
     setPopover(null);
   }, [routeActive]);
@@ -360,12 +345,7 @@ export function WorkoutPanel({ routeActive = true, storage }: WorkoutPanelProps)
   const closePopover = () => setPopover(null);
 
   const openRecordModal = (mode: WorkoutRecordMode = "training") => {
-    if (recordModalCloseTimerRef.current) {
-      clearTimeout(recordModalCloseTimerRef.current);
-      recordModalCloseTimerRef.current = null;
-    }
     const today = todayIso();
-    setRecordModalClosing(false);
     setRecordMode(mode);
     setSelectedDate(today);
     setBodyDate(today);
@@ -378,24 +358,9 @@ export function WorkoutPanel({ routeActive = true, storage }: WorkoutPanelProps)
 
   const closeRecordModal = () => {
     if (!recordModalOpen) return;
-    if (Platform.OS !== "web") {
-      setRecordModalOpen(false);
-      setRecordModalClosing(false);
-      setEditingLogId(null);
-      closePopover();
-      return;
-    }
-    setRecordModalClosing(true);
+    setRecordModalOpen(false);
     setEditingLogId(null);
     closePopover();
-    if (recordModalCloseTimerRef.current) {
-      clearTimeout(recordModalCloseTimerRef.current);
-    }
-    recordModalCloseTimerRef.current = setTimeout(() => {
-      setRecordModalOpen(false);
-      setRecordModalClosing(false);
-      recordModalCloseTimerRef.current = null;
-    }, 200);
   };
 
   const selectRecordMode = (mode: WorkoutRecordMode) => {
@@ -729,10 +694,10 @@ export function WorkoutPanel({ routeActive = true, storage }: WorkoutPanelProps)
               accessibilityRole="button"
               accessibilityLabel="关闭运动记录弹窗遮罩"
               onPress={closeRecordModal}
-              style={[styles.recordModalBackdrop, recordModalClosing ? styles.recordModalBackdropClosing : null]}
+              style={styles.recordModalBackdrop}
               testID="workout-modal-backdrop"
             />
-            <View style={[styles.recordModalCard, recordModalClosing ? styles.recordModalCardClosing : null]}>
+            <View style={styles.recordModalCard}>
               <View style={styles.recordModalHeader}>
                 <Text style={styles.recordModalTitle}>{editingLogId ? "编辑运动记录" : "添加运动记录"}</Text>
                 <Pressable accessibilityRole="button" accessibilityLabel="关闭运动记录弹窗" onPress={closeRecordModal} style={styles.recordModalClose}>
@@ -2545,9 +2510,6 @@ const styles = StyleSheet.create({
     transitionProperty: "opacity",
     transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)"
   } as never,
-  recordModalBackdropClosing: {
-    opacity: 0
-  },
   recordModalCard: {
     animationDuration: "220ms",
     animationFillMode: "both",
@@ -2574,10 +2536,6 @@ const styles = StyleSheet.create({
     transitionProperty: "opacity, transform",
     transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)"
   } as never,
-  recordModalCardClosing: {
-    opacity: 0,
-    transform: [{ translateY: 8 }, { scale: 0.96 }]
-  },
   recordModalClose: {
     alignItems: "center",
     borderRadius: 999,

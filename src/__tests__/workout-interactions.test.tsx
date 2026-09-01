@@ -177,7 +177,7 @@ describe("WorkoutPanel interactions", () => {
     expect(screen.queryByText("添加运动记录")).toBeNull();
   });
 
-  it("keeps the workout fab active as a close button while the record modal is open", async () => {
+  it("keeps the workout fab active as a close button while the record modal is open", () => {
     render(<WorkoutPanel storage={makeStorage()} />);
 
     fireEvent.press(screen.getByRole("button", { name: "添加运动记录" }));
@@ -188,7 +188,7 @@ describe("WorkoutPanel interactions", () => {
 
     fireEvent.press(screen.getByRole("button", { name: "关闭运动记录浮动按钮" }));
 
-    await waitFor(() => expect(screen.queryByTestId("workout-modal-backdrop")).toBeNull());
+    expect(screen.queryByTestId("workout-modal-backdrop")).toBeNull();
     expect(screen.getByRole("button", { name: "添加运动记录" })).toBeOnTheScreen();
   });
 

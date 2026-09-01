@@ -525,6 +525,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
               onLoveTabChange={setLoveTab}
               onOpenQuickAccounting={() => setQuickAccountingOpen(true)}
               onOpenPackages={() => openShortcut("packages")}
+              routeControlled={Boolean(route)}
               shortcutRequest={shortcutRequest}
               styles={styles}
               themeEmptyState={theme.emptyState}
@@ -549,6 +550,7 @@ export function AppShell({ initialRoute = "/home", route, viewport, onNavigate }
             onLoveTabChange={setLoveTab}
             onOpenQuickAccounting={() => setQuickAccountingOpen(true)}
             onOpenPackages={() => openShortcut("packages")}
+            routeControlled={Boolean(route)}
             shortcutRequest={shortcutRequest}
             styles={styles}
             themeEmptyState={theme.emptyState}
@@ -646,6 +648,7 @@ function PageContent({
   onLoveTabChange,
   onOpenQuickAccounting,
   onOpenPackages,
+  routeControlled,
   shortcutRequest,
   styles,
   themeEmptyState,
@@ -665,6 +668,7 @@ function PageContent({
   onLoveTabChange: (tab: LoveTab) => void;
   onOpenQuickAccounting: () => void;
   onOpenPackages: () => void;
+  routeControlled: boolean;
   shortcutRequest: ShortcutRequest | null;
   styles: ReturnType<typeof createStyles>;
   themeEmptyState: string;
@@ -687,7 +691,7 @@ function PageContent({
         />
       ) : null}
       {activeKey === "plan" ? <DailyPlanPanel shortcutNonce={shortcutRequest?.nonce} shortcutTarget={shortcutRequest?.kind === "packages" ? "packages" : shortcutRequest?.kind === "packageScan" ? "packageScan" : undefined} themeTokens={tokens} /> : null}
-      {activeKey === "workout" ? <WorkoutPanel routeActive /> : null}
+      {activeKey === "workout" ? <WorkoutPanel routeActive={routeControlled ? routeVisibleKey === "workout" : true} /> : null}
       {activeKey === "finance" ? (
         <FinancePanel
           activeTab={financeTab}
