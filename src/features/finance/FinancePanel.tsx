@@ -13,21 +13,24 @@ import type { FixedBottomTabItem } from "@/shared/ui/FixedBottomTabs";
 import type { UiTokens } from "@/shared/ui/primitives";
 import { CategoryLineIcon } from "@/features/finance/QuickAccountingSheet";
 import { QUICK_CAPTURE_DATA_EVENT } from "@/features/quick-capture/quickCapture";
-import { buildMonthlyFinanceOverview, type TransactionType } from "@/features/finance/financeService";
+import { buildMonthlyFinanceOverview, isInternalFinanceTransfer, type TransactionType } from "@/features/finance/financeService";
 import {
   createFinanceId,
   getDefaultFinanceStorage,
   hydrateCustomCategoriesFromCloud,
   hydrateFinanceTransactionsFromCloud,
   hydrateGiftRecordsFromCloud,
+  hydrateInitialBalanceFromCloud,
   hydrateSavingEntriesFromCloud,
   loadCustomCategories,
   loadFinanceTransactions,
   loadGiftRecords,
+  loadInitialBalance,
   loadSavingEntries,
   saveCustomCategories,
   saveFinanceTransactions,
   saveGiftRecords,
+  saveInitialBalance,
   saveSavingEntries,
   sortGiftRecords,
   sortTransactions,
@@ -99,6 +102,7 @@ const noteInputWebProps = { id: "finance-note-input" } as object;
 const savingAmountInputWebProps = { id: "finance-saving-amount-input" } as object;
 const savingNoteInputWebProps = { id: "finance-saving-note-input" } as object;
 const categoryInputWebProps = { id: "finance-category-input" } as object;
+const initialBalanceInputWebProps = { id: "finance-initial-balance-input" } as object;
 
 export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, shortcutNonce, showInlineTabs = true, storage, themeTokens = financeTokens }: FinancePanelProps) {
   const { width: windowWidth } = useWindowDimensions();
@@ -114,6 +118,8 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
   const [categorySharesExpanded, setCategorySharesExpanded] = useState(false);
   const [selectedShareCategory, setSelectedShareCategory] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<FinanceTransaction[]>(() => sortTransactions(loadFinanceTransactions(financeStorage)));
+  const [initialBalance, setInitialBalance] = useState<string | null>(() => loadInitialBalance(financeStorage));
+  const [initialBalanceInput, setInitialBalanceInput] = useState(() => loadInitialBalance(financeStorage) ?? "");
   const [savingEntries, setSavingEntries] = useState<SavingEntry[]>(() => loadSavingEntries(financeStorage));
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>(() => loadCustomCategories(financeStorage));
   const [transactionType, setTransactionType] = useState<TransactionType>("expense");
@@ -160,6 +166,12 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
     void hydrateSavingEntriesFromCloud(financeStorage).then((next) => {
       if (!cancelled && !localDirtyRef.current) setSavingEntries(next);
     });
+    void hydrateInitialBalanceFromCloud(financeStorage).then((next) => {
+      if (!cancelled && !localDirtyRef.current) {
+        setInitialBalance(next);
+        setInitialBalanceInput(next ?? "");
+      }
+    });
     void hydrateCustomCategoriesFromCloud(financeStorage).then((next) => {
       if (!cancelled && !localDirtyRef.current) setCustomCategories(next);
     });
@@ -193,20 +205,21 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
       giftRecordId: transaction.giftRecordId ?? null,
       id: transaction.id,
       localDate: transaction.localDate,
+      savingEntryId: transaction.savingEntryId ?? null,
       transactionType: transaction.transactionType
     })),
     [transactions]
   );
   const monthlyOverview = useMemo(
-    () => buildMonthlyFinanceOverview({ selectedMonth: detailMonth, transactions: statsTransactions }),
-    [detailMonth, statsTransactions]
+    () => buildMonthlyFinanceOverview({ initialBalance, now: todayIso(), selectedMonth: detailMonth, transactions: statsTransactions }),
+    [detailMonth, initialBalance, statsTransactions]
   );
   const monthTransactions = useMemo(
     () => transactions.filter((transaction) => transaction.localDate.startsWith(detailMonth)),
     [detailMonth, transactions]
   );
   const monthExpenseTransactions = useMemo(
-    () => monthTransactions.filter((transaction) => transaction.transactionType === "expense"),
+    () => monthTransactions.filter((transaction) => transaction.transactionType === "expense" && !isInternalFinanceTransfer(transaction)),
     [monthTransactions]
   );
   const maxExpenseTransaction = useMemo(
@@ -229,7 +242,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
   const savingSticker = useMemo(() => getSavingSticker(savingEntries, savingTotal, todayIso()), [savingEntries, savingTotal]);
   const detailCategories = useMemo(() => {
     const names = transactions
-      .filter((transaction) => transaction.transactionType === detailType && transaction.localDate.startsWith(detailMonth))
+      .filter((transaction) => transaction.transactionType === detailType && transaction.localDate.startsWith(detailMonth) && !isInternalFinanceTransfer(transaction))
       .map((transaction) => transaction.categoryName);
     return ["全部", ...Array.from(new Set(names))];
   }, [detailMonth, detailType, transactions]);
@@ -238,7 +251,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
     return Array.from(new Set([todayIso().slice(0, 7), ...months])).sort((left, right) => right.localeCompare(left));
   }, [transactions]);
   const detailTransactions = transactions.filter(
-    (transaction) => transaction.transactionType === detailType && transaction.localDate.startsWith(detailMonth) && (detailCategory === "全部" || transaction.categoryName === detailCategory)
+    (transaction) => transaction.transactionType === detailType && transaction.localDate.startsWith(detailMonth) && !isInternalFinanceTransfer(transaction) && (detailCategory === "全部" || transaction.categoryName === detailCategory)
   );
   const detailTotal = centsToMoney(detailTransactions.reduce((sum, transaction) => sum + moneyToCents(transaction.amount), 0));
   const canSaveTransaction = Boolean(normalizeMoney(readWebInputValue("finance-amount-input") || amount));
@@ -464,6 +477,20 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
     setNewCategoryName("");
     setSelectedCategory(name);
     setFeedback("自定义分类已添加。");
+  };
+
+  const saveInitialBalanceSetting = () => {
+    const inputValue = readWebInputValue("finance-initial-balance-input") || initialBalanceInput;
+    const cleanAmount = normalizeInitialBalance(inputValue);
+    if (!cleanAmount) {
+      setFeedback("请输入正确的初始余额。");
+      return;
+    }
+    localDirtyRef.current = true;
+    setInitialBalance(cleanAmount);
+    setInitialBalanceInput(cleanAmount);
+    saveInitialBalance(cleanAmount, financeStorage);
+    setFeedback("初始余额已保存，不计入收入。");
   };
 
   const giftStats = useMemo(() => {
@@ -700,7 +727,7 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
               <IconWalletCards color="#111827" size={82} />
             </View>
             <View style={styles.statsHeroHeader}>
-              <Text style={styles.statsHeroTitle}>本月财务总览</Text>
+              <Text style={styles.statsHeroTitle}>财务总览</Text>
               <View style={styles.statsMonthControl}>
                 <Pressable
                   accessibilityRole="button"
@@ -733,8 +760,8 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
             <View testID="finance-summary-panel" style={styles.statsHeroContent}>
               <View testID="finance-hero-core" style={styles.statsHeroCore}>
                 <View testID="finance-balance-summary" style={styles.statsBalanceBlock}>
-                  <View testID="finance-metric-本月结余" style={styles.statsBalanceInner}>
-                    <Text style={styles.statsMetricLabel}>本月结余</Text>
+                  <View testID={`finance-metric-${monthlyOverview.balance.label}`} style={styles.statsBalanceInner}>
+                    <Text style={styles.statsMetricLabel}>{monthlyOverview.balance.label}</Text>
                     <Text
                       numberOfLines={1}
                       adjustsFontSizeToFit
@@ -751,6 +778,20 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
               </View>
               <View style={styles.summaryTrack}>
                 <View style={[styles.summaryFill, { width: `${getExpenseRatio(monthlyOverview.income.amount, monthlyOverview.expense.amount)}%` }]} />
+              </View>
+              <View style={styles.statsMonthNetRow}>
+                <Text style={styles.statsMonthNetLabel}>本月收支</Text>
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  style={[
+                    styles.statsMonthNetValue,
+                    moneyToCents(monthlyOverview.monthNet.amount) > 0 ? styles.statsMonthNetPositive : null,
+                    moneyToCents(monthlyOverview.monthNet.amount) < 0 ? styles.statsMonthNetNegative : null
+                  ]}
+                >
+                  {formatSignedMoney(monthlyOverview.monthNet.amount)}
+                </Text>
               </View>
               <View testID="finance-hero-secondary-metrics" style={styles.statsSecondaryMetrics}>
                 <View style={styles.statsSecondaryItem}>
@@ -998,6 +1039,30 @@ export function FinancePanel({ activeTab, onTabChange, shortcutCreate = false, s
 
       {tab === "category" ? (
         <>
+          <View style={styles.card}>
+            <View style={styles.accountSettingHeader}>
+              <View>
+                <Text style={styles.cardTitle}>账户设置</Text>
+                <Text style={styles.accountSettingHint}>初始余额只用于计算当前余额，不计入收入。</Text>
+              </View>
+              <Text style={styles.accountSettingCurrent}>当前 ¥{initialBalance ?? "0.00"}</Text>
+            </View>
+            <View style={styles.formRow}>
+              <TextInput
+                {...initialBalanceInputWebProps}
+                keyboardType="decimal-pad"
+                nativeID="finance-initial-balance-input"
+                onChange={makeTextInputChangeHandler(setInitialBalanceInput)}
+                onChangeText={setInitialBalanceInput}
+                placeholder="初始余额"
+                style={[styles.input, styles.flexInput]}
+                value={initialBalanceInput}
+              />
+              <Pressable accessibilityRole="button" accessibilityLabel="保存初始余额" onPress={saveInitialBalanceSetting} style={styles.accountSettingSaveButton}>
+                <Text style={styles.accountSettingSaveText}>保存</Text>
+              </Pressable>
+            </View>
+          </View>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>添加自定义分类</Text>
             <View style={styles.segmentRow}>
@@ -1552,6 +1617,13 @@ function formatCompactComparison(label: string) {
   return label.replace(/^较上月\s*/, "");
 }
 
+function formatSignedMoney(amount: string) {
+  const cents = moneyToCents(amount);
+  if (cents > 0) return `+¥${amount}`;
+  if (cents < 0) return `-¥${amount.replace(/^-/, "")}`;
+  return "¥0.00";
+}
+
 function getComparisonTextStyle(tone: string) {
   if (tone === "up") return styles.comparisonUp;
   if (tone === "down") return styles.comparisonDown;
@@ -1786,6 +1858,14 @@ function normalizeMoney(value: string) {
   return Number(trimmed).toFixed(2);
 }
 
+function normalizeInitialBalance(value: string) {
+  const trimmed = value.trim();
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) {
+    return "";
+  }
+  return Number(trimmed).toFixed(2);
+}
+
 function moneyToCents(value: string) {
   const [yuan = "0", cents = ""] = value.split(".");
   return Number.parseInt(yuan || "0", 10) * 100 + Number.parseInt(cents.padEnd(2, "0").slice(0, 2) || "0", 10);
@@ -1847,6 +1927,38 @@ const styles = StyleSheet.create({
   },
   amountField: {
     flex: 0.7
+  },
+  accountSettingCurrent: {
+    color: "#4f6757",
+    flexShrink: 0,
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  accountSettingHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between"
+  },
+  accountSettingHint: {
+    color: "#7a857f",
+    fontSize: 11,
+    fontWeight: "700",
+    lineHeight: 15,
+    marginTop: 3
+  },
+  accountSettingSaveButton: {
+    alignItems: "center",
+    backgroundColor: "#7acbf0",
+    borderRadius: 14,
+    height: 54,
+    justifyContent: "center",
+    paddingHorizontal: 14
+  },
+  accountSettingSaveText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "900"
   },
   balanceMetricWrap: {
     flexBasis: "100%",
@@ -2527,6 +2639,32 @@ const styles = StyleSheet.create({
     backgroundColor: "#24aee0",
     borderRadius: 999,
     height: "100%"
+  },
+  statsMonthNetRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "space-between",
+    minWidth: 0
+  },
+  statsMonthNetLabel: {
+    color: "#7a857f",
+    fontSize: 11,
+    fontWeight: "800"
+  },
+  statsMonthNetValue: {
+    color: "#7a857f",
+    flexShrink: 1,
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: 0,
+    minWidth: 0
+  },
+  statsMonthNetPositive: {
+    color: "#54a35e"
+  },
+  statsMonthNetNegative: {
+    color: "#ef4444"
   },
   statsSecondaryMetrics: {
     borderTopColor: "#edf1f5",

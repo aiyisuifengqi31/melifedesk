@@ -6,7 +6,7 @@ describe("Task 5 and Task 7 pages", () => {
   it("renders the finance workspace controls", () => {
     render(<FinancePanel />);
 
-    for (const label of ["统计", "份子", "储蓄", "本月结余", "支出明细", "收入明细"]) {
+    for (const label of ["统计", "份子", "储蓄", "当前余额", "本月收支", "支出明细", "收入明细"]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
     expect(screen.queryByRole("button", { name: "分类" })).toBeNull();

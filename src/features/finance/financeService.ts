@@ -6,6 +6,7 @@ export type FinanceTransactionForStats = {
   giftRecordId: string | null;
   id: string;
   localDate: string;
+  savingEntryId?: string | null;
   transactionType: TransactionType;
 };
 
@@ -25,11 +26,14 @@ export type GiftRecordForStats = {
 
 type FinanceSummaryInput = {
   budgets: FinanceBudgetForStats[];
+  initialBalance?: string | null;
   now: string;
   transactions: FinanceTransactionForStats[];
 };
 
 type MonthlyFinanceOverviewInput = {
+  initialBalance?: string | null;
+  now?: string;
   selectedMonth: string;
   transactions: FinanceTransactionForStats[];
 };
@@ -80,17 +84,36 @@ function sumTransactions(transactions: FinanceTransactionForStats[], predicate: 
   return transactions.filter(predicate).reduce((sum, transaction) => sum + parseMoneyToCents(transaction.amount), 0);
 }
 
-export function buildFinanceSummary({ budgets, now, transactions }: FinanceSummaryInput) {
+export function isInternalFinanceTransfer(transaction: Pick<FinanceTransactionForStats, "savingEntryId">) {
+  return Boolean(transaction.savingEntryId);
+}
+
+function isRealExpense(transaction: FinanceTransactionForStats) {
+  return transaction.transactionType === "expense" && !isInternalFinanceTransfer(transaction);
+}
+
+function isRealIncome(transaction: FinanceTransactionForStats) {
+  return transaction.transactionType === "income" && !isInternalFinanceTransfer(transaction);
+}
+
+function isOnOrBeforeMonth(transaction: FinanceTransactionForStats, selectedMonth: string) {
+  return monthKey(transaction.localDate) <= selectedMonth;
+}
+
+export function buildFinanceSummary({ budgets, initialBalance = "0.00", now, transactions }: FinanceSummaryInput) {
   const currentMonth = monthKey(now);
   const previousMonth = previousMonthKey(currentMonth);
   const currentMonthTransactions = transactions.filter((transaction) => monthKey(transaction.localDate) === currentMonth);
-  const currentExpenseCents = sumTransactions(currentMonthTransactions, (transaction) => transaction.transactionType === "expense");
-  const currentIncomeCents = sumTransactions(currentMonthTransactions, (transaction) => transaction.transactionType === "income");
+  const currentExpenseCents = sumTransactions(currentMonthTransactions, isRealExpense);
+  const currentIncomeCents = sumTransactions(currentMonthTransactions, isRealIncome);
+  const currentBalanceCents = parseMoneyToCents(initialBalance ?? "0.00")
+    + sumTransactions(transactions, isRealIncome)
+    - sumTransactions(transactions, isRealExpense);
   const budgetCents = budgets.filter((budget) => budget.month === currentMonth).reduce((sum, budget) => sum + parseMoneyToCents(budget.amount), 0);
   const categoryTotals = new Map<string, number>();
 
   for (const transaction of currentMonthTransactions) {
-    if (transaction.transactionType === "expense") {
+    if (isRealExpense(transaction)) {
       categoryTotals.set(transaction.categoryName, (categoryTotals.get(transaction.categoryName) ?? 0) + parseMoneyToCents(transaction.amount));
     }
   }
@@ -105,37 +128,43 @@ export function buildFinanceSummary({ budgets, now, transactions }: FinanceSumma
 
   return {
     categoryShares,
-    last30DaysExpense: formatCents(sumTransactions(transactions, (transaction) => transaction.transactionType === "expense" && daysBetween(transaction.localDate, now) >= 0 && daysBetween(transaction.localDate, now) < 30)),
-    last7DaysExpense: formatCents(sumTransactions(transactions, (transaction) => transaction.transactionType === "expense" && daysBetween(transaction.localDate, now) >= 0 && daysBetween(transaction.localDate, now) < 7)),
+    currentBalance: formatCents(currentBalanceCents),
+    last30DaysExpense: formatCents(sumTransactions(transactions, (transaction) => isRealExpense(transaction) && daysBetween(transaction.localDate, now) >= 0 && daysBetween(transaction.localDate, now) < 30)),
+    last7DaysExpense: formatCents(sumTransactions(transactions, (transaction) => isRealExpense(transaction) && daysBetween(transaction.localDate, now) >= 0 && daysBetween(transaction.localDate, now) < 7)),
     monthBalance: formatCents(currentIncomeCents - currentExpenseCents),
     monthBudgetRemaining: formatCents(budgetCents - currentExpenseCents),
     monthComparison: {
       currentExpense: formatCents(currentExpenseCents),
       currentIncome: formatCents(currentIncomeCents),
-      previousExpense: formatCents(sumTransactions(transactions, (transaction) => monthKey(transaction.localDate) === previousMonth && transaction.transactionType === "expense")),
-      previousIncome: formatCents(sumTransactions(transactions, (transaction) => monthKey(transaction.localDate) === previousMonth && transaction.transactionType === "income"))
+      previousExpense: formatCents(sumTransactions(transactions, (transaction) => monthKey(transaction.localDate) === previousMonth && isRealExpense(transaction))),
+      previousIncome: formatCents(sumTransactions(transactions, (transaction) => monthKey(transaction.localDate) === previousMonth && isRealIncome(transaction)))
     },
     monthExpense: formatCents(currentExpenseCents),
     monthIncome: formatCents(currentIncomeCents),
-    todayExpense: formatCents(sumTransactions(transactions, (transaction) => transaction.localDate === now && transaction.transactionType === "expense")),
-    todayIncome: formatCents(sumTransactions(transactions, (transaction) => transaction.localDate === now && transaction.transactionType === "income"))
+    monthNet: formatCents(currentIncomeCents - currentExpenseCents),
+    todayExpense: formatCents(sumTransactions(transactions, (transaction) => transaction.localDate === now && isRealExpense(transaction))),
+    todayIncome: formatCents(sumTransactions(transactions, (transaction) => transaction.localDate === now && isRealIncome(transaction)))
   };
 }
 
-export function buildMonthlyFinanceOverview({ selectedMonth, transactions }: MonthlyFinanceOverviewInput) {
+export function buildMonthlyFinanceOverview({ initialBalance = "0.00", now, selectedMonth, transactions }: MonthlyFinanceOverviewInput) {
   const previousMonth = previousMonthKey(selectedMonth);
+  const activeMonth = now ? monthKey(now) : monthKey(new Date().toISOString());
   const currentTransactions = transactions.filter((transaction) => monthKey(transaction.localDate) === selectedMonth);
   const previousTransactions = transactions.filter((transaction) => monthKey(transaction.localDate) === previousMonth);
-  const expenseCents = sumTransactions(currentTransactions, (transaction) => transaction.transactionType === "expense");
-  const incomeCents = sumTransactions(currentTransactions, (transaction) => transaction.transactionType === "income");
-  const previousExpenseCents = sumTransactions(previousTransactions, (transaction) => transaction.transactionType === "expense");
-  const previousIncomeCents = sumTransactions(previousTransactions, (transaction) => transaction.transactionType === "income");
-  const balanceCents = incomeCents - expenseCents;
-  const previousBalanceCents = previousIncomeCents - previousExpenseCents;
+  const expenseCents = sumTransactions(currentTransactions, isRealExpense);
+  const incomeCents = sumTransactions(currentTransactions, isRealIncome);
+  const previousExpenseCents = sumTransactions(previousTransactions, isRealExpense);
+  const previousIncomeCents = sumTransactions(previousTransactions, isRealIncome);
+  const monthNetCents = incomeCents - expenseCents;
+  const previousMonthNetCents = previousIncomeCents - previousExpenseCents;
+  const balanceCents = parseMoneyToCents(initialBalance ?? "0.00")
+    + sumTransactions(transactions, (transaction) => isOnOrBeforeMonth(transaction, selectedMonth) && isRealIncome(transaction))
+    - sumTransactions(transactions, (transaction) => isOnOrBeforeMonth(transaction, selectedMonth) && isRealExpense(transaction));
   const categoryTotals = new Map<string, number>();
 
   for (const transaction of currentTransactions) {
-    if (transaction.transactionType === "expense") {
+    if (isRealExpense(transaction)) {
       categoryTotals.set(transaction.categoryName, (categoryTotals.get(transaction.categoryName) ?? 0) + parseMoneyToCents(transaction.amount));
     }
   }
@@ -147,22 +176,31 @@ export function buildMonthlyFinanceOverview({ selectedMonth, transactions }: Mon
       categoryName,
       ratio: expenseCents === 0 ? 0 : Number((cents / expenseCents).toFixed(4))
     }));
+  const maxExpense = currentTransactions.filter(isRealExpense).reduce<{ amount: string; categoryName: string; id: string } | null>((best, transaction) => {
+    if (!best) return { amount: transaction.amount, categoryName: transaction.categoryName, id: transaction.id };
+    return parseMoneyToCents(transaction.amount) > parseMoneyToCents(best.amount) ? { amount: transaction.amount, categoryName: transaction.categoryName, id: transaction.id } : best;
+  }, null);
 
   return {
     balance: {
       amount: formatCents(balanceCents),
-      comparison: compareMonthValue(balanceCents, previousBalanceCents, previousTransactions.length, true)
+      label: selectedMonth === activeMonth ? "当前余额" : "月末余额"
     },
     categoryShares,
     expense: {
       amount: formatCents(expenseCents),
-      comparison: compareMonthValue(expenseCents, previousExpenseCents, previousTransactions.filter((transaction) => transaction.transactionType === "expense").length)
+      comparison: compareMonthValue(expenseCents, previousExpenseCents, previousTransactions.filter(isRealExpense).length)
     },
     income: {
       amount: formatCents(incomeCents),
-      comparison: compareMonthValue(incomeCents, previousIncomeCents, previousTransactions.filter((transaction) => transaction.transactionType === "income").length)
+      comparison: compareMonthValue(incomeCents, previousIncomeCents, previousTransactions.filter(isRealIncome).length)
     },
+    maxExpense,
     monthLabel: formatMonthKeyLabel(selectedMonth),
+    monthNet: {
+      amount: formatCents(monthNetCents),
+      comparison: compareMonthValue(monthNetCents, previousMonthNetCents, previousTransactions.filter((transaction) => isRealIncome(transaction) || isRealExpense(transaction)).length, true)
+    },
     previousMonth
   };
 }

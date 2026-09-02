@@ -1,5 +1,5 @@
 import type { TransactionType } from "@/features/finance/financeService";
-import { hydrateFromCloud, saveCloudValue } from "@/features/sync/cloudSync";
+import { clearCloudValue, hydrateFromCloud, saveCloudValue } from "@/features/sync/cloudSync";
 
 export type FinanceTransaction = {
   amount: string;
@@ -58,6 +58,7 @@ export const FINANCE_TRANSACTIONS_KEY = "fanfan-guanguan.finance.transactions.v1
 export const FINANCE_SAVINGS_KEY = "fanfan-guanguan.finance.savings.v1";
 export const FINANCE_CATEGORIES_KEY = "fanfan-guanguan.finance.categories.v1";
 export const FINANCE_GIFTS_KEY = "fanfan-guanguan.finance.gifts.v1";
+export const FINANCE_INITIAL_BALANCE_KEY = "fanfan-guanguan.finance.initial-balance.v1";
 
 let memoryStore = new Map<string, string>();
 
@@ -82,6 +83,26 @@ export function loadFinanceTransactions(storage: FinanceStorage = getDefaultFina
   return loadArray<FinanceTransaction>(storage, FINANCE_TRANSACTIONS_KEY).filter(
     (item) => typeof item.id === "string" && typeof item.amount === "string" && typeof item.localDate === "string" && (item.transactionType === "expense" || item.transactionType === "income")
   );
+}
+
+export function loadInitialBalance(storage: FinanceStorage = getDefaultFinanceStorage()) {
+  const raw = storage.getItem(FINANCE_INITIAL_BALANCE_KEY);
+  return typeof raw === "string" && raw.trim() ? raw : null;
+}
+
+export function saveInitialBalance(balance: string | null, storage: FinanceStorage = getDefaultFinanceStorage()) {
+  if (balance === null) {
+    storage.removeItem(FINANCE_INITIAL_BALANCE_KEY);
+    void clearCloudValue(FINANCE_INITIAL_BALANCE_KEY);
+    return;
+  }
+  storage.setItem(FINANCE_INITIAL_BALANCE_KEY, balance);
+  void saveCloudValue(FINANCE_INITIAL_BALANCE_KEY, balance);
+}
+
+export async function hydrateInitialBalanceFromCloud(storage: FinanceStorage = getDefaultFinanceStorage()): Promise<string | null> {
+  const local = loadInitialBalance(storage);
+  return hydrateFromCloud<string | null>(FINANCE_INITIAL_BALANCE_KEY, local, (value) => saveInitialBalance(value, storage));
 }
 
 export function saveFinanceTransactions(transactions: FinanceTransaction[], storage: FinanceStorage = getDefaultFinanceStorage()) {
@@ -157,6 +178,7 @@ export function clearFinanceStorageForTests(storage: FinanceStorage = memoryStor
   storage.removeItem(FINANCE_SAVINGS_KEY);
   storage.removeItem(FINANCE_CATEGORIES_KEY);
   storage.removeItem(FINANCE_GIFTS_KEY);
+  storage.removeItem(FINANCE_INITIAL_BALANCE_KEY);
   memoryStore = new Map<string, string>();
 }
 

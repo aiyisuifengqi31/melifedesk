@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react-nativ
 
 import { AppShell } from "@/components/AppShell";
 import { FinancePanel } from "@/features/finance/FinancePanel";
-import { loadFinanceTransactions, loadGiftRecords, loadSavingEntries, saveFinanceTransactions, saveSavingEntries, type FinanceTransaction } from "@/features/finance/financeStorage";
+import { loadFinanceTransactions, loadGiftRecords, loadInitialBalance, loadSavingEntries, saveFinanceTransactions, saveSavingEntries, type FinanceTransaction } from "@/features/finance/financeStorage";
 import { QuickAccountingSheet } from "@/features/finance/QuickAccountingSheet";
 import type { UiTokens } from "@/shared/ui/primitives";
 
@@ -241,7 +241,7 @@ describe("FinancePanel interactions", () => {
     });
     fireEvent.press(screen.getByRole("button", { name: "筛选月份：2026年7月" }));
 
-    expect(screen.getByText("本月结余")).toBeOnTheScreen();
+    expect(screen.getByText("月末余额")).toBeOnTheScreen();
     expect(screen.getByText("¥-60.00")).toBeOnTheScreen();
     expect(screen.queryByText("1笔记录")).toBeNull();
     expect(screen.getByText(/最大单笔 ¥60\.00/)).toBeOnTheScreen();
@@ -437,13 +437,25 @@ describe("FinancePanel interactions", () => {
     expect(screen.queryByText("收入与支出概览")).toBeNull();
     expect(screen.getByTestId("finance-summary-panel")).toBeOnTheScreen();
     expect(screen.queryByTestId("finance-monthly-overview-card")).toBeNull();
-    expect(screen.getAllByText("本月结余").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("当前余额").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("本月收支").length).toBeGreaterThan(0);
     expect(screen.queryByText("今日支出")).toBeNull();
     expect(screen.queryByText("今日收入")).toBeNull();
-    expect(screen.getByTestId("finance-metric-本月结余")).toBeOnTheScreen();
+    expect(screen.getByTestId("finance-metric-当前余额")).toBeOnTheScreen();
     expect(screen.getAllByText(/收入 ¥0\.00/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/支出 ¥0\.00/).length).toBeGreaterThan(0);
     expect(screen.getByText("本月分类占比")).toBeOnTheScreen();
+  });
+
+  it("saves initial balance as an account setting without creating income transactions", () => {
+    const storage = makeStorage();
+    render(<FinancePanel activeTab="category" storage={storage} />);
+
+    fireEvent.changeText(screen.getByPlaceholderText("初始余额"), "1000");
+    fireEvent.press(screen.getByRole("button", { name: "保存初始余额" }));
+
+    expect(loadInitialBalance(storage)).toBe("1000.00");
+    expect(loadFinanceTransactions(storage)).toEqual([]);
   });
 
   it("renders very large monthly totals inside the summary card without breaking layout", () => {

@@ -23,6 +23,7 @@ describe("Task 5 finance service", () => {
     expect(summary.monthExpense).toBe("262.80");
     expect(summary.monthIncome).toBe("500.00");
     expect(summary.monthBalance).toBe("237.20");
+    expect(summary.monthNet).toBe("237.20");
     expect(summary.monthBudgetRemaining).toBe("137.20");
     expect(summary.last7DaysExpense).toBe("42.80");
     expect(summary.last30DaysExpense).toBe("262.80");
@@ -46,6 +47,8 @@ describe("Task 5 finance service", () => {
 
   it("builds a selected-month overview with month-over-month labels and category shares", () => {
     const overview = buildMonthlyFinanceOverview({
+      initialBalance: "100.00",
+      now: "2026-08-10",
       selectedMonth: "2026-08",
       transactions: [
         { amount: "500.00", categoryName: "工资", giftRecordId: null, id: "aug-income", localDate: "2026-08-01", transactionType: "income" },
@@ -60,9 +63,10 @@ describe("Task 5 finance service", () => {
     expect(overview.income.amount).toBe("500.00");
     expect(overview.expense.amount).toBe("200.00");
     expect(overview.balance.amount).toBe("300.00");
+    expect(overview.balance.label).toBe("当前余额");
+    expect(overview.monthNet.amount).toBe("300.00");
     expect(overview.income.comparison).toEqual({ label: "较上月 ↑ 25.0%", tone: "up" });
     expect(overview.expense.comparison).toEqual({ label: "较上月 ↓ 60.0%", tone: "down" });
-    expect(overview.balance.comparison).toEqual({ label: "较上月 由负转正", tone: "up" });
     expect(overview.categoryShares).toEqual([
       { amount: "120.00", categoryName: "餐饮", ratio: 0.6 },
       { amount: "80.00", categoryName: "出行", ratio: 0.4 }
@@ -71,6 +75,8 @@ describe("Task 5 finance service", () => {
 
   it("handles cross-year previous month and unavailable comparison data", () => {
     const overview = buildMonthlyFinanceOverview({
+      initialBalance: "0.00",
+      now: "2027-01-10",
       selectedMonth: "2027-01",
       transactions: [
         { amount: "100.00", categoryName: "工资", giftRecordId: null, id: "jan-income", localDate: "2027-01-05", transactionType: "income" },
@@ -82,7 +88,65 @@ describe("Task 5 finance service", () => {
     expect(overview.previousMonth).toBe("2026-12");
     expect(overview.income.comparison).toEqual({ label: "暂无可比数据", tone: "muted" });
     expect(overview.expense.comparison).toEqual({ label: "暂无上月数据", tone: "muted" });
-    expect(overview.balance.comparison).toEqual({ label: "暂无可比数据", tone: "muted" });
+    expect(overview.monthNet.comparison).toEqual({ label: "暂无可比数据", tone: "muted" });
+  });
+
+  it("keeps total balance continuous across months while monthly net resets naturally", () => {
+    const transactions = [
+      { amount: "6000.00", categoryName: "工资", giftRecordId: null, id: "aug-income", localDate: "2026-08-15", transactionType: "income" as const },
+      { amount: "4000.00", categoryName: "餐饮", giftRecordId: null, id: "aug-expense", localDate: "2026-08-20", transactionType: "expense" as const },
+      { amount: "100.00", categoryName: "餐饮", giftRecordId: null, id: "sep-food", localDate: "2026-09-01", transactionType: "expense" as const },
+      { amount: "6000.00", categoryName: "工资", giftRecordId: null, id: "sep-income", localDate: "2026-09-15", transactionType: "income" as const }
+    ];
+
+    const august = buildMonthlyFinanceOverview({ initialBalance: "1000.00", now: "2026-09-01", selectedMonth: "2026-08", transactions });
+    const septemberBeforeSalary = buildMonthlyFinanceOverview({ initialBalance: "1000.00", now: "2026-09-01", selectedMonth: "2026-09", transactions: transactions.slice(0, 3) });
+    const septemberAfterSalary = buildMonthlyFinanceOverview({ initialBalance: "1000.00", now: "2026-09-15", selectedMonth: "2026-09", transactions });
+
+    expect(august.balance.label).toBe("月末余额");
+    expect(august.income.amount).toBe("6000.00");
+    expect(august.expense.amount).toBe("4000.00");
+    expect(august.monthNet.amount).toBe("2000.00");
+    expect(august.balance.amount).toBe("3000.00");
+
+    expect(septemberBeforeSalary.balance.label).toBe("当前余额");
+    expect(septemberBeforeSalary.balance.amount).toBe("2900.00");
+    expect(septemberBeforeSalary.income.amount).toBe("0.00");
+    expect(septemberBeforeSalary.expense.amount).toBe("100.00");
+    expect(septemberBeforeSalary.monthNet.amount).toBe("-100.00");
+
+    expect(septemberAfterSalary.balance.amount).toBe("8900.00");
+    expect(septemberAfterSalary.income.amount).toBe("6000.00");
+    expect(septemberAfterSalary.expense.amount).toBe("100.00");
+    expect(septemberAfterSalary.monthNet.amount).toBe("5900.00");
+  });
+
+  it("excludes saving transfers from total balance, income, expense, category share, and largest expense", () => {
+    const baseTransactions = [
+      { amount: "6000.00", categoryName: "工资", giftRecordId: null, id: "sep-income", localDate: "2026-09-15", transactionType: "income" as const },
+      { amount: "100.00", categoryName: "餐饮", giftRecordId: null, id: "sep-food", localDate: "2026-09-01", transactionType: "expense" as const },
+      { amount: "500.00", categoryName: "储蓄", giftRecordId: null, id: "saving-deposit", localDate: "2026-09-16", savingEntryId: "saving-1", transactionType: "expense" as const },
+      { amount: "300.00", categoryName: "储蓄取出", giftRecordId: null, id: "saving-withdraw", localDate: "2026-09-17", savingEntryId: "saving-2", transactionType: "income" as const }
+    ];
+    const withTrueExpense = [
+      ...baseTransactions,
+      { amount: "50.00", categoryName: "餐饮", giftRecordId: null, id: "sep-food-2", localDate: "2026-09-18", transactionType: "expense" as const }
+    ];
+
+    const afterTransfers = buildMonthlyFinanceOverview({ initialBalance: "3000.00", now: "2026-09-17", selectedMonth: "2026-09", transactions: baseTransactions });
+    const afterTrueExpense = buildMonthlyFinanceOverview({ initialBalance: "3000.00", now: "2026-09-18", selectedMonth: "2026-09", transactions: withTrueExpense });
+
+    expect(afterTransfers.balance.amount).toBe("8900.00");
+    expect(afterTransfers.income.amount).toBe("6000.00");
+    expect(afterTransfers.expense.amount).toBe("100.00");
+    expect(afterTransfers.monthNet.amount).toBe("5900.00");
+    expect(afterTransfers.categoryShares).toEqual([{ amount: "100.00", categoryName: "餐饮", ratio: 1 }]);
+    expect(afterTransfers.maxExpense).toEqual({ amount: "100.00", categoryName: "餐饮", id: "sep-food" });
+
+    expect(afterTrueExpense.balance.amount).toBe("8850.00");
+    expect(afterTrueExpense.expense.amount).toBe("150.00");
+    expect(afterTrueExpense.monthNet.amount).toBe("5850.00");
+    expect(afterTrueExpense.maxExpense).toEqual({ amount: "100.00", categoryName: "餐饮", id: "sep-food" });
   });
 });
 
