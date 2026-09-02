@@ -194,6 +194,8 @@ export function LovePanel({
   const [editingDiaryId, setEditingDiaryId] = useState<string | null>(null);
   const [editingGiftId, setEditingGiftId] = useState<string | null>(null);
   const [diaryComposerOpen, setDiaryComposerOpen] = useState(false);
+  const [giftComposerOpen, setGiftComposerOpen] = useState(false);
+  const [anniversaryComposerOpen, setAnniversaryComposerOpen] = useState(false);
   const [diaryComments, setDiaryComments] = useState<Record<string, DiaryComment[]>>({});
   const [diaryLikes, setDiaryLikes] = useState<Record<string, DiaryLikeSummary>>({});
   const [activeCommentDiaryId, setActiveCommentDiaryId] = useState<string | null>(null);
@@ -211,6 +213,7 @@ export function LovePanel({
   const [diaryDatePickerOpen, setDiaryDatePickerOpen] = useState(false);
   const [anniversaryDatePickerOpen, setAnniversaryDatePickerOpen] = useState(false);
   const [giftDatePickerOpen, setGiftDatePickerOpen] = useState(false);
+  const loveComposerOpen = diaryComposerOpen || giftComposerOpen || anniversaryComposerOpen;
 
   useEffect(() => {
     let cancelled = false;
@@ -302,11 +305,16 @@ export function LovePanel({
     if (previousTabRef.current === tab) return;
     previousTabRef.current = tab;
     setDiaryComposerOpen(false);
+    setGiftComposerOpen(false);
+    setAnniversaryComposerOpen(false);
     setActiveCommentDiaryId(null);
     setOpenDiaryMenuId(null);
     setOpenGiftMenuId(null);
     setPickerPopover(null);
     setDiaryMenuPopover(null);
+    setDiaryDatePickerOpen(false);
+    setGiftDatePickerOpen(false);
+    setAnniversaryDatePickerOpen(false);
   }, [tab]);
 
   useEffect(() => {
@@ -317,21 +325,26 @@ export function LovePanel({
   useEffect(() => {
     if (routeActive) return;
     setDiaryComposerOpen(false);
+    setGiftComposerOpen(false);
+    setAnniversaryComposerOpen(false);
     setActiveCommentDiaryId(null);
     setOpenDiaryMenuId(null);
     setOpenGiftMenuId(null);
     setPickerPopover(null);
     setDiaryMenuPopover(null);
+    setDiaryDatePickerOpen(false);
+    setGiftDatePickerOpen(false);
+    setAnniversaryDatePickerOpen(false);
   }, [routeActive]);
 
   useEffect(() => {
-    if (!diaryComposerOpen || typeof document === "undefined") return undefined;
+    if (!loveComposerOpen || typeof document === "undefined") return undefined;
     diaryScrollLockRef.current = lockBodyScroll();
     return () => {
       unlockBodyScroll(diaryScrollLockRef.current);
       diaryScrollLockRef.current = null;
     };
-  }, [diaryComposerOpen]);
+  }, [loveComposerOpen]);
 
   useEffect(() => {
     if (!activeCommentDiaryId || typeof document === "undefined") return undefined;
@@ -460,6 +473,8 @@ export function LovePanel({
     setGiftImage(null);
     setGiftFolderId(null);
     setEditingGiftId(null);
+    setGiftComposerOpen(false);
+    setGiftDatePickerOpen(false);
     setFeedback("✓ 已保存");
   };
 
@@ -485,6 +500,8 @@ export function LovePanel({
     setAnniversaryTitle("");
     setAnniImage(null);
     setReminderDays(0);
+    setAnniversaryComposerOpen(false);
+    setAnniversaryDatePickerOpen(false);
     setFeedback("✓ 已保存");
   };
 
@@ -599,13 +616,19 @@ export function LovePanel({
   const handleLoveTabChange = (nextTab: LoveTab) => {
     setTab(nextTab);
     setDiaryComposerOpen(false);
+    setGiftComposerOpen(false);
+    setAnniversaryComposerOpen(false);
     closeCommentComposer();
     setOpenDiaryMenuId(null);
     setOpenGiftMenuId(null);
     setPickerPopover(null);
     setDiaryMenuPopover(null);
+    setDiaryDatePickerOpen(false);
+    setGiftDatePickerOpen(false);
+    setAnniversaryDatePickerOpen(false);
   };
-  const showDiaryFab = routeActive === true && tab === "diary" && !diaryComposerOpen && !activeCommentDiaryId;
+  const showLoveFab = routeActive === true && !loveComposerOpen && !activeCommentDiaryId;
+  const loveFabConfig = getLoveFabConfig(tab);
   const showLoveTabs = showInlineTabs && !activeCommentDiaryId;
 
   const navigateToPhotoSource = () => {
@@ -703,6 +726,7 @@ export function LovePanel({
     setGiftDirection(entry.direction ?? "我送 TA");
     setGiftFolderId(entry.folderId ?? null);
     setOpenGiftMenuId(null);
+    setGiftComposerOpen(true);
   };
   const moveGift = (entry: GiftEntry, folderId: string) => {
     const nextEntries = gifts.map((item) => (item.id === entry.id ? { ...item, folderId: folderId || null } : item));
@@ -722,6 +746,26 @@ export function LovePanel({
     setDiaryImages([]);
     setDiaryHeight(44);
     setDiaryComposerOpen(true);
+  };
+  const openGiftComposer = () => {
+    setEditingGiftId(null);
+    setGiftName("");
+    setGiftDate(todayIso());
+    setGiftTag("生日");
+    setGiftDirection("我送 TA");
+    setGiftFolderId(null);
+    setGiftDescription("");
+    setGiftImage(null);
+    setGiftDescriptionHeight(44);
+    setGiftComposerOpen(true);
+  };
+  const openAnniversaryComposer = () => {
+    setAnniversaryTitle("");
+    setAnniversaryDate(todayIso());
+    setRepeatYearly(false);
+    setReminderDays(0);
+    setAnniImage(null);
+    setAnniversaryComposerOpen(true);
   };
   const closeDiaryComposer = () => {
     setDiaryComposerOpen(false);
@@ -1014,79 +1058,11 @@ export function LovePanel({
               </View>
             )}
           </View>
-          {showDiaryFab ? (
-            <PortalLayer>
-              <PressableScale
-                accessibilityRole="button"
-                accessibilityLabel="发布恋爱日记"
-                onPress={openDiaryComposer}
-                style={styles.diaryFab}
-                testID="love-diary-publish-fab"
-                wrapperStyle={styles.diaryFabShell}
-                wrapperTestID="love-diary-publish-fab-shell"
-              >
-                <Text style={styles.diaryFabText}>+</Text>
-              </PressableScale>
-            </PortalLayer>
-          ) : null}
         </>
       ) : null}
 
       {tab === "gifts" ? (
         <>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>记录礼物</Text>
-            <View style={styles.inlineRow}>
-              <TextInput onChangeText={setGiftName} placeholder="礼物名称（如：手表）" style={[styles.input, styles.titleField]} value={giftName} />
-              <Pressable accessibilityRole="button" accessibilityLabel="选择礼物日期" onPress={() => setGiftDatePickerOpen((value) => !value)} style={[styles.input, styles.dateCompact]}>
-                <Text style={styles.dateValue}>{giftDate.replaceAll("-", "/")}</Text>
-              </Pressable>
-            </View>
-            <View style={styles.choiceGridThree}>
-              <PickerButton accessibilityLabel="选择礼物类型" compact id="gift-type" label={giftTag} onSelect={setGiftTag} onToggle={togglePicker} open={openPickerId === "gift-type"} options={giftTags.map((item) => ({ label: item, value: item }))} selectedValue={giftTag} />
-              <PickerButton accessibilityLabel="选择送礼方向" compact id="gift-direction" label={giftDirection} onSelect={(value) => setGiftDirection(value as GiftDirection)} onToggle={togglePicker} open={openPickerId === "gift-direction"} options={giftDirections.map((item) => ({ label: item, value: item }))} selectedValue={giftDirection} />
-              <PickerButton accessibilityLabel="选择礼物文件夹" compact id="gift-folder" label={giftFolderId ? getFolderName(giftFolderId) : "文件夹"} onSelect={(value) => setGiftFolderId(value || null)} onToggle={togglePicker} open={openPickerId === "gift-folder"} options={folderOptions} selectedValue={giftFolderId ?? ""} />
-            </View>
-            <TextInput
-              scrollEnabled
-              multiline
-              onChangeText={setGiftDescription}
-              onContentSizeChange={(event) => setGiftDescriptionHeight(event.nativeEvent.contentSize.height)}
-              placeholder="描述（可选）"
-              style={[styles.input, styles.diaryInput, { height: Math.min(Math.max(44, giftDescriptionHeight), 132) }]}
-              value={giftDescription}
-            />
-
-            {giftImage ? (
-              <View style={styles.imageThumbWrap}>
-                <Pressable onPress={() => setExpandedImage(giftImage)}>
-                  <Image source={{ uri: giftImage }} style={styles.imageThumb} />
-                </Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel="删除图片" onPress={() => setGiftImage(null)} style={styles.imageRemove}>
-                  <Text style={styles.imageRemoveText}>×</Text>
-                </Pressable>
-              </View>
-            ) : null}
-
-            <View style={styles.saveRow}>
-              <Pressable accessibilityRole="button" accessibilityLabel="上传礼物图片" onPress={() => giftFileInputRef.current?.click()} style={styles.secondaryButton}>
-                <Text style={styles.secondaryText}>图片</Text>
-              </Pressable>
-              <input accept="image/*" onChange={handleSingleImagePick(setGiftImage)} ref={giftFileInputRef} style={{ display: "none" }} type="file" />
-              <Pressable accessibilityRole="button" accessibilityLabel="保存礼物" onPress={saveGift} style={styles.primaryButton}>
-                <Text style={styles.primaryText}>{editingGiftId ? "更新" : "保存"}</Text>
-              </Pressable>
-            </View>
-            <DatePickerPopup
-              onCancel={() => setGiftDatePickerOpen(false)}
-              onConfirm={(selectedDate) => { setGiftDate(selectedDate); setGiftDatePickerOpen(false); }}
-              selectedDate={giftDate}
-              title="选择礼物日期"
-              visible={giftDatePickerOpen}
-            />
-            {feedback ? <Text nativeID="love-feedback" style={styles.feedback}>{feedback}</Text> : null}
-          </View>
-
           <View style={styles.card} testID="love-gift-archive-card">
             <View style={styles.archiveHeader}>
               <Text style={styles.cardTitle}>礼物档案</Text>
@@ -1168,49 +1144,6 @@ export function LovePanel({
 
       {tab === "anniversary" ? (
         <>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>添加纪念日</Text>
-            <View style={styles.inlineRow}>
-              <TextInput onChangeText={setAnniversaryTitle} placeholder="纪念日名称（如：在一起的日子）" style={[styles.input, styles.titleField]} value={anniversaryTitle} />
-              <Pressable accessibilityRole="button" accessibilityLabel="选择纪念日日期" onPress={() => setAnniversaryDatePickerOpen((value) => !value)} style={[styles.input, styles.dateCompact]}>
-                <Text style={styles.dateValue}>{anniversaryDate.replaceAll("-", "/")}</Text>
-              </Pressable>
-            </View>
-            <DatePickerPopup
-              onCancel={() => setAnniversaryDatePickerOpen(false)}
-              onConfirm={(selectedDate) => { setAnniversaryDate(selectedDate); setAnniversaryDatePickerOpen(false); }}
-              selectedDate={anniversaryDate}
-              title="选择纪念日日期"
-              visible={anniversaryDatePickerOpen}
-            />
-            <View style={styles.inlineRow}>
-              <PickerButton accessibilityLabel="选择纪念日重复方式" id="anniversary-repeat" label={repeatYearly ? "每年重复" : "不重复"} onSelect={(value) => setRepeatYearly(value === "每年重复")} onToggle={togglePicker} open={openPickerId === "anniversary-repeat"} options={repeatOptions.map((item) => ({ label: item, value: item }))} selectedValue={repeatYearly ? "每年重复" : "不重复"} />
-              <PickerButton accessibilityLabel="选择纪念日提醒" id="anniversary-reminder" label={reminderOptions.find((item) => item.value === reminderDays)?.label ?? "当天"} onSelect={(value) => setReminderDays(Number(value))} onToggle={togglePicker} open={openPickerId === "anniversary-reminder"} options={reminderOptions.map((item) => ({ label: item.label, value: String(item.value) }))} selectedValue={String(reminderDays)} />
-            </View>
-
-            {anniImage ? (
-              <View style={styles.imageThumbWrap}>
-                <Pressable onPress={() => setExpandedImage(anniImage)}>
-                  <Image source={{ uri: anniImage }} style={styles.imageThumb} />
-                </Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel="删除图片" onPress={() => setAnniImage(null)} style={styles.imageRemove}>
-                  <Text style={styles.imageRemoveText}>×</Text>
-                </Pressable>
-              </View>
-            ) : null}
-
-            <View style={styles.saveRow}>
-              <Pressable accessibilityRole="button" accessibilityLabel="上传纪念日图片" onPress={() => anniFileInputRef.current?.click()} style={styles.secondaryButton}>
-                <Text style={styles.secondaryText}>图片</Text>
-              </Pressable>
-              <input accept="image/*" onChange={handleSingleImagePick(setAnniImage)} ref={anniFileInputRef} style={{ display: "none" }} type="file" />
-              <Pressable accessibilityRole="button" accessibilityLabel="添加纪念日" onPress={saveAnniversary} style={styles.primaryButton}>
-                <Text style={styles.primaryText}>添加</Text>
-              </Pressable>
-            </View>
-            {feedback ? <Text nativeID="love-feedback" style={styles.feedback}>{feedback}</Text> : null}
-          </View>
-
           <View style={styles.card} testID="love-anniversary-archive-card">
             <View style={styles.archiveHeader}>
               <Text style={styles.cardTitle}>纪念日档案</Text>
@@ -1305,6 +1238,27 @@ export function LovePanel({
           />
           </>
         )
+      ) : null}
+
+      {showLoveFab ? (
+        <PortalLayer>
+          <PressableScale
+            accessibilityRole="button"
+            accessibilityLabel={loveFabConfig.label}
+            onPress={() => {
+              if (tab === "diary") openDiaryComposer();
+              if (tab === "gifts") openGiftComposer();
+              if (tab === "anniversary") openAnniversaryComposer();
+              if (tab === "photos") setFolderDialogOpen(true);
+            }}
+            style={styles.diaryFab}
+            testID={loveFabConfig.testID}
+            wrapperStyle={styles.diaryFabShell}
+            wrapperTestID="love-diary-publish-fab-shell"
+          >
+            <Text style={styles.diaryFabText}>+</Text>
+          </PressableScale>
+        </PortalLayer>
       ) : null}
 
       {showLoveTabs ? (
@@ -1475,6 +1429,126 @@ export function LovePanel({
         </PortalLayer>
       ) : null}
 
+      {giftComposerOpen ? (
+        <PortalLayer>
+        <View style={styles.composerLayer}>
+          <Pressable accessibilityRole="button" accessibilityLabel="关闭礼物弹窗遮罩" onPress={() => setGiftComposerOpen(false)} style={styles.composerBackdrop} />
+          <Animated.View style={styles.composerModalMotion}>
+          <View style={styles.composerModal} testID="love-gift-composer-modal">
+            <View style={styles.composerHeader}>
+              <Text style={styles.cardTitle}>{editingGiftId ? "编辑礼物" : "记录礼物"}</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="关闭礼物弹窗" onPress={() => setGiftComposerOpen(false)} style={styles.composerCloseButton}>
+                <Text style={styles.composerCloseText}>×</Text>
+              </Pressable>
+            </View>
+            <View style={styles.inlineRow}>
+              <TextInput onChangeText={setGiftName} placeholder="礼物名称（如：手表）" style={[styles.input, styles.titleField]} value={giftName} />
+              <Pressable accessibilityRole="button" accessibilityLabel="选择礼物日期" onPress={() => setGiftDatePickerOpen((value) => !value)} style={[styles.input, styles.dateCompact]}>
+                <Text style={styles.dateValue}>{giftDate.replaceAll("-", "/")}</Text>
+              </Pressable>
+            </View>
+            <View style={styles.choiceGridThree}>
+              <PickerButton accessibilityLabel="选择礼物类型" compact id="gift-type" label={giftTag} onSelect={setGiftTag} onToggle={togglePicker} open={openPickerId === "gift-type"} options={giftTags.map((item) => ({ label: item, value: item }))} selectedValue={giftTag} />
+              <PickerButton accessibilityLabel="选择送礼方向" compact id="gift-direction" label={giftDirection} onSelect={(value) => setGiftDirection(value as GiftDirection)} onToggle={togglePicker} open={openPickerId === "gift-direction"} options={giftDirections.map((item) => ({ label: item, value: item }))} selectedValue={giftDirection} />
+              <PickerButton accessibilityLabel="选择礼物文件夹" compact id="gift-folder" label={giftFolderId ? getFolderName(giftFolderId) : "文件夹"} onSelect={(value) => setGiftFolderId(value || null)} onToggle={togglePicker} open={openPickerId === "gift-folder"} options={folderOptions} selectedValue={giftFolderId ?? ""} />
+            </View>
+            <TextInput
+              scrollEnabled
+              multiline
+              onChangeText={setGiftDescription}
+              onContentSizeChange={(event) => setGiftDescriptionHeight(event.nativeEvent.contentSize.height)}
+              placeholder="描述（可选）"
+              style={[styles.input, styles.diaryInput, { height: Math.min(Math.max(44, giftDescriptionHeight), 132) }]}
+              value={giftDescription}
+            />
+            {giftImage ? (
+              <View style={styles.imageThumbWrap}>
+                <Pressable onPress={() => setExpandedImage(giftImage)}>
+                  <Image source={{ uri: giftImage }} style={styles.imageThumb} />
+                </Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel="删除图片" onPress={() => setGiftImage(null)} style={styles.imageRemove}>
+                  <Text style={styles.imageRemoveText}>×</Text>
+                </Pressable>
+              </View>
+            ) : null}
+            <View style={styles.saveRow}>
+              <Pressable accessibilityRole="button" accessibilityLabel="上传礼物图片" onPress={() => giftFileInputRef.current?.click()} style={styles.secondaryButton}>
+                <Text style={styles.secondaryText}>图片</Text>
+              </Pressable>
+              <input accept="image/*" onChange={handleSingleImagePick(setGiftImage)} ref={giftFileInputRef} style={{ display: "none" }} type="file" />
+              <Pressable accessibilityRole="button" accessibilityLabel="保存礼物" onPress={saveGift} style={styles.primaryButton}>
+                <Text style={styles.primaryText}>{editingGiftId ? "更新" : "保存"}</Text>
+              </Pressable>
+            </View>
+            <DatePickerPopup
+              onCancel={() => setGiftDatePickerOpen(false)}
+              onConfirm={(selectedDate) => { setGiftDate(selectedDate); setGiftDatePickerOpen(false); }}
+              selectedDate={giftDate}
+              title="选择礼物日期"
+              visible={giftDatePickerOpen}
+            />
+            {feedback ? <Text nativeID="love-feedback" style={styles.feedback}>{feedback}</Text> : null}
+          </View>
+          </Animated.View>
+        </View>
+        </PortalLayer>
+      ) : null}
+
+      {anniversaryComposerOpen ? (
+        <PortalLayer>
+        <View style={styles.composerLayer}>
+          <Pressable accessibilityRole="button" accessibilityLabel="关闭纪念日弹窗遮罩" onPress={() => setAnniversaryComposerOpen(false)} style={styles.composerBackdrop} />
+          <Animated.View style={styles.composerModalMotion}>
+          <View style={styles.composerModal} testID="love-anniversary-composer-modal">
+            <View style={styles.composerHeader}>
+              <Text style={styles.cardTitle}>添加纪念日</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="关闭纪念日弹窗" onPress={() => setAnniversaryComposerOpen(false)} style={styles.composerCloseButton}>
+                <Text style={styles.composerCloseText}>×</Text>
+              </Pressable>
+            </View>
+            <View style={styles.inlineRow}>
+              <TextInput onChangeText={setAnniversaryTitle} placeholder="纪念日名称（如：在一起的日子）" style={[styles.input, styles.titleField]} value={anniversaryTitle} />
+              <Pressable accessibilityRole="button" accessibilityLabel="选择纪念日日期" onPress={() => setAnniversaryDatePickerOpen((value) => !value)} style={[styles.input, styles.dateCompact]}>
+                <Text style={styles.dateValue}>{anniversaryDate.replaceAll("-", "/")}</Text>
+              </Pressable>
+            </View>
+            <DatePickerPopup
+              onCancel={() => setAnniversaryDatePickerOpen(false)}
+              onConfirm={(selectedDate) => { setAnniversaryDate(selectedDate); setAnniversaryDatePickerOpen(false); }}
+              selectedDate={anniversaryDate}
+              title="选择纪念日日期"
+              visible={anniversaryDatePickerOpen}
+            />
+            <View style={styles.inlineRow}>
+              <PickerButton accessibilityLabel="选择纪念日重复方式" id="anniversary-repeat" label={repeatYearly ? "每年重复" : "不重复"} onSelect={(value) => setRepeatYearly(value === "每年重复")} onToggle={togglePicker} open={openPickerId === "anniversary-repeat"} options={repeatOptions.map((item) => ({ label: item, value: item }))} selectedValue={repeatYearly ? "每年重复" : "不重复"} />
+              <PickerButton accessibilityLabel="选择纪念日提醒" id="anniversary-reminder" label={reminderOptions.find((item) => item.value === reminderDays)?.label ?? "当天"} onSelect={(value) => setReminderDays(Number(value))} onToggle={togglePicker} open={openPickerId === "anniversary-reminder"} options={reminderOptions.map((item) => ({ label: item.label, value: String(item.value) }))} selectedValue={String(reminderDays)} />
+            </View>
+            {anniImage ? (
+              <View style={styles.imageThumbWrap}>
+                <Pressable onPress={() => setExpandedImage(anniImage)}>
+                  <Image source={{ uri: anniImage }} style={styles.imageThumb} />
+                </Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel="删除图片" onPress={() => setAnniImage(null)} style={styles.imageRemove}>
+                  <Text style={styles.imageRemoveText}>×</Text>
+                </Pressable>
+              </View>
+            ) : null}
+            <View style={styles.saveRow}>
+              <Pressable accessibilityRole="button" accessibilityLabel="上传纪念日图片" onPress={() => anniFileInputRef.current?.click()} style={styles.secondaryButton}>
+                <Text style={styles.secondaryText}>图片</Text>
+              </Pressable>
+              <input accept="image/*" onChange={handleSingleImagePick(setAnniImage)} ref={anniFileInputRef} style={{ display: "none" }} type="file" />
+              <Pressable accessibilityRole="button" accessibilityLabel="添加纪念日" onPress={saveAnniversary} style={styles.primaryButton}>
+                <Text style={styles.primaryText}>添加</Text>
+              </Pressable>
+            </View>
+            {feedback ? <Text nativeID="love-feedback" style={styles.feedback}>{feedback}</Text> : null}
+          </View>
+          </Animated.View>
+        </View>
+        </PortalLayer>
+      ) : null}
+
       {activeCommentDiaryId ? (
         <PortalLayer>
         <Animated.View nativeID="love-inline-comment-composer" style={[styles.inlineCommentComposer, styles.inlineCommentComposerMotion, { bottom: commentKeyboardOffset }]} testID="love-inline-comment-motion">
@@ -1533,6 +1607,13 @@ export function LovePanel({
       ) : null}
     </View>
   );
+}
+
+function getLoveFabConfig(tab: LoveTab) {
+  if (tab === "gifts") return { label: "记录礼物", testID: "love-story-fab-gifts" };
+  if (tab === "anniversary") return { label: "添加纪念日", testID: "love-story-fab-anniversary" };
+  if (tab === "photos") return { label: "照片墙新建文件夹", testID: "love-story-fab-photos" };
+  return { label: "发布恋爱日记", testID: "love-diary-publish-fab" };
 }
 
 function PortalLayer({ children }: { children: ReactNode }) {

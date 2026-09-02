@@ -156,8 +156,9 @@ describe("Task 6 love page and UI polish", () => {
   it("keeps the diary publish fab fixed to the viewport", async () => {
     render(<AppShell initialRoute="/love" />);
 
-    expect(await screen.findByRole("button", { name: "发布恋爱日记" })).toHaveStyle({
-      bottom: "calc(94px + env(safe-area-inset-bottom, 0px))",
+    await screen.findByRole("button", { name: "发布恋爱日记" });
+    expect(screen.getByTestId("love-diary-publish-fab-shell")).toHaveStyle({
+      bottom: "calc(80px + env(safe-area-inset-bottom, 0px))",
       position: "fixed"
     } as never);
   });

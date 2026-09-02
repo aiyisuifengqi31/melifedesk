@@ -61,13 +61,13 @@ describe("HomePanel layout (Phase 2)", () => {
 
     render(<HomePanel themeTokens={testTokens} />);
 
-    const todosCard = screen.getByTestId("home-todo-widget");
-    expect(within(todosCard).getByTestId("home-todo-show-more")).toBeOnTheScreen();
+    const todayCard = screen.getByTestId("home-today-card");
+    expect(within(todayCard).getByTestId("home-todo-show-more")).toBeOnTheScreen();
 
-    fireEvent.press(within(todosCard).getByRole("button", { name: "收起卡片" }));
+    fireEvent.press(within(todayCard).getByRole("button", { name: "收起卡片" }));
 
-    expect(within(todosCard).queryByTestId("home-todo-show-more")).toBeNull();
-    expect(storage.data.get(COLLAPSED_KEY)).toContain("todos");
+    expect(within(todayCard).queryByTestId("home-todo-show-more")).toBeNull();
+    expect(storage.data.get(COLLAPSED_KEY)).toContain("today");
   });
 
   it("enters edit mode, shows lock for core cards and hides a non-core card", () => {
@@ -75,16 +75,16 @@ describe("HomePanel layout (Phase 2)", () => {
 
     fireEvent.press(screen.getByRole("button", { name: "编辑首页" }));
 
-    const todosCard = screen.getByTestId("home-todo-widget");
-    expect(within(todosCard).getByText("锁定")).toBeOnTheScreen();
-    expect(within(todosCard).queryByRole("button", { name: "隐藏卡片" })).toBeNull();
+    const todayCard = screen.getByTestId("home-today-card");
+    expect(within(todayCard).getByText("锁定")).toBeOnTheScreen();
+    expect(within(todayCard).queryByRole("button", { name: "隐藏卡片" })).toBeNull();
 
-    const notesCard = screen.getByTestId("home-notes-card");
-    fireEvent.press(within(notesCard).getByRole("button", { name: "隐藏卡片" }));
+    const mealCard = screen.getByTestId("home-meal-card");
+    fireEvent.press(within(mealCard).getByRole("button", { name: "隐藏卡片" }));
 
-    expect(within(notesCard).getByRole("button", { name: "显示卡片" })).toBeOnTheScreen();
+    expect(within(mealCard).getByRole("button", { name: "显示卡片" })).toBeOnTheScreen();
     const savedOrder = JSON.parse(storage.data.get(ORDER_KEY) ?? "[]");
-    expect(savedOrder).not.toContain("notes");
+    expect(savedOrder).not.toContain("meal");
   });
 
   it("reorders cards via move up and persists the new order", () => {
@@ -92,24 +92,24 @@ describe("HomePanel layout (Phase 2)", () => {
 
     fireEvent.press(screen.getByRole("button", { name: "编辑首页" }));
 
-    const notesCard = screen.getByTestId("home-notes-card");
-    fireEvent.press(within(notesCard).getByRole("button", { name: "上移卡片" }));
+    const mealCard = screen.getByTestId("home-meal-card");
+    fireEvent.press(within(mealCard).getByRole("button", { name: "上移卡片" }));
 
     const savedOrder = JSON.parse(storage.data.get(ORDER_KEY) ?? "[]");
-    expect(savedOrder.indexOf("notes")).toBeLessThan(savedOrder.indexOf("meal"));
+    expect(savedOrder.indexOf("meal")).toBeLessThan(savedOrder.indexOf("today"));
   });
 
   it("restores a hidden non-core card via the show toggle", () => {
-    storage.data.set(ORDER_KEY, JSON.stringify(["summary", "quickAccounting", "todos", "meal"]));
+    storage.data.set(ORDER_KEY, JSON.stringify(["summary", "quickAccounting", "today"]));
 
     render(<HomePanel themeTokens={testTokens} />);
     fireEvent.press(screen.getByRole("button", { name: "编辑首页" }));
 
-    const notesCard = screen.getByTestId("home-notes-card");
-    fireEvent.press(within(notesCard).getByRole("button", { name: "显示卡片" }));
+    const mealCard = screen.getByTestId("home-meal-card");
+    fireEvent.press(within(mealCard).getByRole("button", { name: "显示卡片" }));
 
     const savedOrder = JSON.parse(storage.data.get(ORDER_KEY) ?? "[]");
-    expect(savedOrder).toContain("notes");
+    expect(savedOrder).toContain("meal");
   });
 
   it("keeps the compact quick accounting action as a single plus", () => {
@@ -129,5 +129,18 @@ describe("HomePanel layout (Phase 2)", () => {
     const cta = within(mealCard).getByTestId("meal-spinner-compact-cta");
     expect(cta).toHaveTextContent("去转盘 →");
     expect(cta.props.style).toEqual(expect.objectContaining({ fontSize: 20, marginTop: "auto" }));
+  });
+
+  it("merges todos, notes, and expiry reminders into one today area", () => {
+    render(<HomePanel themeTokens={testTokens} />);
+
+    const todayCard = screen.getByTestId("home-today-card");
+    expect(within(todayCard).getByText("今天")).toBeOnTheScreen();
+    expect(within(todayCard).getByText("待办")).toBeOnTheScreen();
+    expect(within(todayCard).getByText("备忘")).toBeOnTheScreen();
+    expect(within(todayCard).getByText("提醒")).toBeOnTheScreen();
+    expect(screen.queryByTestId("home-todo-widget")).toBeNull();
+    expect(screen.queryByTestId("home-notes-card")).toBeNull();
+    expect(screen.queryByTestId("home-expiry-card")).toBeNull();
   });
 });

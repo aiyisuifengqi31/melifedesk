@@ -59,6 +59,7 @@ export function DailyPlanPanel({ shortcutNonce, shortcutTarget, storage, themeTo
   const [draftTitle, setDraftTitle] = useState("");
   const [draftTime, setDraftTime] = useState("");
   const [focusId, setFocusId] = useState<string | null>(null);
+  const [monthCalendarExpanded, setMonthCalendarExpanded] = useState(false);
 
   useEffect(() => {
     const focus = consumePlanFocus();
@@ -129,6 +130,15 @@ export function DailyPlanPanel({ shortcutNonce, shortcutTarget, storage, themeTo
     setViewMonth(parsed.getMonth());
   };
 
+  const shiftSelectedDate = (deltaDays: number) => {
+    const next = parseIsoDate(selectedDate);
+    next.setDate(next.getDate() + deltaDays);
+    const nextIso = toIsoDate(next);
+    setSelectedDate(nextIso);
+    setViewYear(next.getFullYear());
+    setViewMonth(next.getMonth());
+  };
+
   const saveQuickDraft = () => {
     const title = draftTitle.trim();
     if (!title || !quickKind) return;
@@ -171,11 +181,15 @@ export function DailyPlanPanel({ shortcutNonce, shortcutTarget, storage, themeTo
       </View>
 
       <LifeCalendar
+        expanded={monthCalendarExpanded}
         markers={markers}
         onNextMonth={() => shiftMonth(viewYear, viewMonth, 1, setViewYear, setViewMonth)}
+        onNextWeek={() => shiftSelectedDate(7)}
         onPrevMonth={() => shiftMonth(viewYear, viewMonth, -1, setViewYear, setViewMonth)}
+        onPrevWeek={() => shiftSelectedDate(-7)}
         onSelectDate={setSelectedDate}
         selectedDate={selectedDate}
+        onToggleExpanded={() => setMonthCalendarExpanded((value) => !value)}
         today={todayIso()}
         viewMonth={viewMonth}
         viewYear={viewYear}
@@ -252,69 +266,117 @@ export function DailyPlanPanel({ shortcutNonce, shortcutTarget, storage, themeTo
 }
 
 function LifeCalendar({
+  expanded,
   markers,
   onNextMonth,
+  onNextWeek,
   onPrevMonth,
+  onPrevWeek,
   onSelectDate,
+  onToggleExpanded,
   selectedDate,
   today,
   viewMonth,
   viewYear
 }: {
+  expanded: boolean;
   markers: Record<string, Array<"todo" | "package" | "reminder">>;
   onNextMonth: () => void;
+  onNextWeek: () => void;
   onPrevMonth: () => void;
+  onPrevWeek: () => void;
   onSelectDate: (date: string) => void;
+  onToggleExpanded: () => void;
   selectedDate: string;
   today: string;
   viewMonth: number;
   viewYear: number;
 }) {
-  const days = buildMonthDays(viewYear, viewMonth);
+  const weekDays = buildWeekDays(selectedDate);
+  const monthDays = buildMonthDays(viewYear, viewMonth);
   return (
-    <View style={styles.calendarCard} testID="life-calendar">
+    <View style={styles.calendarCard} testID="life-week-calendar">
       <View style={styles.calendarTop}>
-        <Pressable accessibilityRole="button" accessibilityLabel="上一个月" hitSlop={12} onPress={onPrevMonth}>
+        <Pressable accessibilityRole="button" accessibilityLabel="上一周" hitSlop={12} onPress={onPrevWeek}>
           <Text style={styles.calendarArrow}>‹</Text>
         </Pressable>
-        <Text style={styles.calendarTitle}>生活日历 · {viewYear}年{viewMonth + 1}月</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="下一个月" hitSlop={12} onPress={onNextMonth}>
+        <View style={styles.calendarTitleWrap}>
+          <Text style={styles.calendarTitle}>生活日历 · {formatHeaderDate(selectedDate)}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={expanded ? "收起完整月历" : "展开完整月历"} onPress={onToggleExpanded} style={styles.calendarModeButton}>
+            <Text style={styles.calendarModeText}>{expanded ? "收起月历 ▲" : "月历 ▼"}</Text>
+          </Pressable>
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="下一周" hitSlop={12} onPress={onNextWeek}>
           <Text style={styles.calendarArrow}>›</Text>
         </Pressable>
       </View>
-      <View style={styles.weekRow}>
-        {["日", "一", "二", "三", "四", "五", "六"].map((weekday) => (
-          <Text key={weekday} style={[styles.weekday, weekday === "日" || weekday === "六" ? styles.weekendHeader : null]}>{weekday}</Text>
+      <View style={styles.weekStrip}>
+        {weekDays.map((day) => (
+          <CalendarDayCell day={day} key={day.date} markers={markers} onSelectDate={onSelectDate} selectedDate={selectedDate} today={today} />
         ))}
       </View>
-      <View style={styles.dayGrid}>
-        {days.map((day) => {
-          const holiday = day.inMonth ? getHolidayLabel(day.date) : null;
-          const weekend = day.inMonth && isWeekend(day.date);
-          const selected = day.date === selectedDate;
-          const isToday = day.date === today;
-          const dayMarkers = (markers[day.date] ?? []).slice(0, 3);
-          return (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`选择日期 ${day.date}`}
-              key={day.date}
-              onPress={() => onSelectDate(day.date)}
-              style={[styles.dayCell, selected ? styles.dayCellSelected : null, isToday && !selected ? styles.dayCellToday : null]}
-              testID={`calendar-day-${day.date}`}
-            >
-              <Text style={[styles.dayText, !day.inMonth ? styles.mutedDay : null, weekend ? styles.weekendDay : null, selected ? styles.selectedDay : null]}>{day.day}</Text>
-              <View style={styles.markerRow}>
-                {dayMarkers.map((marker) => (
-                  <View key={marker} style={[styles.markerDot, marker === "package" ? styles.packageDot : marker === "reminder" ? styles.reminderDot : null]} testID={`calendar-marker-${marker}-${day.date}`} />
-                ))}
-              </View>
-              {holiday ? <Text numberOfLines={1} style={styles.holidayText}>{holiday}</Text> : <View style={styles.holidayPlaceholder} />}
+      {expanded ? (
+        <View style={styles.monthCalendar} testID="life-month-calendar">
+          <View style={styles.monthTop}>
+            <Pressable accessibilityRole="button" accessibilityLabel="上一个月" hitSlop={12} onPress={onPrevMonth}>
+              <Text style={styles.monthArrow}>‹</Text>
             </Pressable>
-          );
-        })}
-      </View>
+            <Text style={styles.monthTitle}>{viewYear}年{viewMonth + 1}月</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="下一个月" hitSlop={12} onPress={onNextMonth}>
+              <Text style={styles.monthArrow}>›</Text>
+            </Pressable>
+          </View>
+          <View style={styles.weekRow}>
+            {["日", "一", "二", "三", "四", "五", "六"].map((weekday) => (
+              <Text key={weekday} style={[styles.weekday, weekday === "日" || weekday === "六" ? styles.weekendHeader : null]}>{weekday}</Text>
+            ))}
+          </View>
+          <View style={styles.dayGrid}>
+            {monthDays.map((day) => (
+              <CalendarDayCell day={day} key={day.date} markers={markers} onSelectDate={onSelectDate} selectedDate={selectedDate} today={today} />
+            ))}
+          </View>
+        </View>
+      ) : null}
     </View>
+  );
+}
+
+function CalendarDayCell({
+  day,
+  markers,
+  onSelectDate,
+  selectedDate,
+  today
+}: {
+  day: MonthDay;
+  markers: Record<string, Array<"todo" | "package" | "reminder">>;
+  onSelectDate: (date: string) => void;
+  selectedDate: string;
+  today: string;
+}) {
+  const holiday = day.inMonth ? getHolidayLabel(day.date) : null;
+  const weekend = day.inMonth && isWeekend(day.date);
+  const selected = day.date === selectedDate;
+  const isToday = day.date === today;
+  const dayMarkers = (markers[day.date] ?? []).slice(0, 3);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`选择日期 ${day.date}`}
+      onPress={() => onSelectDate(day.date)}
+      style={[styles.dayCell, selected ? styles.dayCellSelected : null, isToday && !selected ? styles.dayCellToday : null]}
+      testID={`calendar-day-${day.date}`}
+    >
+      <Text style={[styles.weekCellLabel, selected ? styles.selectedDay : weekend ? styles.weekendDay : null]}>{weekdayShort(day.date)}</Text>
+      <Text style={[styles.dayText, !day.inMonth ? styles.mutedDay : null, weekend ? styles.weekendDay : null, selected ? styles.selectedDay : null]}>{day.day}</Text>
+      <View style={styles.markerRow}>
+        {dayMarkers.map((marker) => (
+          <View key={marker} style={[styles.markerDot, marker === "package" ? styles.packageDot : marker === "reminder" ? styles.reminderDot : null]} testID={`calendar-marker-${marker}-${day.date}`} />
+        ))}
+      </View>
+      {holiday ? <Text numberOfLines={1} style={styles.holidayText}>{holiday}</Text> : <View style={styles.holidayPlaceholder} />}
+    </Pressable>
   );
 }
 
@@ -440,6 +502,25 @@ function buildMonthDays(year: number, monthIndex: number): MonthDay[] {
   });
 }
 
+function buildWeekDays(selectedDate: string): MonthDay[] {
+  const selected = parseIsoDate(selectedDate);
+  const start = new Date(selected);
+  start.setDate(selected.getDate() - 2);
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return {
+      date: toIsoDate(date),
+      day: date.getDate(),
+      inMonth: date.getMonth() === selected.getMonth()
+    };
+  });
+}
+
+function weekdayShort(value: string) {
+  return ["日", "一", "二", "三", "四", "五", "六"][parseIsoDate(value).getDay()];
+}
+
 function shiftMonth(year: number, month: number, delta: number, setYear: (value: number) => void, setMonth: (value: number) => void) {
   const next = new Date(year, month + delta, 1);
   setYear(next.getFullYear());
@@ -479,6 +560,21 @@ const styles = StyleSheet.create({
   calendarTitle: {
     color: "#111827",
     fontSize: 15,
+    fontWeight: "900"
+  },
+  calendarTitleWrap: {
+    alignItems: "center",
+    gap: 4
+  },
+  calendarModeButton: {
+    backgroundColor: "#e8f6ee",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4
+  },
+  calendarModeText: {
+    color: "#248a51",
+    fontSize: 11,
     fontWeight: "900"
   },
   calendarTop: {
@@ -594,6 +690,28 @@ const styles = StyleSheet.create({
   },
   mutedDay: {
     color: "#c9ced6"
+  },
+  monthArrow: {
+    color: "#64748b",
+    fontSize: 20,
+    fontWeight: "900"
+  },
+  monthCalendar: {
+    borderTopColor: "#edf1f4",
+    borderTopWidth: 1,
+    marginTop: 10,
+    paddingTop: 8
+  },
+  monthTitle: {
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  monthTop: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 6
   },
   packageDot: {
     backgroundColor: "#38bdf8"
@@ -821,5 +939,17 @@ const styles = StyleSheet.create({
     gap: 4,
     justifyContent: "space-between",
     marginBottom: 6
+  },
+  weekCellLabel: {
+    color: "#94a3b8",
+    fontSize: 9,
+    fontWeight: "900",
+    lineHeight: 11,
+    textAlign: "center"
+  },
+  weekStrip: {
+    flexDirection: "row",
+    gap: 4,
+    justifyContent: "space-between"
   }
 });

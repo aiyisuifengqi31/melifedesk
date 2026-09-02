@@ -3,20 +3,19 @@
  * 顺序数组本身即「可见且有序」的列表：卡片不在数组中即视为已隐藏。
  */
 
-export type HomeCardId = "summary" | "quickAccounting" | "todos" | "notes" | "meal";
+export type HomeCardId = "summary" | "quickAccounting" | "today" | "meal";
 
 export type HomeCardMeta = {
   id: HomeCardId;
   title: string;
-  /** 核心模块不可隐藏（例如今日概览、快速记账、今日待办）。 */
+  /** 核心模块不可隐藏（例如今日概览、快速记账、今天）。 */
   core: boolean;
 };
 
 export const HOME_CARDS: HomeCardMeta[] = [
   { id: "summary", title: "今日概览", core: true },
   { id: "quickAccounting", title: "快速记账", core: true },
-  { id: "todos", title: "今日待办", core: true },
-  { id: "notes", title: "备忘录", core: false },
+  { id: "today", title: "今天", core: true },
   { id: "meal", title: "今天吃什么", core: false }
 ];
 
@@ -62,7 +61,12 @@ function writeJson(key: string, value: unknown): void {
 export function loadHomeOrder(): HomeCardId[] {
   const parsed = readJson<unknown[]>(ORDER_KEY, []);
   if (!Array.isArray(parsed) || parsed.length === 0) return [...DEFAULT_ORDER];
-  const filtered = parsed.filter((id): id is HomeCardId => typeof id === "string" && KNOWN_IDS.includes(id as HomeCardId));
+  const migrated = parsed.map((id) => (id === "todos" || id === "notes" ? "today" : id));
+  const filtered: HomeCardId[] = [];
+  for (const id of migrated) {
+    if (typeof id !== "string" || !KNOWN_IDS.includes(id as HomeCardId)) continue;
+    if (!filtered.includes(id as HomeCardId)) filtered.push(id as HomeCardId);
+  }
   // 核心模块不可丢失：若保存数据异常导致缺失，补回；非核心缺失 = 用户主动隐藏，保留隐藏态。
   for (const card of HOME_CARDS) {
     if (card.core && !filtered.includes(card.id)) filtered.push(card.id);

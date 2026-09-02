@@ -18,7 +18,7 @@ describe("floating page controls", () => {
     expect(screen.getByTestId("secondary-tab-indicator")).toHaveStyle({
       bottom: 0,
       top: 0,
-      width: "25%"
+      width: "33.333333333333336%"
     });
     expect(screen.getByTestId("secondary-tab-indicator-pill")).toHaveStyle({
       backgroundColor: "rgba(93, 178, 235, 0.14)",
@@ -100,22 +100,28 @@ describe("floating page controls", () => {
     expect(screen.queryByRole("button", { name: "发布恋爱日记" })).toBeNull();
   });
 
-  it("only shows the love diary publish button on the diary tab", async () => {
+  it("switches the unified love story fab action by love tab", async () => {
     render(<AppShell initialRoute="/love" viewport="mobile" />);
 
     expect(await screen.findByRole("button", { name: "发布恋爱日记" })).toBeOnTheScreen();
 
     fireEvent.press(screen.getByRole("button", { name: "礼物" }));
-    expect(screen.queryByRole("button", { name: "发布恋爱日记" })).toBeNull();
+    expect(await screen.findByRole("button", { name: "记录礼物" })).toBeOnTheScreen();
+    expect(screen.queryByPlaceholderText("礼物名称（如：手表）")).toBeNull();
+    fireEvent.press(screen.getByRole("button", { name: "记录礼物" }));
+    expect(screen.getByTestId("love-gift-composer-modal")).toBeOnTheScreen();
 
     fireEvent.press(screen.getByRole("button", { name: "日记本" }));
     expect(await screen.findByRole("button", { name: "发布恋爱日记" })).toBeOnTheScreen();
 
     fireEvent.press(screen.getByRole("button", { name: "纪念日" }));
-    expect(screen.queryByRole("button", { name: "发布恋爱日记" })).toBeNull();
+    expect(await screen.findByRole("button", { name: "添加纪念日" })).toBeOnTheScreen();
+    expect(screen.queryByPlaceholderText("纪念日名称（如：在一起的日子）")).toBeNull();
+    fireEvent.press(screen.getByRole("button", { name: "添加纪念日" }));
+    expect(screen.getByTestId("love-anniversary-composer-modal")).toBeOnTheScreen();
 
     fireEvent.press(screen.getByRole("button", { name: "照片墙" }));
-    expect(screen.queryByRole("button", { name: "发布恋爱日记" })).toBeNull();
+    expect(await screen.findByRole("button", { name: "照片墙新建文件夹" })).toBeOnTheScreen();
   });
 
   it("does not show the diary publish portal without an explicit love route guard", () => {

@@ -116,7 +116,8 @@ describe("Daily plan calendar workspace", () => {
     render(<DailyPlanPanel storage={storage} themeTokens={testTokens} />);
 
     expect(screen.queryByText("当前城市天气")).toBeNull();
-    expect(screen.getByTestId("life-calendar")).toBeOnTheScreen();
+    expect(screen.getByTestId("life-week-calendar")).toBeOnTheScreen();
+    expect(screen.queryByTestId("life-month-calendar")).toBeNull();
     expect(screen.getByTestId(`calendar-marker-todo-${today}`)).toBeOnTheScreen();
     expect(screen.getByTestId(`calendar-marker-reminder-${today}`)).toBeOnTheScreen();
     expect(screen.getByText("today schedule task")).toBeOnTheScreen();
@@ -128,6 +129,9 @@ describe("Daily plan calendar workspace", () => {
 
     fireEvent.press(screen.getByTestId(`calendar-day-${tomorrow}`));
     expect(screen.getAllByText("A12-3").length).toBeGreaterThan(0);
+
+    fireEvent.press(screen.getByRole("button", { name: "展开完整月历" }));
+    expect(screen.getByTestId("life-month-calendar")).toBeOnTheScreen();
   });
 });
 
@@ -151,7 +155,7 @@ describe("Todo route interactions", () => {
 
     render(<HomePanel storage={window.localStorage} themeTokens={testTokens} />);
 
-    expect(screen.getAllByText("今日待办").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("今天").length).toBeGreaterThan(0);
     expect(screen.getAllByText("复盘页面交互").length).toBeGreaterThan(0);
     fireEvent.press(screen.getByRole("checkbox", { name: "完成首页待办：复盘页面交互" }));
     expect(loadLocalTodos(window.localStorage)[0]?.completed).toBe(true);
@@ -179,12 +183,12 @@ describe("Todo route interactions", () => {
 
     render(<HomePanel storage={window.localStorage} themeTokens={testTokens} />);
 
-    expect(within(screen.getByTestId("home-todo-widget")).getByText("completed-home-only")).toBeOnTheScreen();
+    expect(within(screen.getByTestId("home-today-card")).getByText("completed-home-only")).toBeOnTheScreen();
     fireEvent.press(screen.getByRole("checkbox", { name: /completed-home-only/ }));
 
-    expect(within(screen.getByTestId("home-todo-widget")).queryByText("completed-home-only")).toBeNull();
+    expect(within(screen.getByTestId("home-today-card")).queryByText("completed-home-only")).toBeNull();
     expect(within(screen.getByTestId("home-summary-card")).queryByText("1/1")).toBeNull();
-    expect(within(screen.getByTestId("home-todo-widget")).queryByText("1/1")).toBeNull();
+    expect(within(screen.getByTestId("home-today-card")).queryByText("1/1")).toBeNull();
   });
 
   it("keeps completed tasks from previous days out of the home todo card and today overview", async () => {
@@ -201,12 +205,12 @@ describe("Todo route interactions", () => {
 
     render(<HomePanel storage={window.localStorage} themeTokens={testTokens} />);
 
-    const todosCard = screen.getByTestId("home-todo-widget");
-    expect(within(screen.getByTestId("home-todo-widget")).getByText("0")).toBeOnTheScreen();
+    const todayCard = screen.getByTestId("home-today-card");
+    expect(within(todayCard).getByText("暂无待办")).toBeOnTheScreen();
     expect(screen.queryByText("几天前完成的待办")).toBeNull();
     fireEvent.press(screen.getByRole("button", { name: "查看全部每日待办" }));
     expect(await screen.findByText("几天前完成的待办")).toBeOnTheScreen();
-    expect(todosCard).toBeTruthy();
+    expect(todayCard).toBeTruthy();
   });
 
   it("does not expose a standalone daily todo navigation tab", () => {
@@ -257,11 +261,11 @@ describe("Todo route interactions", () => {
 
     expect(screen.getByText("今日概览")).toBeOnTheScreen();
     expect(screen.queryByText("生活控制中心")).toBeNull();
-    expect(within(screen.getByTestId("home-todo-widget")).getByText("1")).toBeOnTheScreen();
+    expect(within(screen.getByTestId("home-today-card")).getByText("写日记")).toBeOnTheScreen();
     expect(screen.getByText("待取快递")).toBeOnTheScreen();
     expect(screen.getAllByText("¥52.00").length).toBeGreaterThan(0);
     expect(screen.queryByText("金币")).toBeNull();
-    expect(screen.getByTestId("home-todo-widget")).not.toHaveStyle({ height: 210 });
+    expect(screen.getByTestId("home-today-card")).not.toHaveStyle({ height: 210 });
     expect(screen.getByTestId("home-notes-quick-entry")).toBeOnTheScreen();
     expect(screen.getByTestId("meal-spinner-compact-entry")).toBeOnTheScreen();
     expect(screen.queryByTestId("meal-spinner-wheel")).toBeNull();

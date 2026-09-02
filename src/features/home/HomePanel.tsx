@@ -20,7 +20,6 @@ import { HomeCard } from "@/shared/ui/HomeCard";
 import { showUndoToast } from "@/shared/ui/UndoToast";
 import { NotesPanel } from "./NotesPanel";
 import { TodoPanel } from "@/features/plan/TodoPanel";
-import { ExpiryHomeCard } from "@/features/expiry/ExpiryHomeCard";
 import { ExpiryAddModal } from "@/features/expiry/ExpiryAddModal";
 import { hydrateExpiryFromCloud, loadExpiryItems, saveExpiryItems } from "@/features/expiry/expiryStorage";
 import { daysUntil, sortExpiryByUrgency, type ExpiryItem } from "@/features/expiry/expiryUtils";
@@ -217,6 +216,7 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
   const sortedHomeTodos = useMemo(() => sortHomeTodos(homeTodos, today), [homeTodos, today]);
   const todoList = useCollapsibleList(sortedHomeTodos);
   const sortedExpiry = useMemo(() => sortExpiryByUrgency(expiryItems, today), [expiryItems, today]);
+  const nextExpiry = sortedExpiry[0] ?? null;
   const expiringSoonCount = useMemo(
     () => expiryItems.filter((item) => {
       const remaining = daysUntil(item.expiryDate, today);
@@ -229,6 +229,7 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
       .filter((transaction) => transaction.transactionType === "expense" && transaction.localDate === today)
       .reduce((sum, transaction) => sum + moneyToCents(transaction.amount), 0);
   }, [transactions]);
+  const hasOverviewSignals = pendingCount > 0 || pendingPackages > 0 || todayExpenseCents > 0;
   const statusChip = useMemo<{ text: string; icon: "check" | "dot"; onPress?: () => void } | null>(() => {
     if (pendingCount > 0) return { text: `还有 ${pendingCount} 项`, icon: "dot", onPress: () => setViewState("todos") };
     if (pendingPackages > 0) return { text: `${pendingPackages} 个待取快递`, icon: "dot", onPress: () => onOpenPackages?.() };
@@ -298,11 +299,13 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
       case "summary":
         return (
           <HomeCard key={id} testID="home-summary-card" {...common} title={<Text style={styles.widgetTitle}>今日概览</Text>}>
-            <View style={styles.summaryGrid}>
-              <OverviewItem label="今日待办" onPress={() => setViewState("todos")} styles={styles} value={<AnimatedNumber value={pendingCount} format={(v) => `${Math.round(v)}`} style={styles.summaryValue} />} />
-              <View style={styles.summaryDivider} />
-              <OverviewItem label="待取快递" onPress={() => onOpenPackages?.()} styles={styles} value={<AnimatedNumber value={pendingPackages} format={(v) => `${Math.round(v)}`} style={styles.summaryValue} />} />
-            </View>
+            {hasOverviewSignals ? (
+              <View style={styles.summaryGrid}>
+                <OverviewItem label="今日待办" onPress={() => setViewState("todos")} styles={styles} value={<AnimatedNumber value={pendingCount} format={(v) => `${Math.round(v)}`} style={styles.summaryValue} />} />
+                <View style={styles.summaryDivider} />
+                <OverviewItem label="待取快递" onPress={() => onOpenPackages?.()} styles={styles} value={<AnimatedNumber value={pendingPackages} format={(v) => `${Math.round(v)}`} style={styles.summaryValue} />} />
+              </View>
+            ) : null}
             <Text style={styles.summaryLine} numberOfLines={1}>{statusSummaryLine(pendingCount, pendingPackages, todayExpenseCents)}</Text>
           </HomeCard>
         );
@@ -343,15 +346,15 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
             </View>
           </HomeCard>
         );
-      case "todos":
+      case "today":
         return (
           <HomeCard
             key={id}
-            testID="home-todo-widget"
+            testID="home-today-card"
             {...common}
             title={
               <View style={styles.titleRow}>
-                <Text style={styles.widgetTitle}>今日待办</Text>
+                <Text style={styles.widgetTitle}>今天</Text>
                 <TitleBadge>{`${pendingCount}`}</TitleBadge>
               </View>
             }
@@ -361,57 +364,68 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
               </PressableScale>
             }
           >
-            {sortedHomeTodos.length === 0 ? (
-              <View style={styles.compactEmpty}>
-                <Text style={styles.emptyHint}>暂无待办</Text>
-                <PressableScale accessibilityRole="button" accessibilityLabel="添加待办" onPress={() => setViewState("todos")} style={styles.compactEmptyAction} wrapperStyle={{ width: "100%" }}>
-                  <Text style={styles.quickLink}>＋ 添加待办</Text>
+            <View style={styles.todayBlock}>
+              <View style={styles.todayBlockHeader}>
+                <Text style={styles.todayBlockTitle}>待办</Text>
+                <PressableScale accessibilityRole="button" accessibilityLabel="添加待办" onPress={() => setViewState("todos")} style={styles.todayInlineAction}>
+                  <Text style={styles.todayInlineActionText}>+ 添加</Text>
                 </PressableScale>
               </View>
-            ) : (
-              <View style={styles.todoPreviewList}>
-                {todoList.visibleItems.map((todo) => {
-                  const tag = todoDateTag(todo, today);
-                  const tagTone = tag === "逾期" ? "#e0533d" : tag === "今天" ? themeTokens.accent : tag === "明天" ? "#3d7be0" : themeTokens.textMuted;
-                  return (
-                    <View key={todo.id} style={styles.todoRow}>
-                      <PressableScale accessibilityRole="checkbox" accessibilityLabel={`${todo.completed ? "恢复" : "完成"}首页待办：${todo.title}`} accessibilityState={{ checked: todo.completed }} onPress={() => toggleHomeTodo(todo.id)} style={styles.todoCheckWrap}>
-                        <View style={[styles.todoCheck, todo.completed ? styles.todoCheckActive : null]}>{todo.completed ? <Text style={styles.todoCheckMark}>✓</Text> : null}</View>
-                      </PressableScale>
-                      <View style={styles.todoTextButton}>
-                        <Text style={[styles.todoTitle, todo.completed ? styles.todoTitleDone : null]} numberOfLines={1}>{todo.title}</Text>
+              {sortedHomeTodos.length === 0 ? (
+                <Text style={styles.todayEmptyLine}>暂无待办</Text>
+              ) : (
+                <View style={styles.todoPreviewList}>
+                  {todoList.visibleItems.map((todo) => {
+                    const tag = todoDateTag(todo, today);
+                    const tagTone = tag === "逾期" ? "#e0533d" : tag === "今天" ? themeTokens.accent : tag === "明天" ? "#3d7be0" : themeTokens.textMuted;
+                    return (
+                      <View key={todo.id} style={styles.todoRow}>
+                        <PressableScale accessibilityRole="checkbox" accessibilityLabel={`${todo.completed ? "恢复" : "完成"}首页待办：${todo.title}`} accessibilityState={{ checked: todo.completed }} onPress={() => toggleHomeTodo(todo.id)} style={styles.todoCheckWrap}>
+                          <View style={[styles.todoCheck, todo.completed ? styles.todoCheckActive : null]}>{todo.completed ? <Text style={styles.todoCheckMark}>✓</Text> : null}</View>
+                        </PressableScale>
+                        <View style={styles.todoTextButton}>
+                          <Text style={[styles.todoTitle, todo.completed ? styles.todoTitleDone : null]} numberOfLines={1}>{todo.title}</Text>
+                        </View>
+                        {tag ? <Text style={[styles.todoDateTag, { color: tagTone }]}>{tag}</Text> : null}
                       </View>
-                      {tag ? <Text style={[styles.todoDateTag, { color: tagTone }]}>{tag}</Text> : null}
-                    </View>
-                  );
-                })}
-                <CollapsibleSectionFooter testID="home-todo-show-more" name="待办" expanded={todoList.expanded} hiddenCount={todoList.hiddenCount} onPress={todoList.toggle} tokens={themeTokens} visible={todoList.canExpand} />
+                    );
+                  })}
+                  <CollapsibleSectionFooter testID="home-todo-show-more" name="待办" expanded={todoList.expanded} hiddenCount={todoList.hiddenCount} onPress={todoList.toggle} tokens={themeTokens} visible={todoList.canExpand} />
+                </View>
+              )}
+            </View>
+            <View style={styles.todayDivider} />
+            <View style={styles.todayBlock}>
+              <View style={styles.todayBlockHeader}>
+                <Text style={styles.todayBlockTitle}>备忘</Text>
+                {notes.length > 0 ? <Text style={styles.notesCount}>{`${notes.length} 条`}</Text> : null}
               </View>
-            )}
-          </HomeCard>
-        );
-      case "notes":
-        return (
-          <HomeCard
-            key={id}
-            testID="home-notes-card"
-            {...common}
-            title={
-              <View style={styles.titleRow}>
-                <Text style={styles.widgetTitle}>备忘录</Text>
-                {notes.length > 0 ? <TitleBadge>{`${notes.length} 条`}</TitleBadge> : null}
-              </View>
-            }
-            headerRight={
-              <PressableScale accessibilityRole="button" accessibilityLabel="查看全部备忘" onPress={() => setViewState("notes")} style={styles.widgetMore} wrapperStyle={{ flexShrink: 0 }}>
-                <Text style={styles.widgetMoreText}>全部 →</Text>
-              </PressableScale>
-            }
-          >
             <PressableScale testID="home-notes-quick-entry" accessibilityRole="button" accessibilityLabel="快速记一条备忘" onPress={() => setViewState("notes")} style={styles.notesQuickEntry} wrapperStyle={{ width: "100%" }}>
               <Text style={styles.notesPlaceholder}>闪过的念头、待买清单……</Text>
               <Text style={styles.quickLink}>＋ 快速记一条备忘</Text>
             </PressableScale>
+            </View>
+            <View style={styles.todayDivider} />
+            <View style={styles.todayBlock}>
+              <View style={styles.todayBlockHeader}>
+                <Text style={styles.todayBlockTitle}>提醒</Text>
+                <PressableScale accessibilityRole="button" accessibilityLabel="添加到期提醒" onPress={() => setExpiryModalOpen(true)} style={styles.todayInlineAction}>
+                  <Text style={styles.todayInlineActionText}>+ 添加</Text>
+                </PressableScale>
+              </View>
+              {nextExpiry ? (
+                <PressableScale accessibilityRole="button" accessibilityLabel={`查看到期提醒：${nextExpiry.title}`} onPress={() => router.push("/expiry")} style={styles.todayReminderRow} wrapperStyle={{ width: "100%" }}>
+                  <View style={styles.todayReminderDot} />
+                  <View style={styles.todayReminderBody}>
+                    <Text numberOfLines={1} style={styles.todayReminderTitle}>{nextExpiry.title}</Text>
+                    <Text numberOfLines={1} style={styles.todayReminderMeta}>{formatExpiryStatus(nextExpiry, today)}</Text>
+                  </View>
+                  <Text style={styles.todayReminderDate}>{nextExpiry.expiryDate}</Text>
+                </PressableScale>
+              ) : (
+                <Text style={styles.todayEmptyLine}>暂无提醒</Text>
+              )}
+            </View>
           </HomeCard>
         );
       case "meal":
@@ -522,8 +536,6 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
         return renderHomeCard(id, !order.includes(id));
       })}
 
-      <ExpiryHomeCard items={sortedExpiry} onAdd={() => setExpiryModalOpen(true)} tokens={themeTokens} testID="home-expiry-card" />
-
       <ExpiryAddModal
         visible={expiryModalOpen}
         onCancel={() => setExpiryModalOpen(false)}
@@ -545,8 +557,15 @@ export function HomePanel({ onOpenFinance, onOpenPackages, onOpenQuickAccounting
 function statusSummaryLine(pendingCount: number, pendingPackages: number, todayExpenseCents: number) {
   if (pendingCount > 0) return `今天还有 ${pendingCount} 项待办未完成。`;
   if (pendingPackages > 0) return `你还有 ${pendingPackages} 个快递等待领取。`;
-  if (todayExpenseCents === 0) return "今天还没有新增待办、快递或支出记录。";
+  if (todayExpenseCents === 0) return "今天暂无待处理事项。";
   return `今天已记录支出 ¥${centsToMoney(todayExpenseCents)}。`;
+}
+
+function formatExpiryStatus(item: ExpiryItem, today: string) {
+  const remaining = daysUntil(item.expiryDate, today);
+  if (remaining < 0) return `已过期 ${Math.abs(remaining)} 天`;
+  if (remaining === 0) return "今天到期";
+  return `还有 ${remaining} 天`;
 }
 
 function TitleBadge({ children }: { children: ReactNode }) {
@@ -624,8 +643,9 @@ function createStyles(tokens: UiTokens) {
     notesQuickEntry: {
       backgroundColor: "#f6faf6",
       borderRadius: 14,
-      gap: 8,
-      padding: 12
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 10
     },
     page: {
       gap: 14,
@@ -788,6 +808,79 @@ function createStyles(tokens: UiTokens) {
     },
     todoPreviewList: {
       gap: 7
+    },
+    todayBlock: {
+      gap: 8
+    },
+    todayBlockHeader: {
+      alignItems: "center",
+      flexDirection: "row",
+      justifyContent: "space-between"
+    },
+    todayBlockTitle: {
+      color: tokens.text,
+      fontSize: 13,
+      fontWeight: "900"
+    },
+    todayDivider: {
+      backgroundColor: tokens.border,
+      height: 1,
+      opacity: 0.7
+    },
+    todayEmptyLine: {
+      color: tokens.textMuted,
+      fontSize: 12,
+      fontWeight: "800",
+      paddingVertical: 2
+    },
+    todayInlineAction: {
+      backgroundColor: tokens.accentSoft,
+      borderRadius: 999,
+      paddingHorizontal: 9,
+      paddingVertical: 4
+    },
+    todayInlineActionText: {
+      color: tokens.accent,
+      fontSize: 11,
+      fontWeight: "900"
+    },
+    todayReminderBody: {
+      flex: 1,
+      minWidth: 0
+    },
+    todayReminderDate: {
+      color: tokens.textMuted,
+      fontSize: 12,
+      fontWeight: "800"
+    },
+    todayReminderDot: {
+      backgroundColor: tokens.accent,
+      borderRadius: 999,
+      height: 8,
+      width: 8
+    },
+    todayReminderMeta: {
+      color: tokens.accent,
+      fontSize: 11,
+      fontWeight: "900",
+      marginTop: 2
+    },
+    todayReminderRow: {
+      alignItems: "center",
+      backgroundColor: "#f6faf6",
+      borderColor: tokens.border,
+      borderRadius: 12,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: 9,
+      minHeight: 42,
+      paddingHorizontal: 10,
+      paddingVertical: 8
+    },
+    todayReminderTitle: {
+      color: tokens.text,
+      fontSize: 13,
+      fontWeight: "900"
     },
     todoDateTag: {
       backgroundColor: "#eef2ee",
