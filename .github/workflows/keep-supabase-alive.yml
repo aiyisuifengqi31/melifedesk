@@ -24,7 +24,7 @@ jobs:
       SUPABASE_URL: https://ycijporsgfgegmqzxdke.supabase.co
       SUPABASE_PUBLISHABLE_KEY: sb_publishable_snVaQOb-XtGDHC4IiXO8XQ__snMM1d6
     steps:
-      - name: Run a read-only GraphQL database query
+      - name: Query the project's public Auth settings
         shell: bash
         run: |
           set -euo pipefail
@@ -39,7 +39,7 @@ jobs:
           trap 'rm -f "$response_file"' EXIT
 
           curl \
-            --request POST \
+            --request GET \
             --fail-with-body \
             --silent \
             --show-error \
@@ -48,11 +48,9 @@ jobs:
             --retry 2 \
             --retry-all-errors \
             --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
-            --header "Content-Type: application/json" \
-            --data '{"query":"query KeepAlive { __typename }"}' \
             --output "$response_file" \
-            "${SUPABASE_URL}/graphql/v1"
+            "${SUPABASE_URL}/auth/v1/settings"
 
           test -s "$response_file"
-          grep -q '"data"' "$response_file"
+          grep -q '"external"' "$response_file"
           echo "Legacy Supabase keepalive request succeeded."
