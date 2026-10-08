@@ -24,7 +24,7 @@ jobs:
       SUPABASE_URL: https://ycijporsgfgegmqzxdke.supabase.co
       SUPABASE_PUBLISHABLE_KEY: sb_publishable_snVaQOb-XtGDHC4IiXO8XQ__snMM1d6
     steps:
-      - name: Query the PostgREST schema endpoint
+      - name: Run a read-only GraphQL database query
         shell: bash
         run: |
           set -euo pipefail
@@ -39,7 +39,7 @@ jobs:
           trap 'rm -f "$response_file"' EXIT
 
           curl \
-            --request GET \
+            --request POST \
             --fail-with-body \
             --silent \
             --show-error \
@@ -48,9 +48,11 @@ jobs:
             --retry 2 \
             --retry-all-errors \
             --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
-            --header "Accept: application/openapi+json" \
+            --header "Content-Type: application/json" \
+            --data '{"query":"query KeepAlive { __typename }"}' \
             --output "$response_file" \
-            "${SUPABASE_URL}/rest/v1/"
+            "${SUPABASE_URL}/graphql/v1"
 
           test -s "$response_file"
+          grep -q '"data"' "$response_file"
           echo "Legacy Supabase keepalive request succeeded."

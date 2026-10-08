@@ -36,16 +36,19 @@ describe("legacy Supabase keepalive workflow", () => {
     expect(workflow).not.toMatch(/sb_secret_/i);
   });
 
-  it("makes a bounded read-only PostgREST request", () => {
+  it("makes a bounded, non-mutating GraphQL database query", () => {
     const workflow = readWorkflow();
 
-    expect(workflow).toContain('"${SUPABASE_URL}/rest/v1/"');
-    expect(workflow).toContain("--request GET");
+    expect(workflow).toContain('"${SUPABASE_URL}/graphql/v1"');
+    expect(workflow).toContain("--request POST");
+    expect(workflow).toContain('Content-Type: application/json');
+    expect(workflow).toContain('query KeepAlive { __typename }');
     expect(workflow).toContain("--fail-with-body");
     expect(workflow).toContain("--connect-timeout 15");
     expect(workflow).toContain("--max-time 45");
     expect(workflow).toContain("--retry 2");
-    expect(workflow).not.toMatch(/--request\s+(POST|PUT|PATCH|DELETE)/);
+    expect(workflow).not.toMatch(/\bmutation\b/i);
+    expect(workflow).not.toMatch(/--request\s+(PUT|PATCH|DELETE)/);
   });
 
   it("uses least privilege and rejects missing configuration", () => {
@@ -57,5 +60,6 @@ describe("legacy Supabase keepalive workflow", () => {
       'if [[ -z "$SUPABASE_URL" || -z "$SUPABASE_PUBLISHABLE_KEY" ]]',
     );
     expect(workflow).toContain('test -s "$response_file"');
+    expect(workflow).toContain('grep -q \'"data"\' "$response_file"');
   });
 });
