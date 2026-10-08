@@ -1,0 +1,56 @@
+name: Keep legacy Supabase active
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/keep-supabase-alive.yml"
+  workflow_dispatch:
+  schedule:
+    - cron: "17 0,8,16 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keep-legacy-supabase-active
+  cancel-in-progress: false
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      SUPABASE_URL: https://ycijporsgfgegmqzxdke.supabase.co
+      SUPABASE_PUBLISHABLE_KEY: sb_publishable_snVaQOb-XtGDHC4IiXO8XQ__snMM1d6
+    steps:
+      - name: Query the PostgREST schema endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$SUPABASE_URL" || -z "$SUPABASE_PUBLISHABLE_KEY" ]]; then
+            echo "Required legacy Supabase public configuration is missing." >&2
+            exit 1
+          fi
+
+          SUPABASE_URL="${SUPABASE_URL%/}"
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+
+          curl \
+            --request GET \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --connect-timeout 15 \
+            --max-time 45 \
+            --retry 2 \
+            --retry-all-errors \
+            --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            --header "Accept: application/openapi+json" \
+            --output "$response_file" \
+            "${SUPABASE_URL}/rest/v1/"
+
+          test -s "$response_file"
+          echo "Legacy Supabase keepalive request succeeded."

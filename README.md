@@ -46,3 +46,9 @@ pnpm test:supabase
 ## 主题资源
 
 `default`、`cat`、`dog` 三套主题资源位于 `src/assets/themes`。每套包含六个导航 SVG、选中/未选中状态、浅色/深色 token、通用空状态、图表配色和 `license.md`。
+
+## 旧 Supabase 项目保活
+
+`.github/workflows/keep-supabase-alive.yml` 每天三次向旧项目发送只读请求，避免免费项目因活动不足自动暂停。工作流不会修改业务数据，也不会改变当前 App 使用的 Supabase 项目。
+
+工作流内只包含 Supabase 官方允许公开的项目 URL 和 publishable key，不包含 `sb_secret_` 或 `service_role` 等高权限密钥，因此无需额外配置 GitHub Secrets。合并工作流时会自动执行一次；也可进入 **Actions → Keep legacy Supabase active → Run workflow** 手动运行，并确认日志包含 `Legacy Supabase keepalive request succeeded.`。
