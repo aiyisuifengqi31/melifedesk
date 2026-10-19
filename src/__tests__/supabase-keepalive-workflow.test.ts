@@ -8,7 +8,7 @@ const workflowPath = join(
   "keep-supabase-alive.yml",
 );
 
-describe("legacy Supabase keepalive workflow", () => {
+describe("LifeDesk Supabase keepalive workflow", () => {
   const readWorkflow = () => readFileSync(workflowPath, "utf8");
 
   it("supports merge, manual, and three off-hour scheduled runs per day", () => {
@@ -20,15 +20,15 @@ describe("legacy Supabase keepalive workflow", () => {
     expect(workflow).toContain('cron: "17 0,8,16 * * *"');
   });
 
-  it("uses only the approved legacy project public configuration", () => {
+  it("uses only the active LifeDesk project's public configuration", () => {
     const workflow = readWorkflow();
 
     expect(workflow).toContain(
-      "SUPABASE_URL: https://ycijporsgfgegmqzxdke.supabase.co",
+      "SUPABASE_URL: https://yzoxgsqucugeatcxcurd.supabase.co",
     );
     expect(workflow).toMatch(/SUPABASE_PUBLISHABLE_KEY: sb_publishable_[A-Za-z0-9_-]+/);
     expect(workflow).not.toContain("secrets.");
-    expect(workflow).not.toContain("yzoxgsqucugeatcxcurd");
+    expect(workflow).not.toContain("ycijporsgfgegmqzxdke");
     expect(workflow).not.toMatch(
       /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/,
     );
@@ -36,15 +36,18 @@ describe("legacy Supabase keepalive workflow", () => {
     expect(workflow).not.toMatch(/sb_secret_/i);
   });
 
-  it("makes a bounded, read-only request to the project's Auth API", () => {
+  it("makes a bounded, read-only database query", () => {
     const workflow = readWorkflow();
 
-    expect(workflow).toContain('"${SUPABASE_URL}/auth/v1/settings"');
+    expect(workflow).toContain(
+      '"${SUPABASE_URL}/rest/v1/user_kv?select=key&limit=1"',
+    );
     expect(workflow).toContain("--request GET");
     expect(workflow).toContain("--fail-with-body");
     expect(workflow).toContain("--connect-timeout 15");
     expect(workflow).toContain("--max-time 45");
     expect(workflow).toContain("--retry 2");
+    expect(workflow).not.toContain("/auth/v1/settings");
     expect(workflow).not.toMatch(/--request\s+(POST|PUT|PATCH|DELETE)/);
   });
 
@@ -57,6 +60,8 @@ describe("legacy Supabase keepalive workflow", () => {
       'if [[ -z "$SUPABASE_URL" || -z "$SUPABASE_PUBLISHABLE_KEY" ]]',
     );
     expect(workflow).toContain('test -s "$response_file"');
-    expect(workflow).toContain('grep -q \'"external"\' "$response_file"');
+    expect(workflow).toContain(
+      "grep -Eq '^[[:space:]]*\\[' \"$response_file\"",
+    );
   });
 });

@@ -1,4 +1,4 @@
-name: Keep legacy Supabase active
+name: Keep LifeDesk Supabase active
 
 on:
   push:
@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: keep-legacy-supabase-active
+  group: keep-lifedesk-supabase-active
   cancel-in-progress: false
 
 jobs:
@@ -21,16 +21,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
-      SUPABASE_URL: https://ycijporsgfgegmqzxdke.supabase.co
-      SUPABASE_PUBLISHABLE_KEY: sb_publishable_snVaQOb-XtGDHC4IiXO8XQ__snMM1d6
+      SUPABASE_URL: https://yzoxgsqucugeatcxcurd.supabase.co
+      SUPABASE_PUBLISHABLE_KEY: sb_publishable_kLUNcKgFgMSwSFkiayFhXw_WSejJ8_R
     steps:
-      - name: Query the project's public Auth settings
+      - name: Query the LifeDesk database
         shell: bash
         run: |
           set -euo pipefail
 
           if [[ -z "$SUPABASE_URL" || -z "$SUPABASE_PUBLISHABLE_KEY" ]]; then
-            echo "Required legacy Supabase public configuration is missing." >&2
+            echo "Required LifeDesk Supabase public configuration is missing." >&2
             exit 1
           fi
 
@@ -49,8 +49,8 @@ jobs:
             --retry-all-errors \
             --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
             --output "$response_file" \
-            "${SUPABASE_URL}/auth/v1/settings"
+            "${SUPABASE_URL}/rest/v1/user_kv?select=key&limit=1"
 
           test -s "$response_file"
-          grep -q '"external"' "$response_file"
-          echo "Legacy Supabase keepalive request succeeded."
+          grep -Eq '^[[:space:]]*\[' "$response_file"
+          echo "LifeDesk Supabase database keepalive succeeded."
