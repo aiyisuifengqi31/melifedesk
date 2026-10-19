@@ -29,12 +29,19 @@
 
 旧项目不再被工作流访问。新任务查询真实 LifeDesk 数据库并成功后，GitHub 不再发送“工作流失败”邮件。历史失败记录保留，便于审计。
 
+## GitHub 定时任务自身保活
+
+GitHub 可能在公开仓库连续 60 天没有仓库活动后自动停用定时工作流。增加一个每月运行一次的仓库心跳任务，仅更新 `.github/scheduled-workflow-heartbeat.txt` 的 UTC 时间并提交到 `main`。它不连接 Supabase、不访问业务数据，也不修改 App 文件；用途只是让免费定时任务长期保持启用。
+
+该任务仅授予 `contents: write` 权限，并在新工作流合并后立即运行一次以验证写权限。之后每月 1 日运行。由 `GITHUB_TOKEN` 推送的心跳提交不会再次触发其他 GitHub Actions，避免循环执行。
+
 ## 测试与验收
 
 - 合约测试必须拒绝旧项目 ID、Auth 设置端点、写请求和高权限密钥。
 - 合约测试必须确认当前项目 ID、`user_kv` 只读查询、每日三次计划和只读 GitHub 权限。
 - YAML 必须可解析，安全扫描不得发现 secret/service-role/JWT/写请求。
 - 合并后首次 GitHub Actions 运行必须为 `success`；否则继续诊断，不宣称完成。
+- 仓库心跳工作流的首次真实运行也必须为 `success`，并确认心跳提交已进入 `main`。
 
 ## 非目标
 
