@@ -1,0 +1,43 @@
+name: Keep scheduled workflows enabled
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/keep-scheduled-workflows-enabled.yml"
+  workflow_dispatch:
+  schedule:
+    - cron: "43 3 1 * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: keep-scheduled-workflows-enabled
+  cancel-in-progress: false
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Refresh repository activity
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git pull --rebase origin main
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/scheduled-workflow-heartbeat.txt
+          git add .github/scheduled-workflow-heartbeat.txt
+          git commit -m "chore: refresh scheduled workflow heartbeat"
+          git push origin HEAD:main

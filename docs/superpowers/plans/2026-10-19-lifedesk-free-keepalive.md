@@ -74,3 +74,26 @@ Commit the focused change, push `fix/keep-active-lifedesk-free`, and open a PR a
 - [ ] **Step 4: Merge and verify the real run**
 
 Merge the PR, locate the `Keep LifeDesk Supabase active` push-triggered run, inspect its job steps, and require conclusion `success` before completing the task.
+
+### Task 4: Keep GitHub's scheduler enabled for the long term
+
+**Files:**
+- Create: `.github/workflows/keep-scheduled-workflows-enabled.yml`
+- Create: `src/__tests__/scheduled-workflow-maintenance.test.ts`
+- Generate: `.github/scheduled-workflow-heartbeat.txt`
+
+- [ ] **Step 1: Write and run the failing contract test**
+
+Require a monthly schedule, a first-run push trigger limited to the workflow file, scoped `contents: write` permission, checkout of `main`, and a harmless timestamp-only commit. Reject Supabase access and credentials.
+
+- [ ] **Step 2: Implement the monthly repository heartbeat**
+
+Create the workflow with cron `43 3 1 * *`. Pull and rebase `main`, write a UTC timestamp to `.github/scheduled-workflow-heartbeat.txt`, then commit and push it as `github-actions[bot]`.
+
+- [ ] **Step 3: Verify locally**
+
+Run both keepalive contract suites, parse both YAML files, run the security scan, and run `git diff --check`.
+
+- [ ] **Step 4: Merge and verify the real run**
+
+Merge the workflow through a pull request. Require the first `Keep scheduled workflows enabled` run to succeed and verify its heartbeat commit exists on `main`.
