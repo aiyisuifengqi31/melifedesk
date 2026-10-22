@@ -22,6 +22,7 @@ jobs:
     timeout-minutes: 2
     env:
       SUPABASE_URL: https://yzoxgsqucugeatcxcurd.supabase.co
+      SUPABASE_PROXY_URL: https://lifedesk-supabase-relay.netlify.app
       SUPABASE_PUBLISHABLE_KEY: sb_publishable_kLUNcKgFgMSwSFkiayFhXw_WSejJ8_R
     steps:
       - name: Query the LifeDesk database
@@ -33,10 +34,31 @@ jobs:
             echo "Required LifeDesk Supabase public configuration is missing." >&2
             exit 1
           fi
+          if [[ -z "$SUPABASE_PROXY_URL" ]]; then
+            echo "Required LifeDesk relay URL is missing." >&2
+            exit 1
+          fi
 
           SUPABASE_URL="${SUPABASE_URL%/}"
+          SUPABASE_PROXY_URL="${SUPABASE_PROXY_URL%/}"
           response_file="$(mktemp)"
-          trap 'rm -f "$response_file"' EXIT
+          relay_response_file="$(mktemp)"
+          health_response_file="$(mktemp)"
+          trap 'rm -f "$response_file" "$relay_response_file" "$health_response_file"' EXIT
+
+          curl \
+            --request GET \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --connect-timeout 15 \
+            --max-time 45 \
+            --retry 2 \
+            --retry-all-errors \
+            --output "$health_response_file" \
+            "${SUPABASE_PROXY_URL}/health"
+
+          grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' "$health_response_file"
 
           curl \
             --request GET \
@@ -53,4 +75,20 @@ jobs:
 
           test -s "$response_file"
           grep -Eq '^[[:space:]]*\[' "$response_file"
-          echo "LifeDesk Supabase database keepalive succeeded."
+
+          curl \
+            --request GET \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --connect-timeout 15 \
+            --max-time 45 \
+            --retry 2 \
+            --retry-all-errors \
+            --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            --output "$relay_response_file" \
+            "${SUPABASE_PROXY_URL}/rest/v1/user_kv?select=key&limit=1"
+
+          test -s "$relay_response_file"
+          grep -Eq '^[[:space:]]*\[' "$relay_response_file"
+          echo "LifeDesk direct and relayed Supabase keepalive succeeded."

@@ -28,9 +28,12 @@ Task 2 不包含每日计划、健身、记账、日记、份子记录、考公�
 ```bash
 EXPO_PUBLIC_SUPABASE_URL=
 EXPO_PUBLIC_SUPABASE_ANON_KEY=
+EXPO_PUBLIC_SUPABASE_PROXY_URL=
 ```
 
 客户端只允许使用 Supabase anon key。`service_role` key 不得进入 `.env` 的 `EXPO_PUBLIC_*` 变量，也不得进入客户端代码。
+
+`EXPO_PUBLIC_SUPABASE_URL` 始终保留原始 Supabase 项目地址，用于维持现有账号、会话存储键和云端数据身份。`EXPO_PUBLIC_SUPABASE_PROXY_URL` 只是可选的网络中继地址；生产 Web 版本使用公开的 Netlify 免费中继，以绕过部分网络对 `*.supabase.co` 项目域名的连接重置。
 
 ## 常用命令
 
@@ -51,4 +54,6 @@ pnpm test:supabase
 
 `.github/workflows/keep-supabase-alive.yml` 每天三次向当前 LifeDesk 使用的 Supabase 项目发送 `user_kv` 只读查询，形成免费套餐认可的数据库活动。工作流不会写入或修改业务数据；与当前 App 无关的旧 Supabase 项目保持暂停。
 
-工作流内只包含 Supabase 官方允许公开的项目 URL 和 publishable key，不包含 `sb_secret_` 或 `service_role` 等高权限密钥，因此无需额外配置 GitHub Secrets。合并工作流时会自动执行一次；也可进入 **Actions → Keep LifeDesk Supabase active → Run workflow** 手动运行，并确认日志包含 `LifeDesk Supabase database keepalive succeeded.`。
+生产 App 的 Supabase 请求通过 `https://lifedesk-supabase-relay.netlify.app` 中继。中继只接受 LifeDesk GitHub Pages、两个本地开发来源和无浏览器来源的请求，只转发固定 Supabase 项目的 Auth、REST、Storage、Functions 和 Realtime 路径，不持有 `service_role`、数据库密码或其他私密凭证。Netlify 免费套餐设有用量硬上限，不会自动产生超额费用。
+
+工作流内只包含 Supabase 官方允许公开的项目 URL、publishable key 和公开中继 URL，不包含 `sb_secret_` 或 `service_role` 等高权限密钥，因此无需额外配置 GitHub Secrets。工作流会同时验证原始 Supabase 只读查询、中继健康状态和经中继的只读查询。合并工作流时会自动执行一次；也可进入 **Actions → Keep LifeDesk Supabase active → Run workflow** 手动运行，并确认日志包含 `LifeDesk direct and relayed Supabase keepalive succeeded.`。
