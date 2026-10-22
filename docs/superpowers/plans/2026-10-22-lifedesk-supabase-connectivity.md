@@ -6,7 +6,9 @@
 
 **Architecture:** Add a small, allowlisted Deno Deploy reverse proxy whose only upstream is the active LifeDesk Supabase project. Keep the original Supabase URL when constructing the client so the existing project identity and stored session key remain unchanged; inject a custom fetch that rewrites only network request origins to the Deno relay.
 
-**Tech Stack:** Deno Deploy, standard Web Fetch APIs, Expo/React Native, `@supabase/supabase-js`, Node test runner, Jest/TypeScript, GitHub Actions
+**Tech Stack:** Netlify Functions, standard Web Fetch APIs (also tested under Deno), Expo/React Native, `@supabase/supabase-js`, Node test runner, Jest/TypeScript, GitHub Actions
+
+> **Execution update (2026-10-22):** Deno Deploy account creation returned `403 SIGNUP_UNAVAILABLE`. The audited Fetch API handler remains runtime-neutral and continues to pass under Deno, but production deployment moved to Netlify Functions at `https://lifedesk-supabase-relay.netlify.app`. The Netlify free account was created through browser OAuth, production visibility was explicitly set to public, and both `/health` and a relayed Supabase REST read returned HTTP 200. `netlify/functions/supabase-relay.mjs` and `netlify.toml` are the production deployment contract.
 
 ---
 
