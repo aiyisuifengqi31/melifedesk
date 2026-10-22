@@ -1,3 +1,5 @@
+/* global Headers, Request, Response, URL */
+
 const UPSTREAM_ORIGIN = "https://yzoxgsqucugeatcxcurd.supabase.co";
 const ALLOWED_PATH_PREFIXES = [
   "/auth/v1/",

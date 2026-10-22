@@ -5,9 +5,7 @@ describe("Supabase relay transport", () => {
   const proxyUrl = "https://lifedesk-relay.example";
 
   it("rewrites only the origin and preserves the complete request", async () => {
-    const fetchImpl = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
-      new Response(null, { status: 204 })
-    );
+    const fetchImpl = jest.fn(async () => new Response(null, { status: 204 }));
     const transport = createSupabaseTransport({ supabaseUrl, proxyUrl, fetchImpl });
     await transport(`${supabaseUrl}/rest/v1/user_kv?select=key`, {
       method: "POST",
