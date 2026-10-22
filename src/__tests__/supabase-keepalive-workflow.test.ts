@@ -7,6 +7,8 @@ const workflowPath = join(
   "workflows",
   "keep-supabase-alive.yml",
 );
+const deployWorkflowPath = join(process.cwd(), ".github", "workflows", "deploy.yml");
+const relayUrl = "https://lifedesk-supabase-relay.netlify.app";
 
 describe("LifeDesk Supabase keepalive workflow", () => {
   const readWorkflow = () => readFileSync(workflowPath, "utf8");
@@ -26,6 +28,7 @@ describe("LifeDesk Supabase keepalive workflow", () => {
     expect(workflow).toContain(
       "SUPABASE_URL: https://yzoxgsqucugeatcxcurd.supabase.co",
     );
+    expect(workflow).toContain(`SUPABASE_PROXY_URL: ${relayUrl}`);
     expect(workflow).toMatch(/SUPABASE_PUBLISHABLE_KEY: sb_publishable_[A-Za-z0-9_-]+/);
     expect(workflow).not.toContain("secrets.");
     expect(workflow).not.toContain("ycijporsgfgegmqzxdke");
@@ -42,6 +45,10 @@ describe("LifeDesk Supabase keepalive workflow", () => {
     expect(workflow).toContain(
       '"${SUPABASE_URL}/rest/v1/user_kv?select=key&limit=1"',
     );
+    expect(workflow).toContain('"${SUPABASE_PROXY_URL}/health"');
+    expect(workflow).toContain(
+      '"${SUPABASE_PROXY_URL}/rest/v1/user_kv?select=key&limit=1"',
+    );
     expect(workflow).toContain("--request GET");
     expect(workflow).toContain("--fail-with-body");
     expect(workflow).toContain("--connect-timeout 15");
@@ -49,6 +56,13 @@ describe("LifeDesk Supabase keepalive workflow", () => {
     expect(workflow).toContain("--retry 2");
     expect(workflow).not.toContain("/auth/v1/settings");
     expect(workflow).not.toMatch(/--request\s+(POST|PUT|PATCH|DELETE)/);
+  });
+
+  it("builds the production app with the same public relay", () => {
+    const deployWorkflow = readFileSync(deployWorkflowPath, "utf8");
+
+    expect(deployWorkflow).toContain(`EXPO_PUBLIC_SUPABASE_PROXY_URL: ${relayUrl}`);
+    expect(deployWorkflow).not.toContain("secrets.EXPO_PUBLIC_SUPABASE_PROXY_URL");
   });
 
   it("uses least privilege and rejects missing configuration", () => {

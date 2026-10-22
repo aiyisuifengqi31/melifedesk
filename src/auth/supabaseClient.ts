@@ -2,11 +2,15 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
-import { getSupabasePublicConfig } from "./supabaseConfig";
+import { getSupabasePublicConfig, type SupabasePublicConfig } from "./supabaseConfig";
+import { createSupabaseTransport } from "./supabaseTransport";
 
 let cachedClient: SupabaseClient | null | undefined;
 
-export function buildSupabaseClientOptions(platformOS: typeof Platform.OS = Platform.OS) {
+export function buildSupabaseClientOptions(
+  platformOS: typeof Platform.OS = Platform.OS,
+  config: SupabasePublicConfig = getSupabasePublicConfig()
+) {
   const isWeb = platformOS === "web";
   return {
     auth: {
@@ -14,6 +18,12 @@ export function buildSupabaseClientOptions(platformOS: typeof Platform.OS = Plat
       detectSessionInUrl: isWeb,
       persistSession: true,
       storage: isWeb ? undefined : AsyncStorage
+    },
+    global: {
+      fetch: createSupabaseTransport({
+        proxyUrl: config.proxyUrl,
+        supabaseUrl: config.url
+      })
     }
   };
 }
@@ -30,7 +40,7 @@ export function getSupabaseClient(): SupabaseClient | null {
     return cachedClient;
   }
 
-  cachedClient = createClient(config.url, config.anonKey, buildSupabaseClientOptions());
+  cachedClient = createClient(config.url, config.anonKey, buildSupabaseClientOptions(Platform.OS, config));
 
   return cachedClient;
 }

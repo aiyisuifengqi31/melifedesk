@@ -6,23 +6,27 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 describe("Task 2 auth client configuration", () => {
   const savedUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
   const savedKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  const savedProxyUrl = process.env.EXPO_PUBLIC_SUPABASE_PROXY_URL;
   const savedExtra = process.env.EXTRA_SECRET_VALUE;
 
   afterAll(() => {
     process.env.EXPO_PUBLIC_SUPABASE_URL = savedUrl;
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = savedKey;
+    process.env.EXPO_PUBLIC_SUPABASE_PROXY_URL = savedProxyUrl;
     process.env.EXTRA_SECRET_VALUE = savedExtra;
   });
 
   it("uses only public Supabase URL and anon key in client config", () => {
     process.env.EXPO_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
+    process.env.EXPO_PUBLIC_SUPABASE_PROXY_URL = "https://relay.example";
 
     const config = getSupabasePublicConfig();
 
     expect(config).toEqual({
       url: "https://example.supabase.co",
       anonKey: "anon-key",
+      proxyUrl: "https://relay.example",
       configured: true
     });
     expect(JSON.stringify(config)).not.toContain("service");
@@ -54,13 +58,21 @@ describe("Task 2 auth client configuration", () => {
   });
 
   it("uses native persistent auth storage for Android app builds", () => {
-    expect(buildSupabaseClientOptions("android").auth).toMatchObject({
+    const config = {
+      anonKey: "anon-key",
+      configured: true,
+      proxyUrl: "https://relay.example",
+      url: "https://example.supabase.co"
+    };
+
+    expect(buildSupabaseClientOptions("android", config).auth).toMatchObject({
       autoRefreshToken: true,
       detectSessionInUrl: false,
       persistSession: true,
       storage: AsyncStorage
     });
-    expect(buildSupabaseClientOptions("web").auth.storage).toBeUndefined();
-    expect(buildSupabaseClientOptions("web").auth.detectSessionInUrl).toBe(true);
+    expect(buildSupabaseClientOptions("web", config).auth.storage).toBeUndefined();
+    expect(buildSupabaseClientOptions("web", config).auth.detectSessionInUrl).toBe(true);
+    expect(buildSupabaseClientOptions("web", config).global.fetch).toEqual(expect.any(Function));
   });
 });

@@ -12,6 +12,8 @@ test-results/
 .worktrees/
 worktrees/
 .superpowers/
+.deno-cache/
+.netlify/
 
 # Local debug / scratch files (never commit)
 debug_q_text.txt
@@ -21,3 +23,6 @@ debug_q_text.txt
 
 expo-env.d.ts
 # @end expo-cli
+
+# Local Netlify folder
+.netlify

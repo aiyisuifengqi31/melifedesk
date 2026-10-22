@@ -1,0 +1,3 @@
+[build]
+  publish = "proxy/public"
+  functions = "netlify/functions"

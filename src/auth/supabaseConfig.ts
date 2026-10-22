@@ -1,6 +1,7 @@
 export type SupabasePublicConfig = {
   anonKey: string;
   configured: boolean;
+  proxyUrl: string;
   url: string;
 };
 
@@ -11,10 +12,12 @@ export type SupabasePublicConfig = {
 export function getSupabasePublicConfig(): SupabasePublicConfig {
   const url = (typeof process !== "undefined" ? process.env?.EXPO_PUBLIC_SUPABASE_URL : undefined) ?? "";
   const anonKey = (typeof process !== "undefined" ? process.env?.EXPO_PUBLIC_SUPABASE_ANON_KEY : undefined) ?? "";
+  const proxyUrl = (typeof process !== "undefined" ? process.env?.EXPO_PUBLIC_SUPABASE_PROXY_URL : undefined) ?? "";
 
   return {
     anonKey,
     configured: Boolean(url && anonKey),
+    proxyUrl,
     url
   };
 }

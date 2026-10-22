@@ -34,6 +34,7 @@ jobs:
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_SUPABASE_PROXY_URL: https://lifedesk-supabase-relay.netlify.app
           PAGES_BASE_URL: /${{ github.event.repository.name }}
         run: pnpm build:web
 
