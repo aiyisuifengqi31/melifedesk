@@ -93,3 +93,19 @@ test("rejects browser origins that do not host LifeDesk", async () => {
   }));
   assert.equal(response.status, 403);
 });
+
+test("rejects methods outside the explicit allowlist", async () => {
+  let calls = 0;
+  const handler = createRelayHandler({
+    fetchUpstream: async () => {
+      calls += 1;
+      return new Response("unexpected");
+    }
+  });
+  const response = await handler(new Request("https://relay.example/rest/v1/user_kv", {
+    method: "PURGE"
+  }));
+  assert.equal(response.status, 405);
+  assert.equal(response.headers.get("allow"), "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS");
+  assert.equal(calls, 0);
+});

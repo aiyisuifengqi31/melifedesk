@@ -12,6 +12,7 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:19006"
 ]);
 const ALLOWED_METHODS = "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS";
+const ALLOWED_METHOD_SET = new Set(ALLOWED_METHODS.split(","));
 
 function corsHeaders(origin) {
   const headers = new Headers({
@@ -50,6 +51,12 @@ export function createRelayHandler({ fetchUpstream = globalThis.fetch } = {}) {
     }
     if (!isAllowedPath(requestUrl.pathname)) {
       return new Response("Not found", { status: 404 });
+    }
+    if (!ALLOWED_METHOD_SET.has(request.method)) {
+      return new Response("Method not allowed", {
+        status: 405,
+        headers: { allow: ALLOWED_METHODS }
+      });
     }
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
